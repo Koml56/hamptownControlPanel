@@ -40,7 +40,7 @@ const EmployeeApp = () => {
     saveToFirebase
   } = useFirebaseData();
 
-  const {
+  const 
     currentUser,
     isAdmin,
     setIsAdmin,
