@@ -30,8 +30,8 @@ const TaskManager: React.FC<TaskManagerProps> = ({
   setDailyData,
   setEmployees
 }) => {
-  const handleTaskToggle = async (taskId: number, assignToEmployeeId?: number) => {
-    await toggleTaskComplete(
+  const handleTaskToggle = (taskId: number, assignToEmployeeId?: number) => {
+    toggleTaskComplete(
       taskId,
       assignToEmployeeId,
       currentUser.id,
