@@ -1,4 +1,4 @@
-// EmployeeApp.tsx - Simple fix: Back to original structure, just save immediately
+// EmployeeApp.tsx - Optimized to prevent infinite loops
 import React, { useState, useEffect, useCallback } from 'react';
 import { Users, CheckSquare, TrendingUp, Settings, Lock, LogOut, Calendar, Database, ChevronDown, X, Check, ShoppingBag } from 'lucide-react';
 
@@ -40,7 +40,7 @@ const EmployeeApp = () => {
     saveToFirebase
   } = useFirebaseData();
 
-  const 
+  const {
     currentUser,
     isAdmin,
     setIsAdmin,
@@ -62,10 +62,21 @@ const EmployeeApp = () => {
     loadFromFirebase();
   }, []); // Empty dependency array - only run once
 
-  // Simple data change handler - now saves immediately, no debounce
+  // Set up periodic auto-save (every 5 minutes)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (connectionStatus === 'connected' && !isLoading) {
+        saveToFirebase();
+      }
+    }, 300000); // 5 minutes
+    
+    return () => clearInterval(interval);
+  }, [connectionStatus, isLoading, saveToFirebase]);
+
+  // Optimized data change handler - only save when user makes changes
   const handleDataChange = useCallback(() => {
     if (connectionStatus === 'connected') {
-      saveToFirebase(); // This now saves immediately
+      saveToFirebase();
     }
   }, [connectionStatus, saveToFirebase]);
 
@@ -95,7 +106,7 @@ const EmployeeApp = () => {
     setActiveTab('mood');
   };
 
-  // All setters now trigger immediate save
+  // Enhanced setters that trigger save
   const setEmployeesWithSave = useCallback((updater: (prev: Employee[]) => Employee[]) => {
     setEmployees(updater);
     handleDataChange();
@@ -337,6 +348,7 @@ const EmployeeApp = () => {
             setTaskAssignments={setTaskAssignmentsWithSave}
             setDailyData={setDailyDataWithSave}
             setEmployees={setEmployeesWithSave}
+            saveToFirebase={saveToFirebase}
           />
         )}
 
