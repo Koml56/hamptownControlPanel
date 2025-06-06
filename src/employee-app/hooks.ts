@@ -1,5 +1,4 @@
-// hooks.ts
-impor// hooks.ts - Fixed version with immediate save + debounce protection
+// hooks.ts - Simple fix: Remove debounce for critical operations
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { FirebaseService } from './firebaseService';
 import { getFormattedDate } from './utils';
@@ -56,14 +55,11 @@ export const useFirebaseData = () => {
   const firebaseService = new FirebaseService();
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSaveDataRef = useRef<string>('');
-  const pendingSaveRef = useRef<boolean>(false);
 
-  // Immediate save function (no debounce) - for critical data like task completions
-  const immediateSave = useCallback(async () => {
-    if (connectionStatus !== 'connected' || isLoading || pendingSaveRef.current) {
-      return;
-    }
-
+  // Simple save function - no debounce, just save immediately
+  const saveToFirebase = useCallback(async () => {
+    if (connectionStatus !== 'connected' || isLoading) return;
+    
     // Create a hash of current data to avoid unnecessary saves
     const currentDataHash = JSON.stringify({
       employees: employees.length,
@@ -71,16 +67,20 @@ export const useFirebaseData = () => {
       dailyDataKeys: Object.keys(dailyData).length,
       completedTasksSize: completedTasks.size,
       taskAssignmentsKeys: Object.keys(taskAssignments).length,
-      customRolesLength: customRoles.length
+      customRolesLength: customRoles.length,
+      // Add actual data checksums to detect real changes
+      employeesChecksum: JSON.stringify(employees.map(e => `${e.id}-${e.points}-${e.mood}`)),
+      completedTasksArray: Array.from(completedTasks).sort().join(',')
     });
 
-    // Skip save if data hasn't changed
+    // Skip save if data hasn't actually changed
     if (currentDataHash === lastSaveDataRef.current) {
+      console.log('⏭️ Skipping save - no data changes detected');
       return;
     }
 
-    pendingSaveRef.current = true;
     setIsLoading(true);
+    console.log('💾 Saving to Firebase immediately...');
     
     try {
       await firebaseService.saveData({
@@ -94,86 +94,15 @@ export const useFirebaseData = () => {
       
       setLastSync(new Date().toLocaleTimeString());
       lastSaveDataRef.current = currentDataHash;
-      console.log('✅ Immediate save successful');
+      console.log('✅ Save successful');
       
     } catch (error) {
-      console.error('❌ Immediate save failed:', error);
+      console.error('❌ Save failed:', error);
       setConnectionStatus('error');
     } finally {
       setIsLoading(false);
-      pendingSaveRef.current = false;
     }
   }, [employees, tasks, dailyData, completedTasks, taskAssignments, customRoles, connectionStatus, isLoading]);
-
-  // Debounced save function - for less critical operations
-  const debouncedSave = useCallback(async () => {
-    if (connectionStatus !== 'connected' || isLoading || pendingSaveRef.current) {
-      return;
-    }
-
-    // Create a hash of current data to avoid unnecessary saves
-    const currentDataHash = JSON.stringify({
-      employees: employees.length,
-      tasks: tasks.length,
-      dailyDataKeys: Object.keys(dailyData).length,
-      completedTasksSize: completedTasks.size,
-      taskAssignmentsKeys: Object.keys(taskAssignments).length,
-      customRolesLength: customRoles.length
-    });
-
-    // Skip save if data hasn't changed
-    if (currentDataHash === lastSaveDataRef.current) {
-      return;
-    }
-
-    pendingSaveRef.current = true;
-    setIsLoading(true);
-    
-    try {
-      await firebaseService.saveData({
-        employees,
-        tasks,
-        dailyData,
-        completedTasks,
-        taskAssignments,
-        customRoles
-      });
-      
-      setLastSync(new Date().toLocaleTimeString());
-      lastSaveDataRef.current = currentDataHash;
-      console.log('✅ Debounced save successful');
-      
-    } catch (error) {
-      console.error('❌ Debounced save failed:', error);
-      setConnectionStatus('error');
-    } finally {
-      setIsLoading(false);
-      pendingSaveRef.current = false;
-    }
-  }, [employees, tasks, dailyData, completedTasks, taskAssignments, customRoles, connectionStatus, isLoading]);
-
-  // Immediate save function for critical operations (task completions, purchases, etc.)
-  const saveToFirebaseImmediate = useCallback(() => {
-    // Cancel any pending debounced save
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-      saveTimeoutRef.current = null;
-    }
-    
-    // Save immediately
-    immediateSave();
-  }, [immediateSave]);
-
-  // Regular debounced save for non-critical operations
-  const saveToFirebase = useCallback(() => {
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-    
-    saveTimeoutRef.current = setTimeout(() => {
-      debouncedSave();
-    }, 1000); // Reduced from 2000ms to 1000ms for faster saves
-  }, [debouncedSave]);
 
   const loadFromFirebase = useCallback(async () => {
     if (isLoading) return; // Prevent multiple simultaneous loads
@@ -209,7 +138,9 @@ export const useFirebaseData = () => {
         dailyDataKeys: Object.keys(data.dailyData).length,
         completedTasksSize: data.completedTasks.size,
         taskAssignmentsKeys: Object.keys(data.taskAssignments).length,
-        customRolesLength: data.customRoles.length
+        customRolesLength: data.customRoles.length,
+        employeesChecksum: JSON.stringify(finalEmployees.map(e => `${e.id}-${e.points}-${e.mood}`)),
+        completedTasksArray: Array.from(data.completedTasks).sort().join(',')
       });
       lastSaveDataRef.current = dataHash;
       
@@ -229,54 +160,6 @@ export const useFirebaseData = () => {
       setIsLoading(false);
     }
   }, [isLoading]);
-
-  // Save before page unload to prevent data loss
-  useEffect(() => {
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      // If there's a pending save, trigger immediate save
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-        // Use navigator.sendBeacon for reliability during page unload
-        const currentData = {
-          employees,
-          tasks,
-          dailyData,
-          completedTasks: Array.from(completedTasks),
-          taskAssignments,
-          customRoles
-        };
-        
-        // Try to send data using beacon (more reliable during unload)
-        try {
-          const blob = new Blob([JSON.stringify(currentData)], { type: 'application/json' });
-          navigator.sendBeacon(`${firebaseService['baseUrl']}/urgent-save.json`, blob);
-        } catch (error) {
-          console.warn('Beacon save failed, trying immediate save');
-          immediateSave();
-        }
-      }
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-    };
-  }, [employees, tasks, dailyData, completedTasks, taskAssignments, customRoles, immediateSave]);
-
-  // Auto-save every 30 seconds as backup
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (connectionStatus === 'connected' && !isLoading && !pendingSaveRef.current) {
-        debouncedSave();
-      }
-    }, 30000); // Every 30 seconds
-    
-    return () => clearInterval(interval);
-  }, [connectionStatus, isLoading, debouncedSave]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -309,8 +192,7 @@ export const useFirebaseData = () => {
     
     // Actions
     loadFromFirebase,
-    saveToFirebase,        // Regular debounced save (1 second delay)
-    saveToFirebaseImmediate // Immediate save for critical operations
+    saveToFirebase  // Now saves immediately, no debounce
   };
 };
 
