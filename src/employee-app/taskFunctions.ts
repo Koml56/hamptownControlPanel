@@ -146,6 +146,7 @@ export const toggleTaskComplete = (
   // Immediately save to Firebase after task completion change
   if (saveToFirebase) {
     console.log('🔥 Immediate save triggered by task completion');
-    setTimeout(() => saveToFirebase(), 100); // Small delay to ensure state updates
+    // Use immediate save without delay to ensure data is persisted
+    saveToFirebase();
   }
 };
