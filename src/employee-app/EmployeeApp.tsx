@@ -348,6 +348,7 @@ const EmployeeApp = () => {
             setTaskAssignments={setTaskAssignmentsWithSave}
             setDailyData={setDailyDataWithSave}
             setEmployees={setEmployeesWithSave}
+            saveToFirebase={saveToFirebase}
           />
         )}
 
