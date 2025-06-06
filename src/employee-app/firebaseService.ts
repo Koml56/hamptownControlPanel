@@ -41,14 +41,19 @@ export class FirebaseService {
       // Migrate daily data to include new fields
       const migratedDailyData = dailyDataRes ? this.migrateDailyData(dailyDataRes) : getEmptyDailyData();
       
+      // Handle completed tasks - ensure it's an array and convert to Set
+      const completedTasksArray = Array.isArray(completedTasksData) ? completedTasksData : [];
+      const completedTasksSet = new Set<number>(completedTasksArray);
+      
       console.log('✅ Firebase: Data loaded and migrated successfully');
       console.log('👥 Employees with points:', migratedEmployees);
+      console.log('✅ Completed tasks loaded:', completedTasksArray, '→ Set:', completedTasksSet);
       
       return {
         employees: migratedEmployees,
         tasks: migratedTasks,
         dailyData: migratedDailyData,
-        completedTasks: new Set<number>(completedTasksData || []),
+        completedTasks: completedTasksSet,
         taskAssignments: taskAssignmentsData || {},
         customRoles: customRolesData || ['Cleaner', 'Manager', 'Supervisor']
       };
@@ -96,6 +101,7 @@ export class FirebaseService {
     customRoles: string[];
   }) {
     console.log('🔥 Saving to Firebase...');
+    console.log('💾 Completed tasks to save:', Array.from(data.completedTasks));
     
     try {
       await Promise.all([
@@ -126,6 +132,7 @@ export class FirebaseService {
       ]);
       
       console.log('✅ Firebase: Data saved successfully');
+      console.log('✅ Completed tasks saved:', Array.from(data.completedTasks));
       
     } catch (error) {
       console.error('❌ Firebase save failed:', error);
