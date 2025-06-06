@@ -37,7 +37,8 @@ const EmployeeApp = () => {
     setTaskAssignments,
     setCustomRoles,
     loadFromFirebase,
-    saveToFirebase
+    saveToFirebase,
+    saveImmediately
   } = useFirebaseData();
 
   const {
@@ -348,7 +349,7 @@ const EmployeeApp = () => {
             setTaskAssignments={setTaskAssignmentsWithSave}
             setDailyData={setDailyDataWithSave}
             setEmployees={setEmployeesWithSave}
-            saveToFirebase={saveToFirebase}
+            saveToFirebase={saveImmediately}
           />
         )}
 
