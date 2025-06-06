@@ -97,16 +97,36 @@ export const useFirebaseData = () => {
     }
   }, [employees, tasks, dailyData, completedTasks, taskAssignments, customRoles, connectionStatus, isLoading]);
 
-  // Throttled save with debounce
-  const saveToFirebase = useCallback(() => {
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
+  // Immediate save function for critical actions like task completion
+  const saveImmediately = useCallback(async () => {
+    if (connectionStatus !== 'connected' || isLoading) {
+      console.log('⚠️ Skipping immediate save: not connected or loading');
+      return;
     }
     
-    saveTimeoutRef.current = setTimeout(() => {
-      debouncedSave();
-    }, 2000); // Wait 2 seconds before saving
-  }, [debouncedSave]);
+    console.log('🚀 Immediate save triggered');
+    setIsLoading(true);
+    
+    try {
+      await firebaseService.saveData({
+        employees,
+        tasks,
+        dailyData,
+        completedTasks,
+        taskAssignments,
+        customRoles
+      });
+      
+      setLastSync(new Date().toLocaleTimeString());
+      console.log('✅ Immediate save completed successfully');
+      
+    } catch (error) {
+      console.error('❌ Immediate save failed:', error);
+      setConnectionStatus('error');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [employees, tasks, dailyData, completedTasks, taskAssignments, customRoles, connectionStatus, isLoading]);
 
   const loadFromFirebase = useCallback(async () => {
     if (isLoading) return; // Prevent multiple simultaneous loads
@@ -172,6 +192,17 @@ export const useFirebaseData = () => {
     };
   }, []);
 
+  // Throttled save with debounce
+  const saveToFirebase = useCallback(() => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    
+    saveTimeoutRef.current = setTimeout(() => {
+      debouncedSave();
+    }, 2000); // Wait 2 seconds before saving
+  }, [debouncedSave]);
+
   return {
     // State
     isLoading,
@@ -194,7 +225,8 @@ export const useFirebaseData = () => {
     
     // Actions
     loadFromFirebase,
-    saveToFirebase
+    saveToFirebase,
+    saveImmediately // Add immediate save function
   };
 };
 
