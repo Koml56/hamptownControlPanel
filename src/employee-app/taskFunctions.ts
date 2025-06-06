@@ -94,7 +94,8 @@ export const toggleTaskComplete = (
   setCompletedTasks: (tasks: Set<number>) => void,
   setTaskAssignments: (updater: (prev: TaskAssignments) => TaskAssignments) => void,
   setDailyData: (updater: (prev: DailyDataMap) => DailyDataMap) => void,
-  setEmployees: (updater: (prev: Employee[]) => Employee[]) => void
+  setEmployees: (updater: (prev: Employee[]) => Employee[]) => void,
+  saveToFirebase?: () => void // Add optional save function
 ) => {
   const wasCompleted = completedTasks.has(taskId);
   const newCompletedTasks = new Set(completedTasks);
@@ -141,4 +142,10 @@ export const toggleTaskComplete = (
   }
   
   setCompletedTasks(newCompletedTasks);
+  
+  // Immediately save to Firebase after task completion change
+  if (saveToFirebase) {
+    console.log('🔥 Immediate save triggered by task completion');
+    setTimeout(() => saveToFirebase(), 100); // Small delay to ensure state updates
+  }
 };
