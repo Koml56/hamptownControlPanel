@@ -83,7 +83,7 @@ export const getAssignedEmployee = (taskId: number, taskAssignments: TaskAssignm
   return employees.find(emp => emp.id === empId);
 };
 
-export const toggleTaskComplete = async (
+export const toggleTaskComplete = (
   taskId: number,
   assignToEmployeeId: number | undefined,
   currentUserId: number,
