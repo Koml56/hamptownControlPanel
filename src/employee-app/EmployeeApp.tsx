@@ -1,4 +1,4 @@
-// EmployeeApp.tsx - Optimized to prevent infinite loops
+// EmployeeApp.tsx - Fixed to use immediate save for critical operations
 import React, { useState, useEffect, useCallback } from 'react';
 import { Users, CheckSquare, TrendingUp, Settings, Lock, LogOut, Calendar, Database, ChevronDown, X, Check, ShoppingBag } from 'lucide-react';
 
@@ -19,7 +19,7 @@ import { getDefaultStoreItems } from './defaultData';
 import type { ActiveTab, Employee, Task, DailyDataMap, TaskAssignments, StoreItem } from './types';
 
 const EmployeeApp = () => {
-  // Firebase and Auth hooks
+  // Firebase and Auth hooks - Now includes immediate save function
   const {
     isLoading,
     lastSync,
@@ -37,8 +37,8 @@ const EmployeeApp = () => {
     setTaskAssignments,
     setCustomRoles,
     loadFromFirebase,
-    saveToFirebase,
-    saveImmediately
+    saveToFirebase,          // Regular debounced save
+    saveToFirebaseImmediate  // NEW: Immediate save for critical operations
   } = useFirebaseData();
 
   const {
@@ -63,23 +63,19 @@ const EmployeeApp = () => {
     loadFromFirebase();
   }, []); // Empty dependency array - only run once
 
-  // Set up periodic auto-save (every 5 minutes)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (connectionStatus === 'connected' && !isLoading) {
-        saveToFirebase();
-      }
-    }, 300000); // 5 minutes
-    
-    return () => clearInterval(interval);
-  }, [connectionStatus, isLoading, saveToFirebase]);
-
-  // Optimized data change handler - only save when user makes changes
+  // Regular data change handler - debounced save for non-critical operations
   const handleDataChange = useCallback(() => {
     if (connectionStatus === 'connected') {
       saveToFirebase();
     }
   }, [connectionStatus, saveToFirebase]);
+
+  // Critical data change handler - immediate save for important operations
+  const handleCriticalDataChange = useCallback(() => {
+    if (connectionStatus === 'connected') {
+      saveToFirebaseImmediate();
+    }
+  }, [connectionStatus, saveToFirebaseImmediate]);
 
   // Update user mood when current user changes
   useEffect(() => {
@@ -107,7 +103,7 @@ const EmployeeApp = () => {
     setActiveTab('mood');
   };
 
-  // Enhanced setters that trigger save
+  // Regular setters with debounced save - for admin operations, mood updates, etc.
   const setEmployeesWithSave = useCallback((updater: (prev: Employee[]) => Employee[]) => {
     setEmployees(updater);
     handleDataChange();
@@ -118,21 +114,6 @@ const EmployeeApp = () => {
     handleDataChange();
   }, [setTasks, handleDataChange]);
 
-  const setDailyDataWithSave = useCallback((updater: (prev: DailyDataMap) => DailyDataMap) => {
-    setDailyData(updater);
-    handleDataChange();
-  }, [setDailyData, handleDataChange]);
-
-  const setCompletedTasksWithSave = useCallback((tasks: Set<number>) => {
-    setCompletedTasks(tasks);
-    handleDataChange();
-  }, [setCompletedTasks, handleDataChange]);
-
-  const setTaskAssignmentsWithSave = useCallback((updater: (prev: TaskAssignments) => TaskAssignments) => {
-    setTaskAssignments(updater);
-    handleDataChange();
-  }, [setTaskAssignments, handleDataChange]);
-
   const setCustomRolesWithSave = useCallback((updater: (prev: string[]) => string[]) => {
     setCustomRoles(updater);
     handleDataChange();
@@ -142,6 +123,28 @@ const EmployeeApp = () => {
     setStoreItems(updater);
     handleDataChange();
   }, [setStoreItems, handleDataChange]);
+
+  // Critical setters with immediate save - for task completions, purchases, etc.
+  const setDailyDataWithImmediateSave = useCallback((updater: (prev: DailyDataMap) => DailyDataMap) => {
+    setDailyData(updater);
+    handleCriticalDataChange();
+  }, [setDailyData, handleCriticalDataChange]);
+
+  const setCompletedTasksWithImmediateSave = useCallback((tasks: Set<number>) => {
+    setCompletedTasks(tasks);
+    handleCriticalDataChange();
+  }, [setCompletedTasks, handleCriticalDataChange]);
+
+  const setTaskAssignmentsWithImmediateSave = useCallback((updater: (prev: TaskAssignments) => TaskAssignments) => {
+    setTaskAssignments(updater);
+    handleCriticalDataChange();
+  }, [setTaskAssignments, handleCriticalDataChange]);
+
+  // Special setter for employee points (critical for task completions and purchases)
+  const setEmployeesWithImmediateSave = useCallback((updater: (prev: Employee[]) => Employee[]) => {
+    setEmployees(updater);
+    handleCriticalDataChange();
+  }, [setEmployees, handleCriticalDataChange]);
 
   const currentEmployee = employees.find(emp => emp.id === currentUser.id);
 
@@ -325,15 +328,15 @@ const EmployeeApp = () => {
           )}
         </div>
 
-        {/* Tab Content */}
+        {/* Tab Content - NOTE: Critical operations now use immediate save */}
         {activeTab === 'mood' && (
           <MoodTracker
             currentUser={currentUser}
             employees={employees}
             userMood={userMood}
             setUserMood={setUserMood}
-            setEmployees={setEmployeesWithSave}
-            setDailyData={setDailyDataWithSave}
+            setEmployees={setEmployeesWithSave} // Regular save for mood updates
+            setDailyData={setDailyDataWithImmediateSave} // Immediate save for daily data
           />
         )}
 
@@ -345,11 +348,10 @@ const EmployeeApp = () => {
             completedTasks={completedTasks}
             taskAssignments={taskAssignments}
             dailyData={dailyData}
-            setCompletedTasks={setCompletedTasksWithSave}
-            setTaskAssignments={setTaskAssignmentsWithSave}
-            setDailyData={setDailyDataWithSave}
-            setEmployees={setEmployeesWithSave}
-            saveToFirebase={saveImmediately}
+            setCompletedTasks={setCompletedTasksWithImmediateSave}      // IMMEDIATE SAVE
+            setTaskAssignments={setTaskAssignmentsWithImmediateSave}    // IMMEDIATE SAVE
+            setDailyData={setDailyDataWithImmediateSave}               // IMMEDIATE SAVE
+            setEmployees={setEmployeesWithImmediateSave}               // IMMEDIATE SAVE for points
           />
         )}
 
@@ -359,8 +361,8 @@ const EmployeeApp = () => {
             employees={employees}
             storeItems={storeItems}
             dailyData={dailyData}
-            setEmployees={setEmployeesWithSave}
-            setDailyData={setDailyDataWithSave}
+            setEmployees={setEmployeesWithImmediateSave}    // IMMEDIATE SAVE for points/purchases
+            setDailyData={setDailyDataWithImmediateSave}    // IMMEDIATE SAVE for purchases
           />
         )}
 
@@ -370,10 +372,10 @@ const EmployeeApp = () => {
             tasks={tasks}
             customRoles={customRoles}
             storeItems={storeItems}
-            setEmployees={setEmployeesWithSave}
-            setTasks={setTasksWithSave}
-            setCustomRoles={setCustomRolesWithSave}
-            setStoreItems={setStoreItemsWithSave}
+            setEmployees={setEmployeesWithSave}       // Regular save for admin operations
+            setTasks={setTasksWithSave}              // Regular save for admin operations
+            setCustomRoles={setCustomRolesWithSave}  // Regular save for admin operations
+            setStoreItems={setStoreItemsWithSave}    // Regular save for admin operations
           />
         )}
 
