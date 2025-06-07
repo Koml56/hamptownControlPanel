@@ -1,4 +1,4 @@
-// EmployeeApp.tsx - Optimized to prevent infinite loops
+// EmployeeApp.tsx - Updated to handle store items from Firebase
 import React, { useState, useEffect, useCallback } from 'react';
 import { Users, CheckSquare, TrendingUp, Settings, Lock, LogOut, Calendar, Database, ChevronDown, X, Check, ShoppingBag } from 'lucide-react';
 
@@ -15,7 +15,6 @@ import { handleAdminLogin } from './adminFunctions';
 
 // Types and Constants
 import { getFormattedDate } from './utils';
-import { getDefaultStoreItems } from './defaultData';
 import type { ActiveTab, Employee, Task, DailyDataMap, TaskAssignments, StoreItem } from './types';
 
 const EmployeeApp = () => {
@@ -30,12 +29,14 @@ const EmployeeApp = () => {
     completedTasks,
     taskAssignments,
     customRoles,
+    storeItems, // Get store items from Firebase hook
     setEmployees,
     setTasks,
     setDailyData,
     setCompletedTasks,
     setTaskAssignments,
     setCustomRoles,
+    setStoreItems, // Get store items setter
     loadFromFirebase,
     saveToFirebase
   } = useFirebaseData();
@@ -55,7 +56,6 @@ const EmployeeApp = () => {
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
   const [selectedDate, setSelectedDate] = useState(getFormattedDate(new Date()));
-  const [storeItems, setStoreItems] = useState<StoreItem[]>(getDefaultStoreItems());
 
   // Load data once on mount
   useEffect(() => {
@@ -137,7 +137,9 @@ const EmployeeApp = () => {
     handleDataChange();
   }, [setCustomRoles, handleDataChange]);
 
+  // Add store items setter with save
   const setStoreItemsWithSave = useCallback((updater: (prev: StoreItem[]) => StoreItem[]) => {
+    console.log('🏪 Updating store items and triggering save...');
     setStoreItems(updater);
     handleDataChange();
   }, [setStoreItems, handleDataChange]);
