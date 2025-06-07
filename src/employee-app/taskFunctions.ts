@@ -1,4 +1,4 @@
-// taskFunctions.ts - Fixed to handle point transfers when reassigning completed tasks
+// taskFunctions.ts - Fixed to prevent duplicate daily completions
 import { getFormattedDate } from './utils';
 import type { Task, TaskAssignments, Employee, DailyDataMap } from './types';
 
@@ -40,7 +40,8 @@ export const saveDailyTaskCompletion = (
     
     const existingCompletions = Array.isArray(todayData.completedTasks) ? todayData.completedTasks : [];
     
-    // Remove any existing completion for this task (in case of reassignment)
+    // CRITICAL FIX: Remove any existing completion for this specific task
+    // This prevents duplicates when task is completed -> uncompleted -> completed again
     const filteredCompletions = existingCompletions.filter(c => c.taskId !== taskId);
     const updatedCompletions = [...filteredCompletions, completion];
     
@@ -59,7 +60,49 @@ export const saveDailyTaskCompletion = (
     };
   });
 
-  console.log('📊 Task completion logged:', completion);
+  console.log('📊 Task completion logged (replacing any previous completion):', completion);
+};
+
+export const removeDailyTaskCompletion = (
+  taskId: number,
+  tasks: Task[],
+  setDailyData: (updater: (prev: DailyDataMap) => DailyDataMap) => void
+) => {
+  const today = new Date();
+  const todayStr = getFormattedDate(today);
+
+  setDailyData(prev => {
+    const todayData = prev[todayStr] || { 
+      completedTasks: [], 
+      employeeMoods: [], 
+      purchases: [],
+      totalTasks: tasks.length, 
+      completionRate: 0,
+      totalPointsEarned: 0,
+      totalPointsSpent: 0
+    };
+    
+    const existingCompletions = Array.isArray(todayData.completedTasks) ? todayData.completedTasks : [];
+    
+    // Remove the completion for this task
+    const filteredCompletions = existingCompletions.filter(c => c.taskId !== taskId);
+    
+    const newCompletionRate = Math.round((filteredCompletions.length / tasks.length) * 100);
+    const newTotalPointsEarned = filteredCompletions.reduce((sum, c) => sum + (c.pointsEarned || 0), 0);
+    
+    return {
+      ...prev,
+      [todayStr]: {
+        ...todayData,
+        completedTasks: filteredCompletions,
+        totalTasks: tasks.length,
+        completionRate: newCompletionRate,
+        totalPointsEarned: newTotalPointsEarned
+      }
+    };
+  });
+
+  console.log('🗑️ Task completion removed from daily data:', taskId);
 };
 
 export const transferPoints = (
@@ -144,6 +187,8 @@ export const toggleTaskComplete = (
 
   if (wasCompleted) {
     // UNCOMPLETING A TASK
+    console.log(`🔄 Uncompleting task: ${task.task}`);
+    
     newCompletedTasks.delete(taskId);
     
     // Remove task assignment when uncompleting
@@ -159,8 +204,13 @@ export const toggleTaskComplete = (
       console.log(`📉 Deducted ${task.points} points from ${currentlyAssignedEmp.name} for uncompleting task`);
     }
     
+    // CRITICAL: Remove from daily completion tracking
+    removeDailyTaskCompletion(taskId, tasks, setDailyData);
+    
   } else {
     // COMPLETING A TASK
+    console.log(`✅ Completing task: ${task.task}`);
+    
     const targetEmployeeId = assignToEmployeeId || currentlyAssignedEmp?.id || currentUserId;
     
     // Update assignment if a specific employee was provided
@@ -191,7 +241,7 @@ export const toggleTaskComplete = (
   }
 };
 
-// NEW FUNCTION: Handle reassignment of already completed tasks
+// Handle reassignment of already completed tasks
 export const reassignCompletedTask = (
   taskId: number,
   newEmployeeId: number,
@@ -233,7 +283,8 @@ export const reassignCompletedTask = (
   // Update task assignment
   setTaskAssignments(prev => ({ ...prev, [taskId]: newEmployeeId }));
 
-  // Update daily data to reflect the new assignment
+  // CRITICAL: Update daily data to reflect the new assignment
+  // This replaces the old completion record with the new employee
   saveDailyTaskCompletion(taskId, newEmployeeId, task.task, task.points, tasks, setDailyData);
 
   // Save to Firebase
