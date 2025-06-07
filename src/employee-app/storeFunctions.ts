@@ -14,30 +14,35 @@ export const purchaseItem = (
   setDailyData: (updater: (prev: DailyDataMap) => DailyDataMap) => void
 ): boolean => {
   const employee = employees.find(emp => emp.id === employeeId);
-  
-  if (!employee || !canAffordItem(employee, item)) {
-    alert(`Insufficient points! You need ${item.cost} points but only have ${employee?.points || 0}.`);
+
+  if (!employee) {
+    alert(`Employee with id ${employeeId} not found`);
+    return false;
+  }
+
+  if (!canAffordItem(employee, item)) {
+    alert(`Insufficient points! You need ${item.cost} points but only have ${employee.points}.`);
     return false;
   }
 
   const today = new Date();
   const todayStr = getFormattedDate(today);
-  const now = new Date().toLocaleTimeString('en-US', { 
-    hour12: false, 
-    hour: '2-digit', 
-    minute: '2-digit' 
+  const now = new Date().toLocaleTimeString('en-US', {
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit'
   });
 
-  // Deduct points from employee
-  setEmployees(prev => prev.map(emp => 
-    emp.id === employeeId 
-      ? { ...emp, points: emp.points - item.cost }
-      : emp
-  ));
+  // Обновляем баллы сотрудника
+  setEmployees(prevEmployees =>
+    prevEmployees.map(emp =>
+      emp.id === employeeId ? { ...emp, points: emp.points - item.cost } : emp
+    )
+  );
 
-  // Create purchase record
+  // Создаем запись покупки
   const purchase: Purchase = {
-    id: Date.now(), // Simple ID generation
+    id: Date.now(),
     employeeId,
     itemId: item.id,
     itemName: item.name,
@@ -47,23 +52,26 @@ export const purchaseItem = (
     status: 'pending'
   };
 
-  // Save purchase to daily data
+  // Обновляем dailyData — иммутабельно!
   setDailyData(prev => {
-    const todayData = prev[todayStr] || { 
-      completedTasks: [], 
-      employeeMoods: [], 
-      purchases: [], 
-      totalTasks: 22, 
+
+    const todayData = prev[todayStr] || {
+      completedTasks: [],
+      employeeMoods: [],
+      purchases: [],
+      totalTasks: 22,
       completionRate: 0,
       totalPointsEarned: 0,
       totalPointsSpent: 0
     };
-    
-    const existingPurchases = Array.isArray(todayData.purchases) ? todayData.purchases : [];
-    const updatedPurchases = [...existingPurchases, purchase];
+
+    const updatedPurchases = Array.isArray(todayData.purchases)
+      ? [...todayData.purchases, purchase]
+      : [purchase];
+
     const newTotalSpent = (todayData.totalPointsSpent || 0) + item.cost;
-    
-    return {
+
+    const updatedDailyData = {
       ...prev,
       [todayStr]: {
         ...todayData,
@@ -71,9 +79,11 @@ export const purchaseItem = (
         totalPointsSpent: newTotalSpent
       }
     };
+
+    return updatedDailyData;
   });
 
-  console.log('🛒 Purchase logged:', purchase);
+  console.log("🛒 Purchase logged:", purchase);
   return true;
 };
 

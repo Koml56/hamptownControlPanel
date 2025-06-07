@@ -1,21 +1,20 @@
-// hooks.ts - Simple fix: Remove debounce for critical operations
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { FirebaseService } from './firebaseService';
 import { getFormattedDate } from './utils';
 import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData } from './defaultData';
-import type { 
-  Employee, 
-  Task, 
-  DailyDataMap, 
-  TaskAssignments, 
+import type {
+  Employee,
+  Task,
+  DailyDataMap,
+  TaskAssignments,
   ConnectionStatus,
-  CurrentUser 
+  CurrentUser
 } from './types';
 
-// Simple migration functions inline to avoid circular dependencies
+// Миграция данных
 const migrateEmployeeData = (employees: any[]): Employee[] => {
   if (!employees || !Array.isArray(employees)) return getDefaultEmployees();
-  
+
   return employees.map(emp => ({
     id: emp.id || 0,
     name: emp.name || 'Unknown',
@@ -29,7 +28,7 @@ const migrateEmployeeData = (employees: any[]): Employee[] => {
 
 const migrateTaskData = (tasks: any[]): Task[] => {
   if (!tasks || !Array.isArray(tasks)) return getDefaultTasks();
-  
+
   return tasks.map(task => ({
     id: task.id || 0,
     task: task.task || 'Unknown Task',
@@ -44,11 +43,11 @@ export const useFirebaseData = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
-  
+
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [dailyData, setDailyData] = useState<DailyDataMap>({});
-  const [completedTasks, setCompletedTasks] = useState(new Set<number>());
+  const [completedTasks, setCompletedTasks] = useState<Set<number>>(new Set());
   const [taskAssignments, setTaskAssignments] = useState<TaskAssignments>({});
   const [customRoles, setCustomRoles] = useState<string[]>(['Cleaner', 'Manager', 'Supervisor']);
 
@@ -56,32 +55,37 @@ export const useFirebaseData = () => {
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSaveDataRef = useRef<string>('');
 
-  // Simple save function - no debounce, just save immediately
-  const saveToFirebase = useCallback(async () => {
-    if (connectionStatus !== 'connected' || isLoading) return;
-    
-    // Create a hash of current data to avoid unnecessary saves
-    const currentDataHash = JSON.stringify({
-      employees: employees.length,
-      tasks: tasks.length,
-      dailyDataKeys: Object.keys(dailyData).length,
-      completedTasksSize: completedTasks.size,
-      taskAssignmentsKeys: Object.keys(taskAssignments).length,
-      customRolesLength: customRoles.length,
-      // Add actual data checksums to detect real changes
-      employeesChecksum: JSON.stringify(employees.map(e => `${e.id}-${e.points}-${e.mood}`)),
-      completedTasksArray: Array.from(completedTasks).sort().join(',')
-    });
-
-    // Skip save if data hasn't actually changed
-    if (currentDataHash === lastSaveDataRef.current) {
-      console.log('⏭️ Skipping save - no data changes detected');
+  // Функция отложенного сохранения
+  const debouncedSave = useCallback(async () => {
+    if (connectionStatus !== 'connected' || isLoading) {
       return;
     }
 
+    const currentDataHash = JSON.stringify({
+      employees: employees.length,
+      tasks: tasks.length,
+      dailyDataHash: JSON.stringify(dailyData),
+      completedTasksSize: completedTasks.size,
+      taskAssignmentsKeys: Object.keys(taskAssignments).length,
+      customRolesLength: customRoles.length
+    });
+
+    if (currentDataHash === lastSaveDataRef.current) {
+      console.log('debouncedSave aborted: data hash unchanged');
+      return;
+    }
+
+    console.log('🔄 Saving data to Firebase...');
+    console.log('📦 Data snapshot:', {
+      employees,
+      tasks,
+      dailyData,
+      completedTasks: Array.from(completedTasks),
+      taskAssignments,
+      customRoles
+    });
+
     setIsLoading(true);
-    console.log('💾 Saving to Firebase immediately...');
-    
     try {
       await firebaseService.saveData({
         employees,
@@ -91,77 +95,86 @@ export const useFirebaseData = () => {
         taskAssignments,
         customRoles
       });
-      
+
       setLastSync(new Date().toLocaleTimeString());
       lastSaveDataRef.current = currentDataHash;
-      console.log('✅ Save successful');
-      
     } catch (error) {
-      console.error('❌ Save failed:', error);
+      console.error('Save failed:', error);
       setConnectionStatus('error');
     } finally {
       setIsLoading(false);
     }
-  }, [employees, tasks, dailyData, completedTasks, taskAssignments, customRoles, connectionStatus, isLoading]);
+  }, [
+    employees,
+    tasks,
+    dailyData,
+    completedTasks,
+    taskAssignments,
+    customRoles,
+    connectionStatus,
+    isLoading
+  ]);
+
+  // Вызывает debouncedSave с задержкой
+  const saveToFirebase = useCallback(() => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    saveTimeoutRef.current = setTimeout(() => {
+      debouncedSave();
+    }, 2000);
+  }, [debouncedSave]);
 
   const loadFromFirebase = useCallback(async () => {
-    if (isLoading) return; // Prevent multiple simultaneous loads
-    
+    if (isLoading) return;
+
     setIsLoading(true);
     setConnectionStatus('connecting');
-    
+
     try {
       const data = await firebaseService.loadData();
-      
-      // Migrate data to ensure all required fields exist
+
       const finalEmployees = migrateEmployeeData(data.employees);
       const finalTasks = migrateTaskData(data.tasks);
-      
+
       setEmployees(finalEmployees);
       setTasks(finalTasks);
       setDailyData(data.dailyData);
-      setCompletedTasks(data.completedTasks);
+      setCompletedTasks(new Set(data.completedTasks));
       setTaskAssignments(data.taskAssignments);
       setCustomRoles(data.customRoles);
-      
+
       setConnectionStatus('connected');
       setLastSync(new Date().toLocaleTimeString());
-      
-      console.log('📊 Final loaded data:');
-      console.log('👥 Employees:', finalEmployees);
-      console.log('📋 Tasks:', finalTasks);
-      
-      // Update the hash after loading
+
       const dataHash = JSON.stringify({
         employees: finalEmployees.length,
         tasks: finalTasks.length,
         dailyDataKeys: Object.keys(data.dailyData).length,
         completedTasksSize: data.completedTasks.size,
         taskAssignmentsKeys: Object.keys(data.taskAssignments).length,
-        customRolesLength: data.customRoles.length,
-        employeesChecksum: JSON.stringify(finalEmployees.map(e => `${e.id}-${e.points}-${e.mood}`)),
-        completedTasksArray: Array.from(data.completedTasks).sort().join(',')
+        customRolesLength: data.customRoles.length
       });
       lastSaveDataRef.current = dataHash;
-      
+
     } catch (error) {
       setConnectionStatus('error');
-      
-      // Initialize with default data on first run
-      const defaultEmployees = getDefaultEmployees();
-      const defaultTasks = getDefaultTasks();
-      const emptyDaily = getEmptyDailyData();
-      
-      setEmployees(defaultEmployees);
-      setTasks(defaultTasks);
-      setDailyData(emptyDaily);
-      
+
+      setEmployees(getDefaultEmployees());
+      setTasks(getDefaultTasks());
+      setDailyData(getEmptyDailyData());
     } finally {
       setIsLoading(false);
     }
   }, [isLoading]);
 
-  // Cleanup timeout on unmount
+  // Вызывает save при изменении зависимостей
+  useEffect(() => {
+    saveToFirebase();
+  }, [employees, tasks, dailyData, completedTasks, taskAssignments, customRoles]);
+
+  // Очистка таймера при размонтировании
   useEffect(() => {
     return () => {
       if (saveTimeoutRef.current) {
@@ -181,7 +194,7 @@ export const useFirebaseData = () => {
     completedTasks,
     taskAssignments,
     customRoles,
-    
+
     // Setters
     setEmployees,
     setTasks,
@@ -189,25 +202,25 @@ export const useFirebaseData = () => {
     setCompletedTasks,
     setTaskAssignments,
     setCustomRoles,
-    
+
     // Actions
     loadFromFirebase,
-    saveToFirebase  // Now saves immediately, no debounce
+    saveToFirebase
   };
 };
 
 export const useAuth = () => {
   const [currentUser, setCurrentUser] = useState<CurrentUser>({ id: 1, name: 'Luka' });
   const [isAdmin, setIsAdmin] = useState(false);
-  
+
   const switchUser = useCallback((employee: Employee) => {
     setCurrentUser({ id: employee.id, name: employee.name });
   }, []);
-  
+
   const logoutAdmin = useCallback(() => {
     setIsAdmin(false);
   }, []);
-  
+
   return {
     currentUser,
     isAdmin,

@@ -1,5 +1,5 @@
 // Store.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ShoppingCart, Trophy, Clock, Gift, Users, Coffee, Star, History } from 'lucide-react';
 import { purchaseItem, canAffordItem, getEmployeePoints, getEmployeePurchaseHistory, getLeaderboard } from './storeFunctions';
 import type { Employee, StoreItem, DailyDataMap, CurrentUser, Purchase } from './types';
@@ -11,6 +11,7 @@ interface StoreProps {
   dailyData: DailyDataMap;
   setEmployees: (updater: (prev: Employee[]) => Employee[]) => void;
   setDailyData: (updater: (prev: DailyDataMap) => DailyDataMap) => void;
+  saveToFirebase: () => void;
 }
 
 const Store: React.FC<StoreProps> = ({
@@ -19,7 +20,8 @@ const Store: React.FC<StoreProps> = ({
   storeItems,
   dailyData,
   setEmployees,
-  setDailyData
+  setDailyData,
+  saveToFirebase
 }) => {
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [showHistory, setShowHistory] = useState(false);
@@ -56,6 +58,12 @@ const Store: React.FC<StoreProps> = ({
       alert(`🎉 Successfully purchased: ${item.name}! Check with your manager to redeem.`);
     }
   };
+
+  React.useEffect(() => {
+    if (dailyData && Object.keys(dailyData).length > 0) {
+      saveToFirebase();
+    }
+  }, [dailyData, saveToFirebase]);
 
   const getCategoryIcon = (category: string) => {
     switch (category) {

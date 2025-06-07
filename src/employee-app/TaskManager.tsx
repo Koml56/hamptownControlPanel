@@ -16,7 +16,6 @@ interface TaskManagerProps {
   setTaskAssignments: (updater: (prev: TaskAssignments) => TaskAssignments) => void;
   setDailyData: (updater: (prev: DailyDataMap) => DailyDataMap) => void;
   setEmployees: (updater: (prev: Employee[]) => Employee[]) => void;
-  saveToFirebase: () => void; // Add saveToFirebase prop
 }
 
 const TaskManager: React.FC<TaskManagerProps> = ({
@@ -29,8 +28,7 @@ const TaskManager: React.FC<TaskManagerProps> = ({
   setCompletedTasks,
   setTaskAssignments,
   setDailyData,
-  setEmployees,
-  saveToFirebase
+  setEmployees
 }) => {
   const handleTaskToggle = (taskId: number, assignToEmployeeId?: number) => {
     toggleTaskComplete(
@@ -44,8 +42,7 @@ const TaskManager: React.FC<TaskManagerProps> = ({
       setCompletedTasks,
       setTaskAssignments,
       setDailyData,
-      setEmployees,
-      saveToFirebase // Pass the save function
+      setEmployees
     );
   };
 
