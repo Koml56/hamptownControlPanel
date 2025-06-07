@@ -1,17 +1,18 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { FirebaseService } from './firebaseService';
 import { getFormattedDate } from './utils';
-import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData } from './defaultData';
+import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData, getDefaultStoreItems } from './defaultData';
 import type {
   Employee,
   Task,
   DailyDataMap,
   TaskAssignments,
   ConnectionStatus,
-  CurrentUser
+  CurrentUser,
+  StoreItem
 } from './types';
 
-// Миграция данных
+// Migration functions
 const migrateEmployeeData = (employees: any[]): Employee[] => {
   if (!employees || !Array.isArray(employees)) return getDefaultEmployees();
 
@@ -39,6 +40,20 @@ const migrateTaskData = (tasks: any[]): Task[] => {
   }));
 };
 
+const migrateStoreItemData = (storeItems: any[]): StoreItem[] => {
+  if (!storeItems || !Array.isArray(storeItems)) return getDefaultStoreItems();
+
+  return storeItems.map(item => ({
+    id: item.id || 0,
+    name: item.name || 'Unknown Item',
+    description: item.description || 'No description',
+    cost: typeof item.cost === 'number' ? item.cost : 10,
+    category: item.category || 'reward',
+    icon: item.icon || '🎁',
+    available: typeof item.available === 'boolean' ? item.available : true
+  }));
+};
+
 export const useFirebaseData = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
@@ -50,12 +65,13 @@ export const useFirebaseData = () => {
   const [completedTasks, setCompletedTasks] = useState<Set<number>>(new Set());
   const [taskAssignments, setTaskAssignments] = useState<TaskAssignments>({});
   const [customRoles, setCustomRoles] = useState<string[]>(['Cleaner', 'Manager', 'Supervisor']);
+  const [storeItems, setStoreItems] = useState<StoreItem[]>([]);
 
   const firebaseService = new FirebaseService();
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSaveDataRef = useRef<string>('');
 
-  // Функция отложенного сохранения
+  // Debounced save function
   const debouncedSave = useCallback(async () => {
     if (connectionStatus !== 'connected' || isLoading) {
       return;
@@ -67,7 +83,8 @@ export const useFirebaseData = () => {
       dailyDataHash: JSON.stringify(dailyData),
       completedTasksSize: completedTasks.size,
       taskAssignmentsKeys: Object.keys(taskAssignments).length,
-      customRolesLength: customRoles.length
+      customRolesLength: customRoles.length,
+      storeItemsLength: storeItems.length // Add store items to hash
     });
 
     if (currentDataHash === lastSaveDataRef.current) {
@@ -82,7 +99,8 @@ export const useFirebaseData = () => {
       dailyData,
       completedTasks: Array.from(completedTasks),
       taskAssignments,
-      customRoles
+      customRoles,
+      storeItems
     });
 
     setIsLoading(true);
@@ -93,11 +111,13 @@ export const useFirebaseData = () => {
         dailyData,
         completedTasks,
         taskAssignments,
-        customRoles
+        customRoles,
+        storeItems // Include store items in save
       });
 
       setLastSync(new Date().toLocaleTimeString());
       lastSaveDataRef.current = currentDataHash;
+      console.log('✅ Store items saved to Firebase successfully');
     } catch (error) {
       console.error('Save failed:', error);
       setConnectionStatus('error');
@@ -111,11 +131,12 @@ export const useFirebaseData = () => {
     completedTasks,
     taskAssignments,
     customRoles,
+    storeItems, // Add to dependency array
     connectionStatus,
     isLoading
   ]);
 
-  // Вызывает debouncedSave с задержкой
+  // Save with debounce
   const saveToFirebase = useCallback(() => {
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
@@ -137,6 +158,7 @@ export const useFirebaseData = () => {
 
       const finalEmployees = migrateEmployeeData(data.employees);
       const finalTasks = migrateTaskData(data.tasks);
+      const finalStoreItems = migrateStoreItemData(data.storeItems);
 
       setEmployees(finalEmployees);
       setTasks(finalTasks);
@@ -144,6 +166,7 @@ export const useFirebaseData = () => {
       setCompletedTasks(new Set(data.completedTasks));
       setTaskAssignments(data.taskAssignments);
       setCustomRoles(data.customRoles);
+      setStoreItems(finalStoreItems); // Set store items
 
       setConnectionStatus('connected');
       setLastSync(new Date().toLocaleTimeString());
@@ -154,9 +177,12 @@ export const useFirebaseData = () => {
         dailyDataKeys: Object.keys(data.dailyData).length,
         completedTasksSize: data.completedTasks.size,
         taskAssignmentsKeys: Object.keys(data.taskAssignments).length,
-        customRolesLength: data.customRoles.length
+        customRolesLength: data.customRoles.length,
+        storeItemsLength: finalStoreItems.length // Include in hash
       });
       lastSaveDataRef.current = dataHash;
+
+      console.log('✅ Store items loaded from Firebase:', finalStoreItems);
 
     } catch (error) {
       setConnectionStatus('error');
@@ -164,17 +190,18 @@ export const useFirebaseData = () => {
       setEmployees(getDefaultEmployees());
       setTasks(getDefaultTasks());
       setDailyData(getEmptyDailyData());
+      setStoreItems(getDefaultStoreItems());
     } finally {
       setIsLoading(false);
     }
   }, [isLoading]);
 
-  // Вызывает save при изменении зависимостей
+  // Auto-save when data changes
   useEffect(() => {
     saveToFirebase();
-  }, [employees, tasks, dailyData, completedTasks, taskAssignments, customRoles]);
+  }, [employees, tasks, dailyData, completedTasks, taskAssignments, customRoles, storeItems]);
 
-  // Очистка таймера при размонтировании
+  // Cleanup timeout on unmount
   useEffect(() => {
     return () => {
       if (saveTimeoutRef.current) {
@@ -194,6 +221,7 @@ export const useFirebaseData = () => {
     completedTasks,
     taskAssignments,
     customRoles,
+    storeItems, // Include store items in return
 
     // Setters
     setEmployees,
@@ -202,6 +230,7 @@ export const useFirebaseData = () => {
     setCompletedTasks,
     setTaskAssignments,
     setCustomRoles,
+    setStoreItems, // Include store items setter
 
     // Actions
     loadFromFirebase,
