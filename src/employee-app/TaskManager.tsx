@@ -1,8 +1,8 @@
-// TaskManager.tsx
+// TaskManager.tsx - Updated to handle point transfers on reassignment
 import React from 'react';
 import { CheckSquare, Check, Users, Star } from 'lucide-react';
 import { getPriorityColor, getFormattedDate } from './utils';
-import { toggleTaskComplete, assignTask, getAssignedEmployee } from './taskFunctions';
+import { toggleTaskComplete, assignTask, getAssignedEmployee, reassignCompletedTask } from './taskFunctions';
 import type { Task, Employee, TaskAssignments, DailyDataMap, CurrentUser } from './types';
 
 interface TaskManagerProps {
@@ -47,7 +47,25 @@ const TaskManager: React.FC<TaskManagerProps> = ({
   };
 
   const handleAssignTask = (taskId: number, employeeId: number) => {
-    assignTask(taskId, employeeId, setTaskAssignments);
+    const isCompleted = completedTasks.has(taskId);
+    
+    if (isCompleted) {
+      // Task is completed - use reassignment function to transfer points
+      reassignCompletedTask(
+        taskId,
+        employeeId,
+        completedTasks,
+        taskAssignments,
+        tasks,
+        employees,
+        setTaskAssignments,
+        setDailyData,
+        setEmployees
+      );
+    } else {
+      // Task is not completed - normal assignment
+      assignTask(taskId, employeeId, setTaskAssignments);
+    }
   };
 
   const currentEmployee = employees.find(emp => emp.id === currentUser.id);
@@ -149,32 +167,43 @@ const TaskManager: React.FC<TaskManagerProps> = ({
                     </div>
                   )}
                   {!assignedEmp && (
-                    <div className="text-sm text-gray-600 mb-2">Assign to:</div>
+                    <div className="text-sm text-gray-600 mb-2">
+                      {isCompleted ? 'Reassign to:' : 'Assign to:'}
+                    </div>
                   )}
                   <div className="flex flex-wrap gap-2">
                     {employees.map(emp => (
                       <button
                         key={emp.id}
-                        onClick={() => {
-                          if (!isCompleted) {
-                            handleTaskToggle(task.id, emp.id);
-                          } else {
-                            handleAssignTask(task.id, emp.id);
-                          }
-                        }}
-                        className={`text-xs px-3 py-1 rounded-full hover:bg-blue-200 ${
+                        onClick={() => handleAssignTask(task.id, emp.id)}
+                        className={`text-xs px-3 py-1 rounded-full transition-colors ${
                           assignedEmp?.id === emp.id 
                             ? 'bg-blue-500 text-white' 
-                            : 'bg-blue-100 text-blue-700'
+                            : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
                         }`}
+                        title={
+                          isCompleted && assignedEmp?.id !== emp.id 
+                            ? `Transfer ${task.points} points from ${assignedEmp?.name || 'unassigned'} to ${emp.name}`
+                            : `Assign task to ${emp.name}`
+                        }
                       >
                         {emp.name}
                         <span className="ml-1 text-purple-600 font-medium">
                           ({emp.points}pts)
                         </span>
+                        {isCompleted && assignedEmp?.id !== emp.id && (
+                          <span className="ml-1">🔄</span>
+                        )}
                       </button>
                     ))}
                   </div>
+                  
+                  {/* Visual indicator for completed task reassignment */}
+                  {isCompleted && (
+                    <div className="mt-2 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                      💡 Tip: Click another employee's name to transfer the {task.points} points to them
+                    </div>
+                  )}
                 </div>
               </div>
             );
