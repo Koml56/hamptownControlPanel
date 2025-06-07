@@ -1,7 +1,7 @@
 // firebaseService.ts
 import { FIREBASE_CONFIG } from './constants';
-import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData } from './defaultData';
-import type { Employee, Task, DailyDataMap, TaskAssignments } from './types';
+import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData, getDefaultStoreItems } from './defaultData';
+import type { Employee, Task, DailyDataMap, TaskAssignments, StoreItem } from './types';
 
 export class FirebaseService {
   private baseUrl = FIREBASE_CONFIG.databaseURL;
@@ -10,13 +10,14 @@ export class FirebaseService {
     console.log('🔥 Loading data from Firebase...');
     
     try {
-      const [employeesRes, tasksRes, dailyRes, completedRes, assignmentsRes, rolesRes] = await Promise.all([
+      const [employeesRes, tasksRes, dailyRes, completedRes, assignmentsRes, rolesRes, storeRes] = await Promise.all([
         fetch(`${this.baseUrl}/employees.json`),
         fetch(`${this.baseUrl}/tasks.json`),
         fetch(`${this.baseUrl}/dailyData.json`),
         fetch(`${this.baseUrl}/completedTasks.json`),
         fetch(`${this.baseUrl}/taskAssignments.json`),
-        fetch(`${this.baseUrl}/customRoles.json`)
+        fetch(`${this.baseUrl}/customRoles.json`),
+        fetch(`${this.baseUrl}/storeItems.json`) // Add store items endpoint
       ]);
       
       const employeesData = await employeesRes.json();
@@ -25,6 +26,7 @@ export class FirebaseService {
       const completedTasksData = await completedRes.json();
       const taskAssignmentsData = await assignmentsRes.json();
       const customRolesData = await rolesRes.json();
+      const storeItemsData = await storeRes.json();
       
       // Migrate employees data to include points if missing
       const migratedEmployees = employeesData ? employeesData.map((emp: any) => ({
@@ -41,8 +43,12 @@ export class FirebaseService {
       // Migrate daily data to include new fields
       const migratedDailyData = dailyDataRes ? this.migrateDailyData(dailyDataRes) : getEmptyDailyData();
       
+      // Migrate store items to ensure all required fields
+      const migratedStoreItems = storeItemsData ? this.migrateStoreItems(storeItemsData) : getDefaultStoreItems();
+      
       console.log('✅ Firebase: Data loaded and migrated successfully');
       console.log('👥 Employees with points:', migratedEmployees);
+      console.log('🏪 Store items loaded:', migratedStoreItems);
       
       return {
         employees: migratedEmployees,
@@ -50,7 +56,8 @@ export class FirebaseService {
         dailyData: migratedDailyData,
         completedTasks: new Set<number>(completedTasksData || []),
         taskAssignments: taskAssignmentsData || {},
-        customRoles: customRolesData || ['Cleaner', 'Manager', 'Supervisor']
+        customRoles: customRolesData || ['Cleaner', 'Manager', 'Supervisor'],
+        storeItems: migratedStoreItems
       };
       
     } catch (error) {
@@ -87,6 +94,20 @@ export class FirebaseService {
     return migrated;
   }
 
+  private migrateStoreItems(storeItems: any[]): StoreItem[] {
+    if (!storeItems || !Array.isArray(storeItems)) return getDefaultStoreItems();
+    
+    return storeItems.map(item => ({
+      id: item.id || 0,
+      name: item.name || 'Unknown Item',
+      description: item.description || 'No description',
+      cost: typeof item.cost === 'number' ? item.cost : 10,
+      category: item.category || 'reward',
+      icon: item.icon || '🎁',
+      available: typeof item.available === 'boolean' ? item.available : true
+    }));
+  }
+
   async saveData(data: {
     employees: Employee[];
     tasks: Task[];
@@ -94,8 +115,10 @@ export class FirebaseService {
     completedTasks: Set<number>;
     taskAssignments: TaskAssignments;
     customRoles: string[];
+    storeItems: StoreItem[];
   }) {
     console.log('🔥 Saving to Firebase...');
+    console.log('🏪 Store items to save:', data.storeItems);
     
     try {
       await Promise.all([
@@ -122,6 +145,10 @@ export class FirebaseService {
         fetch(`${this.baseUrl}/customRoles.json`, {
           method: 'PUT',
           body: JSON.stringify(data.customRoles)
+        }),
+        fetch(`${this.baseUrl}/storeItems.json`, {
+          method: 'PUT',
+          body: JSON.stringify(data.storeItems)
         })
       ]);
       
