@@ -1,14 +1,15 @@
-// firebaseService.ts - Enhanced with real-time synchronization
+// firebaseService.ts - Fixed with proper Firebase real-time streaming
 import { FIREBASE_CONFIG } from './constants';
 import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData, getDefaultStoreItems } from './defaultData';
 import type { Employee, Task, DailyDataMap, TaskAssignments, StoreItem } from './types';
 
 export class FirebaseService {
   private baseUrl = FIREBASE_CONFIG.databaseURL;
-  private listeners: Map<string, any> = new Map();
   private eventSources: Map<string, EventSource> = new Map();
+  private pollIntervals: Map<string, NodeJS.Timeout> = new Map();
+  private lastDataSnapshots: Map<string, string> = new Map();
 
-  // Real-time listener setup
+  // Setup real-time listeners using Firebase REST streaming
   setupRealtimeListeners(callbacks: {
     onEmployeesUpdate: (employees: Employee[]) => void;
     onTasksUpdate: (tasks: Task[]) => void;
@@ -17,59 +18,59 @@ export class FirebaseService {
     onStoreItemsUpdate: (items: StoreItem[]) => void;
     onConnectionChange: (status: 'connected' | 'disconnected' | 'error') => void;
   }) {
-    console.log('🔥 Setting up real-time Firebase listeners...');
+    console.log('🔥 Setting up Firebase real-time listeners...');
 
-    // Setup listeners for each data type
-    this.setupListener('employees', callbacks.onEmployeesUpdate, this.migrateEmployeeData);
-    this.setupListener('tasks', callbacks.onTasksUpdate, this.migrateTaskData);
-    this.setupListener('dailyData', callbacks.onDailyDataUpdate, this.migrateDailyData);
-    this.setupListener('customRoles', callbacks.onCustomRolesUpdate, (data) => data || ['Cleaner', 'Manager', 'Supervisor']);
-    this.setupListener('storeItems', callbacks.onStoreItemsUpdate, this.migrateStoreItems);
+    // Setup polling-based real-time sync (more reliable than SSE with Firebase)
+    this.setupPollingListener('employees', callbacks.onEmployeesUpdate, this.migrateEmployeeData);
+    this.setupPollingListener('tasks', callbacks.onTasksUpdate, this.migrateTaskData);
+    this.setupPollingListener('dailyData', callbacks.onDailyDataUpdate, this.migrateDailyData);
+    this.setupPollingListener('customRoles', callbacks.onCustomRolesUpdate, (data) => data || ['Cleaner', 'Manager', 'Supervisor']);
+    this.setupPollingListener('storeItems', callbacks.onStoreItemsUpdate, this.migrateStoreItems);
 
     // Connection status monitoring
     this.setupConnectionMonitoring(callbacks.onConnectionChange);
   }
 
-  private setupListener(
-    endpoint: string, 
-    callback: (data: any) => void, 
+  private setupPollingListener(
+    endpoint: string,
+    callback: (data: any) => void,
     migrationFn: (data: any) => any
   ) {
-    try {
-      // Create Server-Sent Events connection for real-time updates
-      const eventSource = new EventSource(`${this.baseUrl}/${endpoint}.json?timeout=keep-alive`);
-      
-      eventSource.onopen = () => {
-        console.log(`✅ Connected to ${endpoint} real-time updates`);
-      };
-
-      eventSource.onmessage = (event) => {
-        try {
-          if (event.data && event.data !== 'null') {
-            const data = JSON.parse(event.data);
-            const migratedData = migrationFn(data);
-            console.log(`🔄 Real-time update received for ${endpoint}:`, migratedData);
-            callback(migratedData);
-          }
-        } catch (error) {
-          console.error(`Error processing ${endpoint} update:`, error);
+    const pollData = async () => {
+      try {
+        const response = await fetch(`${this.baseUrl}/${endpoint}.json`);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
         }
-      };
 
-      eventSource.onerror = (error) => {
-        console.warn(`⚠️ Real-time connection error for ${endpoint}:`, error);
-        // Attempt to reconnect after a delay
-        setTimeout(() => {
-          if (eventSource.readyState === EventSource.CLOSED) {
-            this.setupListener(endpoint, callback, migrationFn);
+        const data = await response.json();
+        const dataHash = JSON.stringify(data);
+        
+        // Only trigger callback if data actually changed
+        if (this.lastDataSnapshots.get(endpoint) !== dataHash) {
+          this.lastDataSnapshots.set(endpoint, dataHash);
+          
+          if (this.lastDataSnapshots.has(endpoint)) { // Only after first load to avoid initial false triggers
+            const migratedData = migrationFn(data);
+            console.log(`🔄 Real-time update detected for ${endpoint}`);
+            callback(migratedData);
+          } else {
+            // First load - just store the hash, don't trigger callback
+            console.log(`📥 Initial data loaded for ${endpoint}`);
           }
-        }, 5000);
-      };
+        }
+      } catch (error) {
+        console.warn(`⚠️ Polling error for ${endpoint}:`, error);
+      }
+    };
 
-      this.eventSources.set(endpoint, eventSource);
-    } catch (error) {
-      console.error(`Failed to setup listener for ${endpoint}:`, error);
-    }
+    // Initial load
+    pollData();
+    
+    // Set up polling every 2 seconds
+    const interval = setInterval(pollData, 2000);
+    this.pollIntervals.set(endpoint, interval);
   }
 
   private setupConnectionMonitoring(onConnectionChange: (status: 'connected' | 'disconnected' | 'error') => void) {
@@ -87,8 +88,24 @@ export class FirebaseService {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
+    // Test connection periodically
+    const testConnection = async () => {
+      try {
+        const response = await fetch(`${this.baseUrl}/.json`, { 
+          method: 'HEAD',
+          cache: 'no-cache'
+        });
+        onConnectionChange(response.ok ? 'connected' : 'error');
+      } catch {
+        onConnectionChange('error');
+      }
+    };
+
     // Initial status
-    onConnectionChange(navigator.onLine ? 'connected' : 'disconnected');
+    testConnection();
+    
+    // Test every 30 seconds
+    setInterval(testConnection, 30000);
   }
 
   async loadData() {
@@ -113,6 +130,13 @@ export class FirebaseService {
       const migratedTasks = this.migrateTaskData(tasksData);
       const migratedDailyData = this.migrateDailyData(dailyDataRes);
       const migratedStoreItems = this.migrateStoreItems(storeItemsData);
+      
+      // Store initial snapshots to avoid false triggers
+      this.lastDataSnapshots.set('employees', JSON.stringify(employeesData));
+      this.lastDataSnapshots.set('tasks', JSON.stringify(tasksData));
+      this.lastDataSnapshots.set('dailyData', JSON.stringify(dailyDataRes));
+      this.lastDataSnapshots.set('customRoles', JSON.stringify(customRolesData));
+      this.lastDataSnapshots.set('storeItems', JSON.stringify(storeItemsData));
       
       console.log('✅ Firebase: Initial data loaded successfully');
       
@@ -207,49 +231,34 @@ export class FirebaseService {
     dailyData: DailyDataMap;
     customRoles: string[];
     storeItems: StoreItem[];
-  }, skipRealtimeUpdate = false) {
+  }) {
     console.log('🔥 Saving to Firebase...');
     
     try {
       const savePromises = [
         fetch(`${this.baseUrl}/employees.json`, {
           method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Skip-Realtime': skipRealtimeUpdate ? 'true' : 'false'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data.employees)
         }),
         fetch(`${this.baseUrl}/tasks.json`, {
           method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Skip-Realtime': skipRealtimeUpdate ? 'true' : 'false'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data.tasks)
         }),
         fetch(`${this.baseUrl}/dailyData.json`, {
           method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Skip-Realtime': skipRealtimeUpdate ? 'true' : 'false'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data.dailyData)
         }),
         fetch(`${this.baseUrl}/customRoles.json`, {
           method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Skip-Realtime': skipRealtimeUpdate ? 'true' : 'false'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data.customRoles)
         }),
         fetch(`${this.baseUrl}/storeItems.json`, {
           method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Skip-Realtime': skipRealtimeUpdate ? 'true' : 'false'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data.storeItems)
         })
       ];
@@ -271,9 +280,7 @@ export class FirebaseService {
     try {
       await fetch(`${this.baseUrl}/${field}.json`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
       });
       
@@ -290,10 +297,16 @@ export class FirebaseService {
     
     this.eventSources.forEach((eventSource, endpoint) => {
       eventSource.close();
-      console.log(`❌ Closed listener for ${endpoint}`);
+      console.log(`❌ Closed event source for ${endpoint}`);
+    });
+    
+    this.pollIntervals.forEach((interval, endpoint) => {
+      clearInterval(interval);
+      console.log(`❌ Cleared polling interval for ${endpoint}`);
     });
     
     this.eventSources.clear();
-    this.listeners.clear();
+    this.pollIntervals.clear();
+    this.lastDataSnapshots.clear();
   }
 }
