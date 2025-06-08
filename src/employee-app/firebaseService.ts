@@ -54,8 +54,8 @@ export class FirebaseService {
         employees: migratedEmployees,
         tasks: migratedTasks,
         dailyData: migratedDailyData,
-        completedTasks: new Set<number>(completedTasksData || []),
-        taskAssignments: taskAssignmentsData || {},
+        completedTasks: new Set<number>(), // Now derived from dailyData
+        taskAssignments: {}, // Now derived from dailyData
         customRoles: customRolesData || ['Cleaner', 'Manager', 'Supervisor'],
         storeItems: migratedStoreItems
       };
