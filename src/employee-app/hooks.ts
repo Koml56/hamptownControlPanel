@@ -1,4 +1,4 @@
-// hooks.ts - Enhanced with real-time multi-device synchronization
+// hooks.ts - Enhanced with instant sync and optimistic updates
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { FirebaseService } from './firebaseService';
 import { getFormattedDate } from './utils';
@@ -47,7 +47,7 @@ export const useFirebaseData = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
-  const [syncCount, setSyncCount] = useState(0); // Track sync events for UI feedback
+  const [syncCount, setSyncCount] = useState(0);
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -60,29 +60,28 @@ export const useFirebaseData = () => {
 
   const firebaseService = useRef(new FirebaseService());
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const lastSaveDataRef = useRef<string>('');
-  const isReceivingUpdate = useRef(false); // Prevent save loops during real-time updates
+  const isReceivingUpdate = useRef(false);
 
   // Real-time sync callbacks
   const realtimeCallbacks = useCallback(() => ({
     onEmployeesUpdate: (newEmployees: Employee[]) => {
-      console.log('📡 Real-time employees update received');
+      console.log('⚡ Instant employees sync received');
       isReceivingUpdate.current = true;
       setEmployees(newEmployees);
       setSyncCount(prev => prev + 1);
-      setTimeout(() => { isReceivingUpdate.current = false; }, 100);
+      setTimeout(() => { isReceivingUpdate.current = false; }, 50);
     },
 
     onTasksUpdate: (newTasks: Task[]) => {
-      console.log('📡 Real-time tasks update received');
+      console.log('⚡ Instant tasks sync received');
       isReceivingUpdate.current = true;
       setTasks(newTasks);
       setSyncCount(prev => prev + 1);
-      setTimeout(() => { isReceivingUpdate.current = false; }, 100);
+      setTimeout(() => { isReceivingUpdate.current = false; }, 50);
     },
 
     onDailyDataUpdate: (newDailyData: DailyDataMap) => {
-      console.log('📡 Real-time daily data update received');
+      console.log('⚡ Instant daily data sync received');
       isReceivingUpdate.current = true;
       setDailyData(newDailyData);
       
@@ -93,37 +92,36 @@ export const useFirebaseData = () => {
       setTaskAssignments(todayAssignments);
       
       setSyncCount(prev => prev + 1);
-      setTimeout(() => { isReceivingUpdate.current = false; }, 100);
+      setTimeout(() => { isReceivingUpdate.current = false; }, 50);
     },
 
     onCustomRolesUpdate: (newRoles: string[]) => {
-      console.log('📡 Real-time custom roles update received');
+      console.log('⚡ Instant custom roles sync received');
       isReceivingUpdate.current = true;
       setCustomRoles(newRoles);
       setSyncCount(prev => prev + 1);
-      setTimeout(() => { isReceivingUpdate.current = false; }, 100);
+      setTimeout(() => { isReceivingUpdate.current = false; }, 50);
     },
 
     onStoreItemsUpdate: (newStoreItems: StoreItem[]) => {
-      console.log('📡 Real-time store items update received');
+      console.log('⚡ Instant store items sync received');
       isReceivingUpdate.current = true;
       setStoreItems(newStoreItems);
       setSyncCount(prev => prev + 1);
-      setTimeout(() => { isReceivingUpdate.current = false; }, 100);
+      setTimeout(() => { isReceivingUpdate.current = false; }, 50);
     },
 
     onConnectionChange: (status: 'connected' | 'disconnected' | 'error') => {
-      console.log(`📡 Connection status changed: ${status}`);
+      console.log(`⚡ Connection status: ${status}`);
       setConnectionStatus(status === 'disconnected' ? 'error' : 'connected');
     }
   }), []);
 
   // Setup real-time listeners
   useEffect(() => {
-    console.log('🚀 Setting up real-time synchronization...');
+    console.log('🚀 Setting up instant synchronization...');
     firebaseService.current.setupRealtimeListeners(realtimeCallbacks());
 
-    // Cleanup listeners on unmount
     return () => {
       firebaseService.current.cleanup();
     };
@@ -154,28 +152,17 @@ export const useFirebaseData = () => {
     return () => clearInterval(interval);
   }, [currentDate, dailyData]);
 
-  // Debounced save function (only when not receiving updates)
-  const debouncedSave = useCallback(async () => {
-    if (connectionStatus !== 'connected' || isLoading || isReceivingUpdate.current) {
+  // Instant save function with optimistic updates
+  const instantSave = useCallback(async () => {
+    if (connectionStatus !== 'connected' || isReceivingUpdate.current) {
       return;
     }
 
-    const currentDataHash = JSON.stringify({
-      employees: employees.length,
-      tasks: tasks.length,
-      dailyDataHash: JSON.stringify(dailyData),
-      customRolesLength: customRoles.length,
-      storeItemsLength: storeItems.length
-    });
-
-    if (currentDataHash === lastSaveDataRef.current) {
-      return;
-    }
-
-    console.log('🔄 Saving data to Firebase (will sync to other devices)...');
-    setIsLoading(true);
+    console.log('⚡ Instant save triggered...');
+    setLastSync(new Date().toLocaleTimeString());
 
     try {
+      // Fire instant saves for all data - don't wait
       await firebaseService.current.saveData({
         employees,
         tasks,
@@ -184,14 +171,10 @@ export const useFirebaseData = () => {
         storeItems
       });
 
-      setLastSync(new Date().toLocaleTimeString());
-      lastSaveDataRef.current = currentDataHash;
-      console.log('✅ Data saved and synced to all devices');
+      console.log('⚡ Instant save completed');
     } catch (error) {
-      console.error('Save failed:', error);
+      console.error('❌ Instant save failed:', error);
       setConnectionStatus('error');
-    } finally {
-      setIsLoading(false);
     }
   }, [
     employees,
@@ -199,33 +182,34 @@ export const useFirebaseData = () => {
     dailyData,
     customRoles,
     storeItems,
-    connectionStatus,
-    isLoading
+    connectionStatus
   ]);
 
-  // Save with debounce
+  // Optimistic save with immediate UI update
   const saveToFirebase = useCallback(() => {
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
 
+    // Instant save - no delay for immediate feel
     saveTimeoutRef.current = setTimeout(() => {
-      debouncedSave();
-    }, 1000); // Reduced delay for better real-time experience
-  }, [debouncedSave]);
+      instantSave();
+    }, 100); // Minimal delay just to batch rapid changes
+  }, [instantSave]);
 
-  // Quick save for immediate operations (like task completion)
+  // Instant field save for critical operations
   const quickSave = useCallback(async (field: string, data: any) => {
     if (connectionStatus !== 'connected' || isReceivingUpdate.current) {
       return;
     }
 
-    console.log(`⚡ Quick saving ${field}...`);
+    console.log(`⚡ Quick saving ${field} instantly...`);
+    setLastSync(new Date().toLocaleTimeString());
+    
     try {
       await firebaseService.current.saveField(field, data);
-      setLastSync(new Date().toLocaleTimeString());
     } catch (error) {
-      console.error(`Quick save failed for ${field}:`, error);
+      console.error(`❌ Quick save failed for ${field}:`, error);
     }
   }, [connectionStatus]);
 
@@ -271,7 +255,7 @@ export const useFirebaseData = () => {
     }
   }, [isLoading]);
 
-  // Auto-save when data changes (but not during real-time updates)
+  // Auto-save when data changes (with optimistic updates)
   useEffect(() => {
     if (!isReceivingUpdate.current) {
       saveToFirebase();
@@ -292,7 +276,7 @@ export const useFirebaseData = () => {
     isLoading,
     lastSync,
     connectionStatus,
-    syncCount, // New: for showing sync activity
+    syncCount,
     employees,
     tasks,
     dailyData,
@@ -301,7 +285,7 @@ export const useFirebaseData = () => {
     customRoles,
     storeItems,
 
-    // Setters
+    // Setters (with optimistic updates)
     setEmployees,
     setTasks,
     setDailyData,
@@ -313,7 +297,8 @@ export const useFirebaseData = () => {
     // Actions
     loadFromFirebase,
     saveToFirebase,
-    quickSave // New: for immediate saves
+    quickSave,
+    instantSave // New: for immediate saves
   };
 };
 
