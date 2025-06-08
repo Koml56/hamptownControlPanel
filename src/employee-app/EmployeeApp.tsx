@@ -8,6 +8,7 @@ import TaskManager from './TaskManager';
 import Store from './Store';
 import AdminPanel from './AdminPanel';
 import DailyReports from './DailyReports';
+import SyncStatusIndicator from './SyncStatusIndicator';
 
 // Hooks and Functions
 import { useFirebaseData, useAuth } from './hooks';
@@ -23,6 +24,7 @@ const EmployeeApp = () => {
     isLoading,
     lastSync,
     connectionStatus,
+    syncCount,
     employees,
     tasks,
     dailyData,
@@ -38,7 +40,8 @@ const EmployeeApp = () => {
     setCustomRoles,
     setStoreItems, // Get store items setter
     loadFromFirebase,
-    saveToFirebase
+    saveToFirebase,
+    quickSave
   } = useFirebaseData();
 
   const {
@@ -296,35 +299,14 @@ const EmployeeApp = () => {
       </div>
 
       <div className="p-4 space-y-6">
-        {/* Floating Status Indicator */}
-        <div className="fixed bottom-20 right-4 z-50">
-          {isLoading && (
-            <div className="bg-white/80 backdrop-blur-sm rounded-full px-4 py-2 shadow-lg flex items-center space-x-2 border border-blue-100">
-              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
-              <span className="text-blue-700 text-xs">Syncing...</span>
-            </div>
-          )}
-
-          {lastSync && connectionStatus === 'connected' && !isLoading && (
-            <div 
-              className="bg-white/80 backdrop-blur-sm rounded-full px-4 py-2 shadow-lg flex items-center space-x-2 border border-green-100 hover:bg-white/90 transition-all cursor-default"
-              title={`Last saved: ${lastSync}`}
-            >
-              <div className="w-2 h-2 rounded-full bg-green-500"></div>
-              <span className="text-green-700 text-xs">Saved</span>
-            </div>
-          )}
-
-          {connectionStatus === 'error' && (
-            <div 
-              onClick={loadFromFirebase}
-              className="bg-white/80 backdrop-blur-sm rounded-full px-4 py-2 shadow-lg flex items-center space-x-2 border border-red-100 hover:bg-white/90 transition-all cursor-pointer"
-            >
-              <div className="w-2 h-2 rounded-full bg-red-500"></div>
-              <span className="text-red-700 text-xs">Reconnect</span>
-            </div>
-          )}
-        </div>
+        {/* Real-time Sync Status Indicator */}
+        <SyncStatusIndicator
+          isLoading={isLoading}
+          lastSync={lastSync}
+          connectionStatus={connectionStatus}
+          syncCount={syncCount}
+          loadFromFirebase={loadFromFirebase}
+        />
 
         {/* Tab Content */}
         {activeTab === 'mood' && (
