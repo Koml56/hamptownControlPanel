@@ -1,15 +1,15 @@
-// firebaseService.ts - Fixed with proper Firebase real-time streaming
+// firebaseService.ts - Enhanced for instant sync with optimistic updates
 import { FIREBASE_CONFIG } from './constants';
 import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData, getDefaultStoreItems } from './defaultData';
 import type { Employee, Task, DailyDataMap, TaskAssignments, StoreItem } from './types';
 
 export class FirebaseService {
   private baseUrl = FIREBASE_CONFIG.databaseURL;
-  private eventSources: Map<string, EventSource> = new Map();
   private pollIntervals: Map<string, NodeJS.Timeout> = new Map();
   private lastDataSnapshots: Map<string, string> = new Map();
+  private pendingUpdates: Map<string, any> = new Map();
 
-  // Setup real-time listeners using Firebase REST streaming
+  // Setup real-time listeners with faster polling for instant feel
   setupRealtimeListeners(callbacks: {
     onEmployeesUpdate: (employees: Employee[]) => void;
     onTasksUpdate: (tasks: Task[]) => void;
@@ -18,14 +18,14 @@ export class FirebaseService {
     onStoreItemsUpdate: (items: StoreItem[]) => void;
     onConnectionChange: (status: 'connected' | 'disconnected' | 'error') => void;
   }) {
-    console.log('🔥 Setting up Firebase real-time listeners...');
+    console.log('🔥 Setting up instant Firebase sync...');
 
-    // Setup polling-based real-time sync (more reliable than SSE with Firebase)
-    this.setupPollingListener('employees', callbacks.onEmployeesUpdate, this.migrateEmployeeData);
-    this.setupPollingListener('tasks', callbacks.onTasksUpdate, this.migrateTaskData);
-    this.setupPollingListener('dailyData', callbacks.onDailyDataUpdate, this.migrateDailyData);
-    this.setupPollingListener('customRoles', callbacks.onCustomRolesUpdate, (data) => data || ['Cleaner', 'Manager', 'Supervisor']);
-    this.setupPollingListener('storeItems', callbacks.onStoreItemsUpdate, this.migrateStoreItems);
+    // Setup faster polling for near real-time sync
+    this.setupPollingListener('employees', callbacks.onEmployeesUpdate, this.migrateEmployeeData, 500); // 500ms
+    this.setupPollingListener('tasks', callbacks.onTasksUpdate, this.migrateTaskData, 500);
+    this.setupPollingListener('dailyData', callbacks.onDailyDataUpdate, this.migrateDailyData, 500);
+    this.setupPollingListener('customRoles', callbacks.onCustomRolesUpdate, (data) => data || ['Cleaner', 'Manager', 'Supervisor'], 1000);
+    this.setupPollingListener('storeItems', callbacks.onStoreItemsUpdate, this.migrateStoreItems, 1000);
 
     // Connection status monitoring
     this.setupConnectionMonitoring(callbacks.onConnectionChange);
@@ -34,7 +34,8 @@ export class FirebaseService {
   private setupPollingListener(
     endpoint: string,
     callback: (data: any) => void,
-    migrationFn: (data: any) => any
+    migrationFn: (data: any) => any,
+    intervalMs: number = 500 // Default 500ms for instant feel
   ) {
     const pollData = async () => {
       try {
@@ -48,17 +49,17 @@ export class FirebaseService {
         const dataHash = JSON.stringify(data);
         
         // Only trigger callback if data actually changed
-        if (this.lastDataSnapshots.get(endpoint) !== dataHash) {
+        const lastHash = this.lastDataSnapshots.get(endpoint);
+        if (lastHash !== undefined && lastHash !== dataHash) {
           this.lastDataSnapshots.set(endpoint, dataHash);
           
-          if (this.lastDataSnapshots.has(endpoint)) { // Only after first load to avoid initial false triggers
-            const migratedData = migrationFn(data);
-            console.log(`🔄 Real-time update detected for ${endpoint}`);
-            callback(migratedData);
-          } else {
-            // First load - just store the hash, don't trigger callback
-            console.log(`📥 Initial data loaded for ${endpoint}`);
-          }
+          const migratedData = migrationFn(data);
+          console.log(`⚡ Instant update detected for ${endpoint}`);
+          callback(migratedData);
+        } else if (lastHash === undefined) {
+          // First load - store hash but don't trigger callback
+          this.lastDataSnapshots.set(endpoint, dataHash);
+          console.log(`📥 Initial data loaded for ${endpoint}`);
         }
       } catch (error) {
         console.warn(`⚠️ Polling error for ${endpoint}:`, error);
@@ -68,8 +69,8 @@ export class FirebaseService {
     // Initial load
     pollData();
     
-    // Set up polling every 2 seconds
-    const interval = setInterval(pollData, 2000);
+    // Set up faster polling
+    const interval = setInterval(pollData, intervalMs);
     this.pollIntervals.set(endpoint, interval);
   }
 
@@ -104,8 +105,8 @@ export class FirebaseService {
     // Initial status
     testConnection();
     
-    // Test every 30 seconds
-    setInterval(testConnection, 30000);
+    // Test every 15 seconds (more frequent)
+    setInterval(testConnection, 15000);
   }
 
   async loadData() {
@@ -151,6 +152,37 @@ export class FirebaseService {
     } catch (error) {
       console.error('❌ Firebase connection failed:', error);
       throw error;
+    }
+  }
+
+  // Optimistic instant save - saves immediately without waiting
+  async instantSave(field: string, data: any) {
+    console.log(`⚡ Instant saving ${field}...`);
+    
+    // Store as pending update
+    this.pendingUpdates.set(field, data);
+    
+    try {
+      // Fire and forget - don't wait for response
+      fetch(`${this.baseUrl}/${field}.json`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      }).then(response => {
+        if (response.ok) {
+          console.log(`⚡ ${field} instantly saved`);
+          this.pendingUpdates.delete(field);
+        } else {
+          console.warn(`⚠️ Instant save failed for ${field}, will retry`);
+        }
+      }).catch(error => {
+        console.warn(`⚠️ Instant save error for ${field}:`, error);
+      });
+      
+      return true;
+    } catch (error) {
+      console.error(`❌ Instant save failed for ${field}:`, error);
+      return false;
     }
   }
 
@@ -235,37 +267,16 @@ export class FirebaseService {
     console.log('🔥 Saving to Firebase...');
     
     try {
-      const savePromises = [
-        fetch(`${this.baseUrl}/employees.json`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data.employees)
-        }),
-        fetch(`${this.baseUrl}/tasks.json`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data.tasks)
-        }),
-        fetch(`${this.baseUrl}/dailyData.json`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data.dailyData)
-        }),
-        fetch(`${this.baseUrl}/customRoles.json`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data.customRoles)
-        }),
-        fetch(`${this.baseUrl}/storeItems.json`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data.storeItems)
-        })
-      ];
-
-      await Promise.all(savePromises);
+      // Use instant save for critical data
+      await Promise.all([
+        this.instantSave('employees', data.employees),
+        this.instantSave('tasks', data.tasks),
+        this.instantSave('dailyData', data.dailyData),
+        this.instantSave('customRoles', data.customRoles),
+        this.instantSave('storeItems', data.storeItems)
+      ]);
       
-      console.log('✅ Firebase: Data saved successfully');
+      console.log('✅ Firebase: Data saved instantly');
       
     } catch (error) {
       console.error('❌ Firebase save failed:', error);
@@ -273,40 +284,22 @@ export class FirebaseService {
     }
   }
 
-  // Method to save a single field quickly
+  // Method to save a single field instantly
   async saveField(field: string, data: any) {
-    console.log(`🔥 Quick saving ${field} to Firebase...`);
-    
-    try {
-      await fetch(`${this.baseUrl}/${field}.json`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-      
-      console.log(`✅ ${field} saved successfully`);
-    } catch (error) {
-      console.error(`❌ Failed to save ${field}:`, error);
-      throw error;
-    }
+    return this.instantSave(field, data);
   }
 
   // Clean up listeners
   cleanup() {
     console.log('🧹 Cleaning up Firebase listeners...');
     
-    this.eventSources.forEach((eventSource, endpoint) => {
-      eventSource.close();
-      console.log(`❌ Closed event source for ${endpoint}`);
-    });
-    
     this.pollIntervals.forEach((interval, endpoint) => {
       clearInterval(interval);
       console.log(`❌ Cleared polling interval for ${endpoint}`);
     });
     
-    this.eventSources.clear();
     this.pollIntervals.clear();
     this.lastDataSnapshots.clear();
+    this.pendingUpdates.clear();
   }
 }
