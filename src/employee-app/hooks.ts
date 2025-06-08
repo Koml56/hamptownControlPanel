@@ -1,4 +1,4 @@
-// hooks.ts - Updated to handle daily task resets
+// hooks.ts - Enhanced with real-time multi-device synchronization
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { FirebaseService } from './firebaseService';
 import { getFormattedDate } from './utils';
@@ -12,48 +12,6 @@ import type {
   CurrentUser,
   StoreItem
 } from './types';
-
-// Migration functions
-const migrateEmployeeData = (employees: any[]): Employee[] => {
-  if (!employees || !Array.isArray(employees)) return getDefaultEmployees();
-
-  return employees.map(emp => ({
-    id: emp.id || 0,
-    name: emp.name || 'Unknown',
-    mood: emp.mood || 3,
-    lastUpdated: emp.lastUpdated || 'Not updated',
-    role: emp.role || 'Cleaner',
-    lastMoodDate: emp.lastMoodDate || null,
-    points: typeof emp.points === 'number' ? emp.points : 0
-  }));
-};
-
-const migrateTaskData = (tasks: any[]): Task[] => {
-  if (!tasks || !Array.isArray(tasks)) return getDefaultTasks();
-
-  return tasks.map(task => ({
-    id: task.id || 0,
-    task: task.task || 'Unknown Task',
-    location: task.location || 'Unknown Location',
-    priority: task.priority || 'medium',
-    estimatedTime: task.estimatedTime || '30 min',
-    points: typeof task.points === 'number' ? task.points : 5
-  }));
-};
-
-const migrateStoreItemData = (storeItems: any[]): StoreItem[] => {
-  if (!storeItems || !Array.isArray(storeItems)) return getDefaultStoreItems();
-
-  return storeItems.map(item => ({
-    id: item.id || 0,
-    name: item.name || 'Unknown Item',
-    description: item.description || 'No description',
-    cost: typeof item.cost === 'number' ? item.cost : 10,
-    category: item.category || 'reward',
-    icon: item.icon || '🎁',
-    available: typeof item.available === 'boolean' ? item.available : true
-  }));
-};
 
 // Helper function to get today's completed tasks from daily data
 const getTodayCompletedTasks = (dailyData: DailyDataMap): Set<number> => {
@@ -89,6 +47,7 @@ export const useFirebaseData = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
+  const [syncCount, setSyncCount] = useState(0); // Track sync events for UI feedback
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -99,9 +58,76 @@ export const useFirebaseData = () => {
   const [storeItems, setStoreItems] = useState<StoreItem[]>([]);
   const [currentDate, setCurrentDate] = useState<string>(getFormattedDate(new Date()));
 
-  const firebaseService = new FirebaseService();
+  const firebaseService = useRef(new FirebaseService());
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSaveDataRef = useRef<string>('');
+  const isReceivingUpdate = useRef(false); // Prevent save loops during real-time updates
+
+  // Real-time sync callbacks
+  const realtimeCallbacks = useCallback(() => ({
+    onEmployeesUpdate: (newEmployees: Employee[]) => {
+      console.log('📡 Real-time employees update received');
+      isReceivingUpdate.current = true;
+      setEmployees(newEmployees);
+      setSyncCount(prev => prev + 1);
+      setTimeout(() => { isReceivingUpdate.current = false; }, 100);
+    },
+
+    onTasksUpdate: (newTasks: Task[]) => {
+      console.log('📡 Real-time tasks update received');
+      isReceivingUpdate.current = true;
+      setTasks(newTasks);
+      setSyncCount(prev => prev + 1);
+      setTimeout(() => { isReceivingUpdate.current = false; }, 100);
+    },
+
+    onDailyDataUpdate: (newDailyData: DailyDataMap) => {
+      console.log('📡 Real-time daily data update received');
+      isReceivingUpdate.current = true;
+      setDailyData(newDailyData);
+      
+      // Update completed tasks and assignments for today
+      const todayCompleted = getTodayCompletedTasks(newDailyData);
+      const todayAssignments = getTodayTaskAssignments(newDailyData);
+      setCompletedTasks(todayCompleted);
+      setTaskAssignments(todayAssignments);
+      
+      setSyncCount(prev => prev + 1);
+      setTimeout(() => { isReceivingUpdate.current = false; }, 100);
+    },
+
+    onCustomRolesUpdate: (newRoles: string[]) => {
+      console.log('📡 Real-time custom roles update received');
+      isReceivingUpdate.current = true;
+      setCustomRoles(newRoles);
+      setSyncCount(prev => prev + 1);
+      setTimeout(() => { isReceivingUpdate.current = false; }, 100);
+    },
+
+    onStoreItemsUpdate: (newStoreItems: StoreItem[]) => {
+      console.log('📡 Real-time store items update received');
+      isReceivingUpdate.current = true;
+      setStoreItems(newStoreItems);
+      setSyncCount(prev => prev + 1);
+      setTimeout(() => { isReceivingUpdate.current = false; }, 100);
+    },
+
+    onConnectionChange: (status: 'connected' | 'disconnected' | 'error') => {
+      console.log(`📡 Connection status changed: ${status}`);
+      setConnectionStatus(status === 'disconnected' ? 'error' : 'connected');
+    }
+  }), []);
+
+  // Setup real-time listeners
+  useEffect(() => {
+    console.log('🚀 Setting up real-time synchronization...');
+    firebaseService.current.setupRealtimeListeners(realtimeCallbacks());
+
+    // Cleanup listeners on unmount
+    return () => {
+      firebaseService.current.cleanup();
+    };
+  }, [realtimeCallbacks]);
 
   // Check for date change and reset daily tasks
   useEffect(() => {
@@ -111,10 +137,8 @@ export const useFirebaseData = () => {
       if (currentDate !== today) {
         console.log(`📅 Date changed from ${currentDate} to ${today} - resetting daily tasks`);
         
-        // Update current date
         setCurrentDate(today);
         
-        // Reset completed tasks and assignments for the new day
         const todayCompleted = getTodayCompletedTasks(dailyData);
         const todayAssignments = getTodayTaskAssignments(dailyData);
         
@@ -125,33 +149,14 @@ export const useFirebaseData = () => {
       }
     };
 
-    // Check immediately
     checkDateChange();
-    
-    // Check every minute for date changes
     const interval = setInterval(checkDateChange, 60000);
-    
     return () => clearInterval(interval);
   }, [currentDate, dailyData]);
 
-  // Update completed tasks when daily data changes
-  useEffect(() => {
-    const todayCompleted = getTodayCompletedTasks(dailyData);
-    const todayAssignments = getTodayTaskAssignments(dailyData);
-    
-    // Only update if there's a meaningful change
-    if (todayCompleted.size !== completedTasks.size || 
-        JSON.stringify(todayAssignments) !== JSON.stringify(taskAssignments)) {
-      
-      console.log(`🔄 Updating today's task state: ${todayCompleted.size} completed tasks`);
-      setCompletedTasks(todayCompleted);
-      setTaskAssignments(todayAssignments);
-    }
-  }, [dailyData, currentDate]);
-
-  // Debounced save function
+  // Debounced save function (only when not receiving updates)
   const debouncedSave = useCallback(async () => {
-    if (connectionStatus !== 'connected' || isLoading) {
+    if (connectionStatus !== 'connected' || isLoading || isReceivingUpdate.current) {
       return;
     }
 
@@ -159,36 +164,29 @@ export const useFirebaseData = () => {
       employees: employees.length,
       tasks: tasks.length,
       dailyDataHash: JSON.stringify(dailyData),
-      completedTasksSize: completedTasks.size,
-      taskAssignmentsKeys: Object.keys(taskAssignments).length,
       customRolesLength: customRoles.length,
       storeItemsLength: storeItems.length
     });
 
     if (currentDataHash === lastSaveDataRef.current) {
-      console.log('debouncedSave aborted: data hash unchanged');
       return;
     }
 
-    console.log('🔄 Saving data to Firebase...');
-
+    console.log('🔄 Saving data to Firebase (will sync to other devices)...');
     setIsLoading(true);
+
     try {
-      // Note: We don't save completedTasks and taskAssignments directly anymore
-      // They are derived from dailyData for the current day
-      await firebaseService.saveData({
+      await firebaseService.current.saveData({
         employees,
         tasks,
         dailyData,
-        completedTasks: new Set(), // Always empty - data is in dailyData
-        taskAssignments: {}, // Always empty - data is in dailyData
         customRoles,
         storeItems
       });
 
       setLastSync(new Date().toLocaleTimeString());
       lastSaveDataRef.current = currentDataHash;
-      console.log('✅ Store items saved to Firebase successfully');
+      console.log('✅ Data saved and synced to all devices');
     } catch (error) {
       console.error('Save failed:', error);
       setConnectionStatus('error');
@@ -199,8 +197,6 @@ export const useFirebaseData = () => {
     employees,
     tasks,
     dailyData,
-    completedTasks,
-    taskAssignments,
     customRoles,
     storeItems,
     connectionStatus,
@@ -215,8 +211,23 @@ export const useFirebaseData = () => {
 
     saveTimeoutRef.current = setTimeout(() => {
       debouncedSave();
-    }, 2000);
+    }, 1000); // Reduced delay for better real-time experience
   }, [debouncedSave]);
+
+  // Quick save for immediate operations (like task completion)
+  const quickSave = useCallback(async (field: string, data: any) => {
+    if (connectionStatus !== 'connected' || isReceivingUpdate.current) {
+      return;
+    }
+
+    console.log(`⚡ Quick saving ${field}...`);
+    try {
+      await firebaseService.current.saveField(field, data);
+      setLastSync(new Date().toLocaleTimeString());
+    } catch (error) {
+      console.error(`Quick save failed for ${field}:`, error);
+    }
+  }, [connectionStatus]);
 
   const loadFromFirebase = useCallback(async () => {
     if (isLoading) return;
@@ -225,19 +236,14 @@ export const useFirebaseData = () => {
     setConnectionStatus('connecting');
 
     try {
-      const data = await firebaseService.loadData();
+      const data = await firebaseService.current.loadData();
 
-      const finalEmployees = migrateEmployeeData(data.employees);
-      const finalTasks = migrateTaskData(data.tasks);
-      const finalStoreItems = migrateStoreItemData(data.storeItems);
-
-      setEmployees(finalEmployees);
-      setTasks(finalTasks);
+      setEmployees(data.employees);
+      setTasks(data.tasks);
       setDailyData(data.dailyData);
       setCustomRoles(data.customRoles);
-      setStoreItems(finalStoreItems);
+      setStoreItems(data.storeItems);
 
-      // Set today's completed tasks and assignments from daily data
       const today = getFormattedDate(new Date());
       setCurrentDate(today);
       
@@ -250,11 +256,10 @@ export const useFirebaseData = () => {
       setConnectionStatus('connected');
       setLastSync(new Date().toLocaleTimeString());
 
-      console.log(`✅ Data loaded - Today (${today}): ${todayCompleted.size} completed tasks`);
+      console.log(`✅ Initial data loaded - Today (${today}): ${todayCompleted.size} completed tasks`);
 
     } catch (error) {
       setConnectionStatus('error');
-
       setEmployees(getDefaultEmployees());
       setTasks(getDefaultTasks());
       setDailyData(getEmptyDailyData());
@@ -266,10 +271,12 @@ export const useFirebaseData = () => {
     }
   }, [isLoading]);
 
-  // Auto-save when data changes
+  // Auto-save when data changes (but not during real-time updates)
   useEffect(() => {
-    saveToFirebase();
-  }, [employees, tasks, dailyData, customRoles, storeItems]);
+    if (!isReceivingUpdate.current) {
+      saveToFirebase();
+    }
+  }, [employees, tasks, dailyData, customRoles, storeItems, saveToFirebase]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -285,6 +292,7 @@ export const useFirebaseData = () => {
     isLoading,
     lastSync,
     connectionStatus,
+    syncCount, // New: for showing sync activity
     employees,
     tasks,
     dailyData,
@@ -304,7 +312,8 @@ export const useFirebaseData = () => {
 
     // Actions
     loadFromFirebase,
-    saveToFirebase
+    saveToFirebase,
+    quickSave // New: for immediate saves
   };
 };
 
