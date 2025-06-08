@@ -116,3 +116,27 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
             <div className="absolute top-0 right-0 w-3 h-3 bg-green-500 rounded-full" />
           </div>
         )}
+      </div>
+
+      {/* Detailed status tooltip on hover */}
+      {connectionStatus === 'connected' && (
+        <div className="absolute bottom-full right-0 mb-2 opacity-0 hover:opacity-100 transition-opacity pointer-events-none">
+          <div className="bg-gray-800 text-white text-xs px-3 py-2 rounded-lg shadow-lg whitespace-nowrap">
+            <div className="flex items-center space-x-2 mb-1">
+              <Users className="w-3 h-3" />
+              <span>Multi-device sync active</span>
+            </div>
+            {lastSync && (
+              <div>Last sync: {lastSync}</div>
+            )}
+            {syncCount > 0 && (
+              <div>Updates: {syncCount}</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default SyncStatusIndicator;
