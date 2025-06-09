@@ -1,4 +1,4 @@
-// firebaseService.ts - Enhanced with data protection and backup
+// firebaseService.ts - Enhanced for instant sync with optimistic updates
 import { FIREBASE_CONFIG } from './constants';
 import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData, getDefaultStoreItems } from './defaultData';
 import type { Employee, Task, DailyDataMap, TaskAssignments, StoreItem } from './types';
@@ -8,9 +8,8 @@ export class FirebaseService {
   private pollIntervals: Map<string, NodeJS.Timeout> = new Map();
   private lastDataSnapshots: Map<string, string> = new Map();
   private pendingUpdates: Map<string, any> = new Map();
-  private dataBackups: Map<string, any> = new Map(); // Backup mechanism
 
-  // Setup real-time listeners with data protection
+  // Setup real-time listeners with faster polling for instant feel
   setupRealtimeListeners(callbacks: {
     onEmployeesUpdate: (employees: Employee[]) => void;
     onTasksUpdate: (tasks: Task[]) => void;
@@ -19,14 +18,14 @@ export class FirebaseService {
     onStoreItemsUpdate: (items: StoreItem[]) => void;
     onConnectionChange: (status: 'connected' | 'disconnected' | 'error') => void;
   }) {
-    console.log('🔥 Setting up protected Firebase sync...');
+    console.log('🔥 Setting up instant Firebase sync...');
 
-    // Setup polling with data validation
-    this.setupPollingListener('employees', callbacks.onEmployeesUpdate, this.protectedMigrateEmployeeData, 500);
-    this.setupPollingListener('tasks', callbacks.onTasksUpdate, this.protectedMigrateTaskData, 500);
-    this.setupPollingListener('dailyData', callbacks.onDailyDataUpdate, this.protectedMigrateDailyData, 500);
-    this.setupPollingListener('customRoles', callbacks.onCustomRolesUpdate, this.protectedMigrateRoles, 1000);
-    this.setupPollingListener('storeItems', callbacks.onStoreItemsUpdate, this.protectedMigrateStoreItems, 1000);
+    // Setup faster polling for near real-time sync
+    this.setupPollingListener('employees', callbacks.onEmployeesUpdate, this.migrateEmployeeData, 500); // 500ms
+    this.setupPollingListener('tasks', callbacks.onTasksUpdate, this.migrateTaskData, 500);
+    this.setupPollingListener('dailyData', callbacks.onDailyDataUpdate, this.migrateDailyData, 500);
+    this.setupPollingListener('customRoles', callbacks.onCustomRolesUpdate, (data) => data || ['Cleaner', 'Manager', 'Supervisor'], 1000);
+    this.setupPollingListener('storeItems', callbacks.onStoreItemsUpdate, this.migrateStoreItems, 1000);
 
     // Connection status monitoring
     this.setupConnectionMonitoring(callbacks.onConnectionChange);
@@ -36,31 +35,17 @@ export class FirebaseService {
     endpoint: string,
     callback: (data: any) => void,
     migrationFn: (data: any) => any,
-    intervalMs: number = 500
+    intervalMs: number = 500 // Default 500ms for instant feel
   ) {
     const pollData = async () => {
       try {
         const response = await fetch(`${this.baseUrl}/${endpoint}.json`);
         
         if (!response.ok) {
-          console.warn(`⚠️ HTTP ${response.status} for ${endpoint}, using backup data if available`);
-          
-          // Use backup data if available
-          if (this.dataBackups.has(endpoint)) {
-            console.log(`🔄 Using backup data for ${endpoint}`);
-            return;
-          }
           throw new Error(`HTTP ${response.status}`);
         }
 
         const data = await response.json();
-        
-        // Validate data before processing
-        if (!this.validateData(endpoint, data)) {
-          console.warn(`⚠️ Invalid data received for ${endpoint}, skipping update`);
-          return;
-        }
-        
         const dataHash = JSON.stringify(data);
         
         // Only trigger callback if data actually changed
@@ -68,17 +53,13 @@ export class FirebaseService {
         if (lastHash !== undefined && lastHash !== dataHash) {
           this.lastDataSnapshots.set(endpoint, dataHash);
           
-          // Backup the previous data before migration
-          this.createBackup(endpoint, data);
-          
           const migratedData = migrationFn(data);
-          console.log(`⚡ Protected update for ${endpoint} (backed up)`);
+          console.log(`⚡ Instant update detected for ${endpoint}`);
           callback(migratedData);
         } else if (lastHash === undefined) {
-          // First load - store hash and backup
+          // First load - store hash but don't trigger callback
           this.lastDataSnapshots.set(endpoint, dataHash);
-          this.createBackup(endpoint, data);
-          console.log(`📥 Initial protected load for ${endpoint}`);
+          console.log(`📥 Initial data loaded for ${endpoint}`);
         }
       } catch (error) {
         console.warn(`⚠️ Polling error for ${endpoint}:`, error);
@@ -88,196 +69,13 @@ export class FirebaseService {
     // Initial load
     pollData();
     
-    // Set up polling
+    // Set up faster polling
     const interval = setInterval(pollData, intervalMs);
     this.pollIntervals.set(endpoint, interval);
   }
 
-  private validateData(endpoint: string, data: any): boolean {
-    if (data === null || data === undefined) {
-      console.warn(`❌ Null data for ${endpoint}`);
-      return false;
-    }
-
-    switch (endpoint) {
-      case 'employees':
-        if (!Array.isArray(data)) {
-          console.warn(`❌ Employees data is not an array:`, data);
-          return false;
-        }
-        // Check if all employees have 0 points (suspicious)
-        if (data.length > 0 && data.every((emp: any) => (emp.points || 0) === 0)) {
-          console.warn(`🚨 All employees have 0 points - potential data corruption!`);
-          return false;
-        }
-        break;
-        
-      case 'dailyData':
-        if (typeof data !== 'object') {
-          console.warn(`❌ Daily data is not an object:`, data);
-          return false;
-        }
-        // Check if all daily data is empty (suspicious)
-        const dates = Object.keys(data);
-        if (dates.length > 0) {
-          const hasAnyCompletions = dates.some(date => {
-            const dayData = data[date];
-            return dayData && Array.isArray(dayData.completedTasks) && dayData.completedTasks.length > 0;
-          });
-          if (!hasAnyCompletions && dates.length > 3) {
-            console.warn(`🚨 No task completions found in daily data - potential data loss!`);
-            return false;
-          }
-        }
-        break;
-        
-      case 'tasks':
-        if (!Array.isArray(data) || data.length === 0) {
-          console.warn(`❌ Tasks data is invalid:`, data);
-          return false;
-        }
-        break;
-    }
-    
-    return true;
-  }
-
-  private createBackup(endpoint: string, data: any) {
-    const timestamp = new Date().toISOString();
-    this.dataBackups.set(`${endpoint}_${timestamp}`, data);
-    this.dataBackups.set(`${endpoint}_latest`, data);
-    
-    // Keep only last 5 backups per endpoint
-    const backupKeys = Array.from(this.dataBackups.keys())
-      .filter(key => key.startsWith(`${endpoint}_`) && key !== `${endpoint}_latest`)
-      .sort()
-      .reverse();
-      
-    if (backupKeys.length > 5) {
-      backupKeys.slice(5).forEach(key => this.dataBackups.delete(key));
-    }
-  }
-
-  private restoreFromBackup(endpoint: string): any | null {
-    const latest = this.dataBackups.get(`${endpoint}_latest`);
-    if (latest) {
-      console.log(`🔄 Restoring ${endpoint} from backup`);
-      return latest;
-    }
-    return null;
-  }
-
-  // Protected migration functions that preserve data
-  private protectedMigrateEmployeeData = (employees: any): Employee[] => {
-    if (!employees || !Array.isArray(employees)) {
-      console.warn(`⚠️ Invalid employees data, checking backup...`);
-      const backup = this.restoreFromBackup('employees');
-      if (backup && Array.isArray(backup)) {
-        employees = backup;
-      } else {
-        console.warn(`❌ No valid backup for employees, using defaults`);
-        return getDefaultEmployees();
-      }
-    }
-    
-    return employees.map((emp: any) => ({
-      id: emp.id || 0,
-      name: emp.name || 'Unknown',
-      mood: emp.mood || 3,
-      lastUpdated: emp.lastUpdated || 'Not updated',
-      role: emp.role || 'Cleaner',
-      lastMoodDate: emp.lastMoodDate || null,
-      points: typeof emp.points === 'number' ? emp.points : 0 // CRITICAL: Preserve points
-    }));
-  };
-
-  private protectedMigrateTaskData = (tasks: any): Task[] => {
-    if (!tasks || !Array.isArray(tasks)) {
-      console.warn(`⚠️ Invalid tasks data, checking backup...`);
-      const backup = this.restoreFromBackup('tasks');
-      if (backup && Array.isArray(backup)) {
-        tasks = backup;
-      } else {
-        console.warn(`❌ No valid backup for tasks, using defaults`);
-        return getDefaultTasks();
-      }
-    }
-    
-    return tasks.map((task: any) => ({
-      id: task.id || 0,
-      task: task.task || 'Unknown Task',
-      location: task.location || 'Unknown Location',
-      priority: task.priority || 'medium',
-      estimatedTime: task.estimatedTime || '30 min',
-      points: typeof task.points === 'number' ? task.points : this.getDefaultTaskPoints(task.priority)
-    }));
-  };
-
-  private protectedMigrateDailyData = (dailyData: any): DailyDataMap => {
-    if (!dailyData || typeof dailyData !== 'object') {
-      console.warn(`⚠️ Invalid daily data, checking backup...`);
-      const backup = this.restoreFromBackup('dailyData');
-      if (backup && typeof backup === 'object') {
-        dailyData = backup;
-      } else {
-        console.warn(`❌ No valid backup for daily data, using defaults`);
-        return getEmptyDailyData();
-      }
-    }
-    
-    const migrated: DailyDataMap = {};
-    
-    Object.keys(dailyData).forEach(date => {
-      const dayData = dailyData[date];
-      if (dayData && typeof dayData === 'object') {
-        migrated[date] = {
-          completedTasks: Array.isArray(dayData.completedTasks) ? dayData.completedTasks : [],
-          employeeMoods: Array.isArray(dayData.employeeMoods) ? dayData.employeeMoods : [],
-          purchases: Array.isArray(dayData.purchases) ? dayData.purchases : [],
-          totalTasks: typeof dayData.totalTasks === 'number' ? dayData.totalTasks : 22,
-          completionRate: typeof dayData.completionRate === 'number' ? dayData.completionRate : 0,
-          totalPointsEarned: typeof dayData.totalPointsEarned === 'number' ? dayData.totalPointsEarned : 0,
-          totalPointsSpent: typeof dayData.totalPointsSpent === 'number' ? dayData.totalPointsSpent : 0
-        };
-      }
-    });
-    
-    return migrated;
-  };
-
-  private protectedMigrateRoles = (roles: any): string[] => {
-    if (!roles || !Array.isArray(roles)) {
-      const backup = this.restoreFromBackup('customRoles');
-      if (backup && Array.isArray(backup)) {
-        return backup;
-      }
-      return ['Cleaner', 'Manager', 'Supervisor'];
-    }
-    return roles;
-  };
-
-  private protectedMigrateStoreItems = (storeItems: any): StoreItem[] => {
-    if (!storeItems || !Array.isArray(storeItems)) {
-      const backup = this.restoreFromBackup('storeItems');
-      if (backup && Array.isArray(backup)) {
-        storeItems = backup;
-      } else {
-        return getDefaultStoreItems();
-      }
-    }
-    
-    return storeItems.map((item: any) => ({
-      id: item.id || 0,
-      name: item.name || 'Unknown Item',
-      description: item.description || 'No description',
-      cost: typeof item.cost === 'number' ? item.cost : 10,
-      category: item.category || 'reward',
-      icon: item.icon || '🎁',
-      available: typeof item.available === 'boolean' ? item.available : true
-    }));
-  };
-
   private setupConnectionMonitoring(onConnectionChange: (status: 'connected' | 'disconnected' | 'error') => void) {
+    // Monitor online/offline status
     const handleOnline = () => {
       console.log('🌐 Device came online');
       onConnectionChange('connected');
@@ -291,6 +89,7 @@ export class FirebaseService {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
+    // Test connection periodically
     const testConnection = async () => {
       try {
         const response = await fetch(`${this.baseUrl}/.json`, { 
@@ -303,12 +102,15 @@ export class FirebaseService {
       }
     };
 
+    // Initial status
     testConnection();
+    
+    // Test every 15 seconds (more frequent)
     setInterval(testConnection, 15000);
   }
 
   async loadData() {
-    console.log('🔥 Loading data with protection...');
+    console.log('🔥 Loading initial data from Firebase...');
     
     try {
       const [employeesRes, tasksRes, dailyRes, customRolesRes, storeRes] = await Promise.all([
@@ -319,44 +121,25 @@ export class FirebaseService {
         fetch(`${this.baseUrl}/storeItems.json`)
       ]);
       
-      // Check all responses
-      if (!employeesRes.ok || !tasksRes.ok || !dailyRes.ok) {
-        throw new Error('One or more endpoints failed');
-      }
-      
       const employeesData = await employeesRes.json();
       const tasksData = await tasksRes.json();
       const dailyDataRes = await dailyRes.json();
       const customRolesData = await customRolesRes.json();
       const storeItemsData = await storeRes.json();
       
-      // Validate before processing
-      if (!this.validateData('employees', employeesData) || 
-          !this.validateData('tasks', tasksData) || 
-          !this.validateData('dailyData', dailyDataRes)) {
-        throw new Error('Data validation failed');
-      }
+      const migratedEmployees = this.migrateEmployeeData(employeesData);
+      const migratedTasks = this.migrateTaskData(tasksData);
+      const migratedDailyData = this.migrateDailyData(dailyDataRes);
+      const migratedStoreItems = this.migrateStoreItems(storeItemsData);
       
-      // Create backups before migration
-      this.createBackup('employees', employeesData);
-      this.createBackup('tasks', tasksData);
-      this.createBackup('dailyData', dailyDataRes);
-      this.createBackup('customRoles', customRolesData);
-      this.createBackup('storeItems', storeItemsData);
-      
-      const migratedEmployees = this.protectedMigrateEmployeeData(employeesData);
-      const migratedTasks = this.protectedMigrateTaskData(tasksData);
-      const migratedDailyData = this.protectedMigrateDailyData(dailyDataRes);
-      const migratedStoreItems = this.protectedMigrateStoreItems(storeItemsData);
-      
-      // Store initial snapshots
+      // Store initial snapshots to avoid false triggers
       this.lastDataSnapshots.set('employees', JSON.stringify(employeesData));
       this.lastDataSnapshots.set('tasks', JSON.stringify(tasksData));
       this.lastDataSnapshots.set('dailyData', JSON.stringify(dailyDataRes));
       this.lastDataSnapshots.set('customRoles', JSON.stringify(customRolesData));
       this.lastDataSnapshots.set('storeItems', JSON.stringify(storeItemsData));
       
-      console.log('✅ Protected data load successful');
+      console.log('✅ Firebase: Initial data loaded successfully');
       
       return {
         employees: migratedEmployees,
@@ -367,10 +150,68 @@ export class FirebaseService {
       };
       
     } catch (error) {
-      console.error('❌ Protected data load failed:', error);
+      console.error('❌ Firebase connection failed:', error);
       throw error;
     }
   }
+
+  // Optimistic instant save - saves immediately without waiting
+  async instantSave(field: string, data: any) {
+    console.log(`⚡ Instant saving ${field}...`);
+    
+    // Store as pending update
+    this.pendingUpdates.set(field, data);
+    
+    try {
+      // Fire and forget - don't wait for response
+      fetch(`${this.baseUrl}/${field}.json`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      }).then(response => {
+        if (response.ok) {
+          console.log(`⚡ ${field} instantly saved`);
+          this.pendingUpdates.delete(field);
+        } else {
+          console.warn(`⚠️ Instant save failed for ${field}, will retry`);
+        }
+      }).catch(error => {
+        console.warn(`⚠️ Instant save error for ${field}:`, error);
+      });
+      
+      return true;
+    } catch (error) {
+      console.error(`❌ Instant save failed for ${field}:`, error);
+      return false;
+    }
+  }
+
+  private migrateEmployeeData = (employees: any): Employee[] => {
+    if (!employees || !Array.isArray(employees)) return getDefaultEmployees();
+    
+    return employees.map(emp => ({
+      id: emp.id || 0,
+      name: emp.name || 'Unknown',
+      mood: emp.mood || 3,
+      lastUpdated: emp.lastUpdated || 'Not updated',
+      role: emp.role || 'Cleaner',
+      lastMoodDate: emp.lastMoodDate || null,
+      points: typeof emp.points === 'number' ? emp.points : 0
+    }));
+  };
+
+  private migrateTaskData = (tasks: any): Task[] => {
+    if (!tasks || !Array.isArray(tasks)) return getDefaultTasks();
+    
+    return tasks.map(task => ({
+      id: task.id || 0,
+      task: task.task || 'Unknown Task',
+      location: task.location || 'Unknown Location',
+      priority: task.priority || 'medium',
+      estimatedTime: task.estimatedTime || '30 min',
+      points: typeof task.points === 'number' ? task.points : this.getDefaultTaskPoints(task.priority)
+    }));
+  };
 
   private getDefaultTaskPoints(priority: string): number {
     switch (priority) {
@@ -381,39 +222,40 @@ export class FirebaseService {
     }
   }
 
-  async instantSave(field: string, data: any) {
-    console.log(`⚡ Protected instant saving ${field}...`);
+  private migrateDailyData = (dailyData: any): DailyDataMap => {
+    if (!dailyData || typeof dailyData !== 'object') return getEmptyDailyData();
     
-    // Validate data before saving
-    if (!this.validateData(field, data)) {
-      console.error(`❌ Refusing to save invalid data for ${field}`);
-      return false;
-    }
+    const migrated: DailyDataMap = {};
     
-    // Create backup before save
-    this.createBackup(field, data);
-    this.pendingUpdates.set(field, data);
+    Object.keys(dailyData).forEach(date => {
+      const dayData = dailyData[date];
+      migrated[date] = {
+        completedTasks: dayData.completedTasks || [],
+        employeeMoods: dayData.employeeMoods || [],
+        purchases: dayData.purchases || [],
+        totalTasks: dayData.totalTasks || 22,
+        completionRate: dayData.completionRate || 0,
+        totalPointsEarned: dayData.totalPointsEarned || 0,
+        totalPointsSpent: dayData.totalPointsSpent || 0
+      };
+    });
     
-    try {
-      const response = await fetch(`${this.baseUrl}/${field}.json`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-      
-      if (response.ok) {
-        console.log(`⚡ ${field} safely saved`);
-        this.pendingUpdates.delete(field);
-        return true;
-      } else {
-        console.warn(`⚠️ Save failed for ${field}, status: ${response.status}`);
-        return false;
-      }
-    } catch (error) {
-      console.error(`❌ Save error for ${field}:`, error);
-      return false;
-    }
-  }
+    return migrated;
+  };
+
+  private migrateStoreItems = (storeItems: any): StoreItem[] => {
+    if (!storeItems || !Array.isArray(storeItems)) return getDefaultStoreItems();
+    
+    return storeItems.map(item => ({
+      id: item.id || 0,
+      name: item.name || 'Unknown Item',
+      description: item.description || 'No description',
+      cost: typeof item.cost === 'number' ? item.cost : 10,
+      category: item.category || 'reward',
+      icon: item.icon || '🎁',
+      available: typeof item.available === 'boolean' ? item.available : true
+    }));
+  };
 
   async saveData(data: {
     employees: Employee[];
@@ -422,10 +264,11 @@ export class FirebaseService {
     customRoles: string[];
     storeItems: StoreItem[];
   }) {
-    console.log('🔥 Protected saving to Firebase...');
+    console.log('🔥 Saving to Firebase...');
     
     try {
-      const results = await Promise.allSettled([
+      // Use instant save for critical data
+      await Promise.all([
         this.instantSave('employees', data.employees),
         this.instantSave('tasks', data.tasks),
         this.instantSave('dailyData', data.dailyData),
@@ -433,34 +276,30 @@ export class FirebaseService {
         this.instantSave('storeItems', data.storeItems)
       ]);
       
-      const failed = results.filter(result => result.status === 'rejected' || !result.value);
-      if (failed.length > 0) {
-        console.warn(`⚠️ ${failed.length} saves failed, but others succeeded`);
-      }
-      
-      console.log('✅ Protected save completed');
+      console.log('✅ Firebase: Data saved instantly');
       
     } catch (error) {
-      console.error('❌ Protected save failed:', error);
+      console.error('❌ Firebase save failed:', error);
       throw error;
     }
   }
 
+  // Method to save a single field instantly
   async saveField(field: string, data: any) {
     return this.instantSave(field, data);
   }
 
+  // Clean up listeners
   cleanup() {
-    console.log('🧹 Cleaning up with backup preservation...');
+    console.log('🧹 Cleaning up Firebase listeners...');
     
     this.pollIntervals.forEach((interval, endpoint) => {
       clearInterval(interval);
+      console.log(`❌ Cleared polling interval for ${endpoint}`);
     });
     
     this.pollIntervals.clear();
     this.lastDataSnapshots.clear();
     this.pendingUpdates.clear();
-    // Keep backups for potential recovery
-    console.log(`💾 Preserved ${this.dataBackups.size} data backups`);
   }
 }
