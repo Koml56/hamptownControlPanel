@@ -10,6 +10,7 @@ interface EmergencyRestoreProps {
   setTasks: (updater: (prev: any[]) => any[]) => void;
   setStoreItems: (updater: (prev: any[]) => any[]) => void;
   setCustomRoles: (updater: (prev: string[]) => string[]) => void;
+  onClose: () => void;
 }
 
 const EmergencyRestore: React.FC<EmergencyRestoreProps> = ({
@@ -18,7 +19,8 @@ const EmergencyRestore: React.FC<EmergencyRestoreProps> = ({
   setDailyData,
   setTasks,
   setStoreItems,
-  setCustomRoles
+  setCustomRoles,
+  onClose
 }) => {
   const [isRestoring, setIsRestoring] = useState(false);
   const [restoreStep, setRestoreStep] = useState(0);
@@ -104,6 +106,7 @@ const EmergencyRestore: React.FC<EmergencyRestoreProps> = ({
         setTimeout(() => {
           saveToFirebase();
           alert('Points restored successfully!');
+          onClose();
         }, 1000);
 
       } catch (error) {
@@ -164,7 +167,10 @@ const EmergencyRestore: React.FC<EmergencyRestoreProps> = ({
                 Your app has been restored with default data. You can now start using it normally.
               </div>
               <button
-                onClick={() => window.location.reload()}
+                onClick={() => {
+                  onClose();
+                  setTimeout(() => window.location.reload(), 100);
+                }}
                 className="w-full bg-green-500 text-white py-3 px-4 rounded-lg hover:bg-green-600"
               >
                 Reload App
