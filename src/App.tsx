@@ -1,10 +1,14 @@
+// App.tsx - Updated with offline detection
 import React from 'react';
 import EmployeeApp from './employee-app/EmployeeApp';
+import OfflineDetector from './employee-app/OfflineDetector';
 
 function App() {
   return (
     <div className="App">
-      <EmployeeApp />
+      <OfflineDetector>
+        <EmployeeApp />
+      </OfflineDetector>
     </div>
   );
 }
