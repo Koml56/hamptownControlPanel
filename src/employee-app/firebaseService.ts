@@ -171,7 +171,7 @@ export class FirebaseService {
     dailyData: DailyDataMap;
     customRoles: string[];
     storeItems: StoreItem[];
-  }) {
+  }): Promise<void> {
     console.log('🔐 Saving data with protection...');
     
     // Validate before saving
@@ -347,7 +347,13 @@ export class FirebaseService {
     setInterval(testConnection, 15000);
   }
 
-  async loadData() {
+  async loadData(): Promise<{
+    employees: Employee[];
+    tasks: Task[];
+    dailyData: DailyDataMap;
+    customRoles: string[];
+    storeItems: StoreItem[];
+  }> {
     console.log('🔥 Loading data with protection...');
     
     try {
@@ -420,11 +426,11 @@ export class FirebaseService {
     dailyData: DailyDataMap;
     customRoles: string[];
     storeItems: StoreItem[];
-  }) {
+  }): Promise<void> {
     return this.saveDataWithProtection(data);
   }
 
-  async saveField(field: string, data: any) {
+  async saveField(field: string, data: any): Promise<boolean> {
     console.log(`⚡ Protected save for ${field}...`);
     
     if (!this.validateData(field, data)) {
