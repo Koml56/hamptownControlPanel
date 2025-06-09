@@ -59,6 +59,7 @@ const EmployeeApp = () => {
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
   const [selectedDate, setSelectedDate] = useState(getFormattedDate(new Date()));
+  const [showEmergencyRestore, setShowEmergencyRestore] = useState(false);
 
   // Load data once on mount
   useEffect(() => {
@@ -153,10 +154,17 @@ const EmployeeApp = () => {
     (employees.length > 0 && employees.every(emp => emp.name === 'Unknown')) ||
     Object.keys(dailyData).length === 0;
 
+  // Show emergency restore modal when needed
+  useEffect(() => {
+    if (needsEmergencyRestore && !showEmergencyRestore) {
+      setShowEmergencyRestore(true);
+    }
+  }, [needsEmergencyRestore, showEmergencyRestore]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* Emergency Restore Modal */}
-      {needsEmergencyRestore && (
+      {showEmergencyRestore && (
         <EmergencyRestore
           saveToFirebase={saveToFirebase}
           setEmployees={setEmployeesWithSave}
@@ -164,6 +172,7 @@ const EmployeeApp = () => {
           setTasks={setTasksWithSave}
           setStoreItems={setStoreItemsWithSave}
           setCustomRoles={setCustomRolesWithSave}
+          onClose={() => setShowEmergencyRestore(false)}
         />
       )}
 
