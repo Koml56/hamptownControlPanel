@@ -359,6 +359,8 @@ const OfflineDetector: React.FC<OfflineDetectorProps> = ({ children }) => {
   );
 };
 
+export default OfflineDetector;
+
   // Show children when online
   if (isOnline) {
     return <>{children}</>;
