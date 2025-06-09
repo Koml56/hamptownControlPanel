@@ -8,6 +8,7 @@ import TaskManager from './TaskManager';
 import Store from './Store';
 import AdminPanel from './AdminPanel';
 import DailyReports from './DailyReports';
+import EmergencyRestore from './EmergencyRestore';
 
 // Hooks and Functions
 import { useFirebaseData, useAuth } from './hooks';
@@ -85,6 +86,11 @@ const EmployeeApp = () => {
   // Update user mood when current user changes
   useEffect(() => {
     const currentEmployee = employees.find(emp => emp.id === currentUser.id);
+
+  // Check if emergency restore is needed
+  const needsEmergencyRestore = employees.length === 0 || 
+    (employees.length > 0 && employees.every(emp => emp.name === 'Unknown')) ||
+    Object.keys(dailyData).length === 0;
     if (currentEmployee) {
       setUserMood(currentEmployee.mood);
     }
@@ -150,6 +156,17 @@ const EmployeeApp = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      {/* Emergency Restore Modal */}
+      {needsEmergencyRestore && (
+        <EmergencyRestore
+          saveToFirebase={saveToFirebase}
+          setEmployees={setEmployeesWithSave}
+          setDailyData={setDailyDataWithSave}
+          setTasks={setTasksWithSave}
+          setStoreItems={setStoreItemsWithSave}
+          setCustomRoles={setCustomRolesWithSave}
+        />
+      )}
       {/* Header */}
       <div className="bg-white shadow-sm border-b">
         <div className="px-4 py-3 flex justify-between items-center">
