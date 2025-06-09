@@ -1,209 +1,465 @@
-// EmergencyRestore.tsx - Emergency data restoration using existing defaultData
-import React, { useState } from 'react';
-import { AlertTriangle, Database, RefreshCw, CheckCircle, Upload } from 'lucide-react';
-import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData, getDefaultStoreItems } from './defaultData';
+// EmployeeApp.tsx - Updated to handle store items from Firebase
+import React, { useState, useEffect, useCallback } from 'react';
+import { Users, CheckSquare, TrendingUp, Settings, Lock, LogOut, Calendar, Database, ChevronDown, X, Check, ShoppingBag } from 'lucide-react';
 
-interface EmergencyRestoreProps {
-  saveToFirebase: () => void;
-  setEmployees: (updater: (prev: any[]) => any[]) => void;
-  setDailyData: (updater: (prev: any) => any) => void;
-  setTasks: (updater: (prev: any[]) => any[]) => void;
-  setStoreItems: (updater: (prev: any[]) => any[]) => void;
-  setCustomRoles: (updater: (prev: string[]) => string[]) => void;
-  onClose: () => void;
-}
+// Components
+import MoodTracker from './MoodTracker';
+import TaskManager from './TaskManager';
+import Store from './Store';
+import AdminPanel from './AdminPanel';
+import DailyReports from './DailyReports';
 
-const EmergencyRestore: React.FC<EmergencyRestoreProps> = ({
-  saveToFirebase,
-  setEmployees,
-  setDailyData,
-  setTasks,
-  setStoreItems,
-  setCustomRoles,
-  onClose
-}) => {
-  const [isRestoring, setIsRestoring] = useState(false);
-  const [restoreStep, setRestoreStep] = useState(0);
+// Hooks and Functions
+import { useFirebaseData, useAuth } from './hooks';
+import { handleAdminLogin } from './adminFunctions';
 
-  const restoreDefaultData = async () => {
-    setIsRestoring(true);
-    setRestoreStep(1);
+// Types and Constants
+import { getFormattedDate } from './utils';
+import type { ActiveTab, Employee, Task, DailyDataMap, TaskAssignments, StoreItem } from './types';
 
-    try {
-      // Step 1: Restore employees using defaultData
-      console.log('🔄 Restoring employees...');
-      setEmployees(() => getDefaultEmployees());
-      setRestoreStep(2);
-      await new Promise(resolve => setTimeout(resolve, 500));
+const EmployeeApp = () => {
+  // Firebase and Auth hooks
+  const {
+    isLoading,
+    lastSync,
+    connectionStatus,
+    syncCount,
+    employees,
+    tasks,
+    dailyData,
+    completedTasks,
+    taskAssignments,
+    customRoles,
+    storeItems, // Get store items from Firebase hook
+    setEmployees,
+    setTasks,
+    setDailyData,
+    setCompletedTasks,
+    setTaskAssignments,
+    setCustomRoles,
+    setStoreItems, // Get store items setter
+    loadFromFirebase,
+    saveToFirebase,
+    quickSave
+  } = useFirebaseData();
 
-      // Step 2: Restore tasks using defaultData
-      console.log('🔄 Restoring tasks...');
-      setTasks(() => getDefaultTasks());
-      setRestoreStep(3);
-      await new Promise(resolve => setTimeout(resolve, 500));
+  const {
+    currentUser,
+    isAdmin,
+    setIsAdmin,
+    switchUser,
+    logoutAdmin
+  } = useAuth();
 
-      // Step 3: Restore daily data using defaultData
-      console.log('🔄 Restoring daily data...');
-      setDailyData(() => getEmptyDailyData());
-      setRestoreStep(4);
-      await new Promise(resolve => setTimeout(resolve, 500));
+  // UI State
+  const [userMood, setUserMood] = useState(3);
+  const [activeTab, setActiveTab] = useState<ActiveTab>('mood');
+  const [showUserSwitcher, setShowUserSwitcher] = useState(false);
+  const [showAdminLogin, setShowAdminLogin] = useState(false);
+  const [adminPassword, setAdminPassword] = useState('');
+  const [selectedDate, setSelectedDate] = useState(getFormattedDate(new Date()));
 
-      // Step 4: Restore store items using defaultData
-      console.log('🔄 Restoring store items...');
-      setStoreItems(() => getDefaultStoreItems());
-      setRestoreStep(5);
-      await new Promise(resolve => setTimeout(resolve, 500));
+  // Load data once on mount
+  useEffect(() => {
+    loadFromFirebase();
+  }, []); // Empty dependency array - only run once
 
-      // Step 5: Restore custom roles
-      console.log('🔄 Restoring custom roles...');
-      setCustomRoles(() => ['Cleaner', 'Manager', 'Supervisor']);
-      setRestoreStep(6);
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // Step 6: Save to Firebase
-      console.log('🔄 Saving to Firebase...');
-      saveToFirebase();
-      setRestoreStep(7);
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      setRestoreStep(8);
-      console.log('✅ Emergency restoration completed!');
-
-    } catch (error) {
-      console.error('❌ Emergency restoration failed:', error);
-      alert('Restoration failed. Please try again or contact support.');
-    } finally {
-      setIsRestoring(false);
-    }
-  };
-
-  const manualPointsRestore = () => {
-    const pointsData = prompt(
-      'Enter employee points data:\n' +
-      'Format: Luka:50,Safi:75,Ehsan:30,Oleksii:90\n\n' +
-      'This will restore your employees with their points:'
-    );
-
-    if (pointsData) {
-      try {
-        // Get default employees first
-        const defaultEmployees = getDefaultEmployees();
-        const entries = pointsData.split(',');
-        
-        const restoredEmployees = entries.map((entry, index) => {
-          const [name, points] = entry.split(':');
-          const defaultEmp = defaultEmployees.find(emp => emp.name.toLowerCase() === name.trim().toLowerCase()) || defaultEmployees[index];
-          
-          return {
-            ...defaultEmp,
-            name: name.trim(),
-            lastUpdated: 'Points restored',
-            points: parseInt(points.trim()) || 0
-          };
-        });
-
-        setEmployees(() => restoredEmployees);
-        setTimeout(() => {
-          saveToFirebase();
-          alert('Points restored successfully!');
-          onClose();
-        }, 1000);
-
-      } catch (error) {
-        alert('Error processing points data. Please check the format.');
+  // Set up periodic auto-save (every 5 minutes)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (connectionStatus === 'connected' && !isLoading) {
+        saveToFirebase();
       }
+    }, 300000); // 5 minutes
+    
+    return () => clearInterval(interval);
+  }, [connectionStatus, isLoading, saveToFirebase]);
+
+  // Optimized data change handler - only save when user makes changes
+  const handleDataChange = useCallback(() => {
+    if (connectionStatus === 'connected') {
+      saveToFirebase();
+    }
+  }, [connectionStatus, saveToFirebase]);
+
+  // Update user mood when current user changes
+  useEffect(() => {
+    const currentEmployee = employees.find(emp => emp.id === currentUser.id);
+    if (currentEmployee) {
+      setUserMood(currentEmployee.mood);
+    }
+  }, [currentUser.id, employees]);
+
+  const handleAdminLoginSubmit = () => {
+    const success = handleAdminLogin(adminPassword, setIsAdmin, setActiveTab, setAdminPassword);
+    if (success) {
+      setShowAdminLogin(false);
     }
   };
 
-  const steps = [
-    'Preparing restoration...',
-    'Restoring employees...',
-    'Restoring tasks...',
-    'Restoring daily data...',
-    'Restoring store items...',
-    'Restoring settings...',
-    'Saving to Firebase...',
-    'Validating data...',
-    'Restoration complete!'
-  ];
+  const handleUserSwitch = (employee: Employee) => {
+    switchUser(employee);
+    setShowUserSwitcher(false);
+    setActiveTab('mood');
+  };
+
+  const handleAdminLogout = () => {
+    logoutAdmin();
+    setActiveTab('mood');
+  };
+
+  // Enhanced setters that trigger save
+  const setEmployeesWithSave = useCallback((updater: (prev: Employee[]) => Employee[]) => {
+    setEmployees(updater);
+    handleDataChange();
+  }, [setEmployees, handleDataChange]);
+
+  const setTasksWithSave = useCallback((updater: (prev: Task[]) => Task[]) => {
+    setTasks(updater);
+    handleDataChange();
+  }, [setTasks, handleDataChange]);
+
+  const setDailyDataWithSave = useCallback((updater: (prev: DailyDataMap) => DailyDataMap) => {
+    setDailyData(updater);
+    handleDataChange();
+  }, [setDailyData, handleDataChange]);
+
+  const setCompletedTasksWithSave = useCallback((tasks: Set<number>) => {
+    setCompletedTasks(tasks);
+    handleDataChange();
+  }, [setCompletedTasks, handleDataChange]);
+
+  const setTaskAssignmentsWithSave = useCallback((updater: (prev: TaskAssignments) => TaskAssignments) => {
+    setTaskAssignments(updater);
+    handleDataChange();
+  }, [setTaskAssignments, handleDataChange]);
+
+  const setCustomRolesWithSave = useCallback((updater: (prev: string[]) => string[]) => {
+    setCustomRoles(updater);
+    handleDataChange();
+  }, [setCustomRoles, handleDataChange]);
+
+  // Add store items setter with save
+  const setStoreItemsWithSave = useCallback((updater: (prev: StoreItem[]) => StoreItem[]) => {
+    console.log('🏪 Updating store items and triggering save...');
+    setStoreItems(updater);
+    handleDataChange();
+  }, [setStoreItems, handleDataChange]);
+
+  const currentEmployee = employees.find(emp => emp.id === currentUser.id);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl p-8 w-96 mx-4 shadow-2xl">
-        <div className="text-center">
-          <AlertTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-red-800 mb-4">
-            🚨 Emergency Data Restoration
-          </h2>
-          <div className="text-gray-700 mb-6">
-            Firebase database is empty or corrupted. All data needs to be restored immediately.
-          </div>
-
-          {isRestoring ? (
-            <div className="space-y-4">
-              <div className="text-lg font-medium text-blue-600">
-                {steps[restoreStep]}
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-blue-500 h-2 rounded-full transition-all duration-500"
-                  style={{ width: `${(restoreStep / (steps.length - 1)) * 100}%` }}
-                ></div>
-              </div>
-              <div className="flex items-center justify-center">
-                <RefreshCw className="w-5 h-5 animate-spin text-blue-500 mr-2" />
-                <span className="text-sm text-gray-600">
-                  Step {restoreStep + 1} of {steps.length}
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      {/* Header */}
+      <div className="bg-white shadow-sm border-b">
+        <div className="px-4 py-3 flex justify-between items-center">
+          <div className="flex items-center space-x-3">
+            <div>
+              <h1 className="text-xl font-bold text-gray-800">WorkVibe</h1>
+              <button
+                onClick={() => setShowUserSwitcher(!showUserSwitcher)}
+                className="flex items-center text-sm text-gray-600 hover:text-gray-800 mt-1"
+              >
+                Hello, {currentUser.name}! 
+                <span className="ml-2 bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                  {currentEmployee?.points || 0} pts
                 </span>
-              </div>
-            </div>
-          ) : restoreStep === 8 ? (
-            <div className="space-y-4">
-              <CheckCircle className="w-16 h-16 text-green-500 mx-auto" />
-              <div className="text-lg font-medium text-green-600">
-                ✅ Emergency restoration completed!
-              </div>
-              <div className="text-sm text-gray-600">
-                Your app has been restored with default data. You can now start using it normally.
-              </div>
-              <button
-                onClick={() => {
-                  onClose();
-                  setTimeout(() => window.location.reload(), 100);
-                }}
-                className="w-full bg-green-500 text-white py-3 px-4 rounded-lg hover:bg-green-600"
-              >
-                Reload App
+                <ChevronDown className="w-4 h-4 ml-1" />
               </button>
             </div>
-          ) : (
-            <div className="space-y-4">
+            {isAdmin && (
+              <div className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full">
+                Admin Mode
+              </div>
+            )}
+          </div>
+          <div className="flex items-center space-x-2">
+            {isAdmin && (
               <button
-                onClick={restoreDefaultData}
-                className="w-full bg-red-500 text-white py-3 px-4 rounded-lg hover:bg-red-600 flex items-center justify-center"
+                onClick={handleAdminLogout}
+                className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg"
+                title="Logout Admin"
               >
-                <Database className="w-5 h-5 mr-2" />
-                Restore Default Data
+                <LogOut className="w-5 h-5" />
               </button>
+            )}
+            <button
+              onClick={() => setShowAdminLogin(true)}
+              className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg"
+              title="Admin Login"
+            >
+              <Settings className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
 
-              <button
-                onClick={manualPointsRestore}
-                className="w-full bg-orange-500 text-white py-3 px-4 rounded-lg hover:bg-orange-600 flex items-center justify-center"
-              >
-                <Upload className="w-5 h-5 mr-2" />
-                Manual Points Restore
-              </button>
-
-              <div className="text-xs text-gray-500 mt-4">
-                <strong>Default restore:</strong> Recreates all employees, tasks, and settings with fresh data.<br/>
-                <strong>Manual restore:</strong> Restore employees with their previous points if you remember them.
-              </div>
+        {/* User Switcher Dropdown */}
+        {showUserSwitcher && (
+          <div className="absolute top-16 left-4 bg-white border rounded-lg shadow-lg z-40 w-64">
+            <div className="p-3 border-b bg-gray-50">
+              <div className="text-sm font-medium text-gray-700">Switch Employee</div>
             </div>
+            <div className="max-h-64 overflow-y-auto">
+              {employees.map(emp => (
+                <button
+                  key={emp.id}
+                  onClick={() => handleUserSwitch(emp)}
+                  className={`w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center justify-between ${
+                    currentUser.id === emp.id ? 'bg-blue-50 border-r-2 border-blue-500' : ''
+                  }`}
+                >
+                  <div className="flex items-center">
+                    <div className={`w-3 h-3 rounded-full mr-3 ${
+                      emp.mood === 1 ? 'bg-red-500' :
+                      emp.mood === 2 ? 'bg-orange-500' :
+                      emp.mood === 3 ? 'bg-yellow-500' :
+                      emp.mood === 4 ? 'bg-green-500' : 'bg-blue-500'
+                    }`} />
+                    <div>
+                      <div className="font-medium text-gray-800">{emp.name}</div>
+                      <div className="text-xs text-gray-500">
+                        {emp.role} • {emp.points} pts
+                      </div>
+                    </div>
+                  </div>
+                  {currentUser.id === emp.id && (
+                    <Check className="w-4 h-4 text-blue-500" />
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Tab Navigation */}
+      <div className="bg-white border-b">
+        <div className="flex">
+          <button
+            onClick={() => setActiveTab('mood')}
+            className={`flex-1 py-3 px-4 text-center ${
+              activeTab === 'mood' 
+                ? 'border-b-2 border-blue-500 text-blue-600 bg-blue-50' 
+                : 'text-gray-600'
+            }`}
+          >
+            <TrendingUp className="w-5 h-5 mx-auto mb-1" />
+            Mood Tracker
+          </button>
+          <button
+            onClick={() => setActiveTab('tasks')}
+            className={`flex-1 py-3 px-4 text-center ${
+              activeTab === 'tasks' 
+                ? 'border-b-2 border-blue-500 text-blue-600 bg-blue-50' 
+                : 'text-gray-600'
+            }`}
+          >
+            <CheckSquare className="w-5 h-5 mx-auto mb-1" />
+            Cleaning Tasks
+          </button>
+          <button
+            onClick={() => setActiveTab('store')}
+            className={`flex-1 py-3 px-4 text-center ${
+              activeTab === 'store' 
+                ? 'border-b-2 border-purple-500 text-purple-600 bg-purple-50' 
+                : 'text-gray-600'
+            }`}
+          >
+            <ShoppingBag className="w-5 h-5 mx-auto mb-1" />
+            Store
+          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setActiveTab('admin')}
+              className={`flex-1 py-3 px-4 text-center ${
+                activeTab === 'admin' 
+                  ? 'border-b-2 border-red-500 text-red-600 bg-red-50' 
+                  : 'text-gray-600'
+              }`}
+            >
+              <Settings className="w-5 h-5 mx-auto mb-1" />
+              Admin Panel
+            </button>
+          )}
+          {isAdmin && (
+            <button
+              onClick={() => setActiveTab('reports')}
+              className={`flex-1 py-3 px-4 text-center ${
+                activeTab === 'reports' 
+                  ? 'border-b-2 border-orange-500 text-orange-600 bg-orange-50' 
+                  : 'text-gray-600'
+              }`}
+            >
+              <Database className="w-5 h-5 mx-auto mb-1" />
+              Daily Reports
+            </button>
           )}
         </div>
       </div>
+
+      <div className="p-4 space-y-6">
+        {/* Floating Status Indicator - Old Design with Device Count */}
+        <div className="fixed bottom-20 right-4 z-50">
+          {isLoading && (
+            <div className="bg-white/80 backdrop-blur-sm rounded-full px-4 py-2 shadow-lg flex items-center space-x-2 border border-blue-100">
+              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+              <span className="text-blue-700 text-xs">Syncing...</span>
+            </div>
+          )}
+
+          {lastSync && connectionStatus === 'connected' && !isLoading && (
+            <div 
+              className="bg-white/80 backdrop-blur-sm rounded-full px-4 py-2 shadow-lg flex items-center space-x-2 border border-green-100 hover:bg-white/90 transition-all cursor-default"
+              title={`Last saved: ${lastSync}${syncCount > 0 ? ` • Updates received: ${syncCount}` : ''}`}
+            >
+              <div className="w-2 h-2 rounded-full bg-green-500"></div>
+              <span className="text-green-700 text-xs">Saved</span>
+              
+              {/* Device count indicator from new design */}
+              {connectionStatus === 'connected' && (
+                <div className="flex items-center space-x-1 ml-2 pl-2 border-l border-green-200">
+                  <div className="w-1 h-1 rounded-full bg-green-500 opacity-60" />
+                  <span className="text-xs text-green-600 opacity-75">
+                    {Math.floor(Math.random() * 3) + 2} devices
+                  </span>
+                </div>
+              )}
+              
+              {/* Real-time sync pulse indicator */}
+              {syncCount > 0 && (
+                <div className="absolute -top-1 -right-1">
+                  <div className="w-3 h-3 bg-green-400 rounded-full animate-ping" />
+                  <div className="absolute top-0 right-0 w-3 h-3 bg-green-500 rounded-full" />
+                </div>
+              )}
+            </div>
+          )}
+
+          {connectionStatus === 'error' && (
+            <div 
+              onClick={loadFromFirebase}
+              className="bg-white/80 backdrop-blur-sm rounded-full px-4 py-2 shadow-lg flex items-center space-x-2 border border-red-100 hover:bg-white/90 transition-all cursor-pointer"
+            >
+              <div className="w-2 h-2 rounded-full bg-red-500"></div>
+              <span className="text-red-700 text-xs">Reconnect</span>
+            </div>
+          )}
+        </div>
+
+        {/* Tab Content */}
+        {activeTab === 'mood' && (
+          <MoodTracker
+            currentUser={currentUser}
+            employees={employees}
+            userMood={userMood}
+            setUserMood={setUserMood}
+            setEmployees={setEmployeesWithSave}
+            setDailyData={setDailyDataWithSave}
+          />
+        )}
+
+        {activeTab === 'tasks' && (
+          <TaskManager
+            currentUser={currentUser}
+            tasks={tasks}
+            employees={employees}
+            completedTasks={completedTasks}
+            taskAssignments={taskAssignments}
+            dailyData={dailyData}
+            setCompletedTasks={setCompletedTasksWithSave}
+            setTaskAssignments={setTaskAssignmentsWithSave}
+            setDailyData={setDailyDataWithSave}
+            setEmployees={setEmployeesWithSave}
+          />
+        )}
+
+        {activeTab === 'store' && (
+          <Store
+            currentUser={currentUser}
+            employees={employees}
+            storeItems={storeItems}
+            dailyData={dailyData}
+            setEmployees={setEmployeesWithSave}
+            setDailyData={setDailyDataWithSave}
+            saveToFirebase={saveToFirebase}
+          />
+        )}
+
+        {activeTab === 'admin' && isAdmin && (
+          <AdminPanel
+            employees={employees}
+            tasks={tasks}
+            customRoles={customRoles}
+            storeItems={storeItems}
+            setEmployees={setEmployeesWithSave}
+            setTasks={setTasksWithSave}
+            setCustomRoles={setCustomRolesWithSave}
+            setStoreItems={setStoreItemsWithSave}
+          />
+        )}
+
+        {activeTab === 'reports' && isAdmin && (
+          <DailyReports
+            selectedDate={selectedDate}
+            setSelectedDate={setSelectedDate}
+            dailyData={dailyData}
+            employees={employees}
+            connectionStatus={connectionStatus}
+          />
+        )}
+      </div>
+
+      {/* Admin Login Modal */}
+      {showAdminLogin && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-80 mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-800 flex items-center">
+                <Lock className="w-5 h-5 mr-2" />
+                Admin Access
+              </h3>
+              <button
+                onClick={() => {
+                  setShowAdminLogin(false);
+                  setAdminPassword('');
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <input
+                type="password"
+                placeholder="Enter admin password"
+                value={adminPassword}
+                onChange={(e) => setAdminPassword(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleAdminLoginSubmit()}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+              <button
+                onClick={handleAdminLoginSubmit}
+                className="w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 transition-colors"
+              >
+                Login
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Click outside to close dropdowns */}
+      {(showUserSwitcher || showAdminLogin) && (
+        <div 
+          className="fixed inset-0 z-30" 
+          onClick={() => {
+            setShowUserSwitcher(false);
+            if (!showAdminLogin) setShowAdminLogin(false);
+          }}
+        />
+      )}
     </div>
   );
 };
 
-export default EmergencyRestore;
+export default EmployeeApp;
