@@ -228,35 +228,43 @@ const OfflineDetector: React.FC<OfflineDetectorProps> = ({ children }) => {
             key={i}
             className={`
               absolute w-1 h-1 bg-white/20 rounded-full
-              animate-float-${i % 3}
+              ${i % 3 === 0 ? 'animate-float-slow' : i % 3 === 1 ? 'animate-float-medium' : 'animate-float-fast'}
             `}
             style={{
               left: `${Math.random() * 100}%`,
               top: `${Math.random() * 100}%`,
               animationDelay: `${Math.random() * 3}s`,
-              animationDuration: `${3 + Math.random() * 2}s`
             }}
           />
         ))}
       </div>
 
-      <style jsx>{`
-        @keyframes float-0 {
-          0%, 100% { transform: translateY(0px) rotate(0deg); opacity: 0.3; }
-          50% { transform: translateY(-20px) rotate(180deg); opacity: 0.7; }
-        }
-        @keyframes float-1 {
-          0%, 100% { transform: translateY(0px) rotate(0deg); opacity: 0.2; }
-          50% { transform: translateY(-30px) rotate(270deg); opacity: 0.6; }
-        }
-        @keyframes float-2 {
-          0%, 100% { transform: translateY(0px) rotate(0deg); opacity: 0.4; }
-          50% { transform: translateY(-25px) rotate(360deg); opacity: 0.8; }
-        }
-        .animate-float-0 { animation: float-0 infinite ease-in-out; }
-        .animate-float-1 { animation: float-1 infinite ease-in-out; }
-        .animate-float-2 { animation: float-2 infinite ease-in-out; }
-      `}</style>
+      {/* CSS animations */}
+      <style dangerouslySetInnerHTML={{
+        __html: `
+          @keyframes float-slow {
+            0%, 100% { transform: translateY(0px) rotate(0deg); opacity: 0.3; }
+            50% { transform: translateY(-20px) rotate(180deg); opacity: 0.7; }
+          }
+          @keyframes float-medium {
+            0%, 100% { transform: translateY(0px) rotate(0deg); opacity: 0.2; }
+            50% { transform: translateY(-30px) rotate(270deg); opacity: 0.6; }
+          }
+          @keyframes float-fast {
+            0%, 100% { transform: translateY(0px) rotate(0deg); opacity: 0.4; }
+            50% { transform: translateY(-25px) rotate(360deg); opacity: 0.8; }
+          }
+          .animate-float-slow { 
+            animation: float-slow 4s infinite ease-in-out; 
+          }
+          .animate-float-medium { 
+            animation: float-medium 3s infinite ease-in-out; 
+          }
+          .animate-float-fast { 
+            animation: float-fast 5s infinite ease-in-out; 
+          }
+        `
+      }} />
     </div>
   );
 };
