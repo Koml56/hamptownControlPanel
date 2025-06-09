@@ -1,4 +1,4 @@
-// EmployeeApp.tsx - Updated with Emergency Restore
+// EmployeeApp.tsx - Updated to handle store items from Firebase
 import React, { useState, useEffect, useCallback } from 'react';
 import { Users, CheckSquare, TrendingUp, Settings, Lock, LogOut, Calendar, Database, ChevronDown, X, Check, ShoppingBag } from 'lucide-react';
 
@@ -8,7 +8,6 @@ import TaskManager from './TaskManager';
 import Store from './Store';
 import AdminPanel from './AdminPanel';
 import DailyReports from './DailyReports';
-import EmergencyRestore from './EmergencyRestore';
 
 // Hooks and Functions
 import { useFirebaseData, useAuth } from './hooks';
@@ -31,14 +30,14 @@ const EmployeeApp = () => {
     completedTasks,
     taskAssignments,
     customRoles,
-    storeItems,
+    storeItems, // Get store items from Firebase hook
     setEmployees,
     setTasks,
     setDailyData,
     setCompletedTasks,
     setTaskAssignments,
     setCustomRoles,
-    setStoreItems,
+    setStoreItems, // Get store items setter
     loadFromFirebase,
     saveToFirebase,
     quickSave
@@ -59,12 +58,11 @@ const EmployeeApp = () => {
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
   const [selectedDate, setSelectedDate] = useState(getFormattedDate(new Date()));
-  const [showEmergencyRestore, setShowEmergencyRestore] = useState(false);
 
   // Load data once on mount
   useEffect(() => {
     loadFromFirebase();
-  }, []);
+  }, []); // Empty dependency array - only run once
 
   // Set up periodic auto-save (every 5 minutes)
   useEffect(() => {
@@ -72,7 +70,7 @@ const EmployeeApp = () => {
       if (connectionStatus === 'connected' && !isLoading) {
         saveToFirebase();
       }
-    }, 300000);
+    }, 300000); // 5 minutes
     
     return () => clearInterval(interval);
   }, [connectionStatus, isLoading, saveToFirebase]);
@@ -141,6 +139,7 @@ const EmployeeApp = () => {
     handleDataChange();
   }, [setCustomRoles, handleDataChange]);
 
+  // Add store items setter with save
   const setStoreItemsWithSave = useCallback((updater: (prev: StoreItem[]) => StoreItem[]) => {
     console.log('🏪 Updating store items and triggering save...');
     setStoreItems(updater);
@@ -149,33 +148,8 @@ const EmployeeApp = () => {
 
   const currentEmployee = employees.find(emp => emp.id === currentUser.id);
 
-  // Check if emergency restore is needed
-  const needsEmergencyRestore = employees.length === 0 || 
-    (employees.length > 0 && employees.every(emp => emp.name === 'Unknown')) ||
-    Object.keys(dailyData).length === 0;
-
-  // Show emergency restore modal when needed
-  useEffect(() => {
-    if (needsEmergencyRestore && !showEmergencyRestore) {
-      setShowEmergencyRestore(true);
-    }
-  }, [needsEmergencyRestore, showEmergencyRestore]);
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      {/* Emergency Restore Modal */}
-      {showEmergencyRestore && (
-        <EmergencyRestore
-          saveToFirebase={saveToFirebase}
-          setEmployees={setEmployeesWithSave}
-          setDailyData={setDailyDataWithSave}
-          setTasks={setTasksWithSave}
-          setStoreItems={setStoreItemsWithSave}
-          setCustomRoles={setCustomRolesWithSave}
-          onClose={() => setShowEmergencyRestore(false)}
-        />
-      )}
-
       {/* Header */}
       <div className="bg-white shadow-sm border-b">
         <div className="px-4 py-3 flex justify-between items-center">
