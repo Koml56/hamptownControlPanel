@@ -221,15 +221,12 @@ const OfflineDetector: React.FC<OfflineDetectorProps> = ({ children }) => {
         </div>
       </div>
 
-      {/* Floating particles effect */}
-      <div className="absolute inset-0 pointer-events-none">
-        {[...Array(20)].map((_, i) => (
+      {/* Simple floating particles without complex animations */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        {[...Array(12)].map((_, i) => (
           <div
             key={i}
-            className={`
-              absolute w-1 h-1 bg-white/20 rounded-full
-              ${i % 3 === 0 ? 'animate-float-slow' : i % 3 === 1 ? 'animate-float-medium' : 'animate-float-fast'}
-            `}
+            className="absolute w-1 h-1 bg-white/20 rounded-full animate-pulse"
             style={{
               left: `${Math.random() * 100}%`,
               top: `${Math.random() * 100}%`,
@@ -238,33 +235,6 @@ const OfflineDetector: React.FC<OfflineDetectorProps> = ({ children }) => {
           />
         ))}
       </div>
-
-      {/* CSS animations */}
-      <style dangerouslySetInnerHTML={{
-        __html: `
-          @keyframes float-slow {
-            0%, 100% { transform: translateY(0px) rotate(0deg); opacity: 0.3; }
-            50% { transform: translateY(-20px) rotate(180deg); opacity: 0.7; }
-          }
-          @keyframes float-medium {
-            0%, 100% { transform: translateY(0px) rotate(0deg); opacity: 0.2; }
-            50% { transform: translateY(-30px) rotate(270deg); opacity: 0.6; }
-          }
-          @keyframes float-fast {
-            0%, 100% { transform: translateY(0px) rotate(0deg); opacity: 0.4; }
-            50% { transform: translateY(-25px) rotate(360deg); opacity: 0.8; }
-          }
-          .animate-float-slow { 
-            animation: float-slow 4s infinite ease-in-out; 
-          }
-          .animate-float-medium { 
-            animation: float-medium 3s infinite ease-in-out; 
-          }
-          .animate-float-fast { 
-            animation: float-fast 5s infinite ease-in-out; 
-          }
-        `
-      }} />
     </div>
   );
 };
