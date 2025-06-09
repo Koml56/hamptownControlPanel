@@ -1,4 +1,4 @@
-// EmployeeApp.tsx - Updated to handle store items from Firebase
+// EmployeeApp.tsx - Updated with Emergency Restore
 import React, { useState, useEffect, useCallback } from 'react';
 import { Users, CheckSquare, TrendingUp, Settings, Lock, LogOut, Calendar, Database, ChevronDown, X, Check, ShoppingBag } from 'lucide-react';
 
@@ -31,14 +31,14 @@ const EmployeeApp = () => {
     completedTasks,
     taskAssignments,
     customRoles,
-    storeItems, // Get store items from Firebase hook
+    storeItems,
     setEmployees,
     setTasks,
     setDailyData,
     setCompletedTasks,
     setTaskAssignments,
     setCustomRoles,
-    setStoreItems, // Get store items setter
+    setStoreItems,
     loadFromFirebase,
     saveToFirebase,
     quickSave
@@ -63,7 +63,7 @@ const EmployeeApp = () => {
   // Load data once on mount
   useEffect(() => {
     loadFromFirebase();
-  }, []); // Empty dependency array - only run once
+  }, []);
 
   // Set up periodic auto-save (every 5 minutes)
   useEffect(() => {
@@ -71,7 +71,7 @@ const EmployeeApp = () => {
       if (connectionStatus === 'connected' && !isLoading) {
         saveToFirebase();
       }
-    }, 300000); // 5 minutes
+    }, 300000);
     
     return () => clearInterval(interval);
   }, [connectionStatus, isLoading, saveToFirebase]);
@@ -86,11 +86,6 @@ const EmployeeApp = () => {
   // Update user mood when current user changes
   useEffect(() => {
     const currentEmployee = employees.find(emp => emp.id === currentUser.id);
-
-  // Check if emergency restore is needed
-  const needsEmergencyRestore = employees.length === 0 || 
-    (employees.length > 0 && employees.every(emp => emp.name === 'Unknown')) ||
-    Object.keys(dailyData).length === 0;
     if (currentEmployee) {
       setUserMood(currentEmployee.mood);
     }
@@ -145,7 +140,6 @@ const EmployeeApp = () => {
     handleDataChange();
   }, [setCustomRoles, handleDataChange]);
 
-  // Add store items setter with save
   const setStoreItemsWithSave = useCallback((updater: (prev: StoreItem[]) => StoreItem[]) => {
     console.log('🏪 Updating store items and triggering save...');
     setStoreItems(updater);
@@ -153,6 +147,11 @@ const EmployeeApp = () => {
   }, [setStoreItems, handleDataChange]);
 
   const currentEmployee = employees.find(emp => emp.id === currentUser.id);
+
+  // Check if emergency restore is needed
+  const needsEmergencyRestore = employees.length === 0 || 
+    (employees.length > 0 && employees.every(emp => emp.name === 'Unknown')) ||
+    Object.keys(dailyData).length === 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -167,6 +166,7 @@ const EmployeeApp = () => {
           setCustomRoles={setCustomRolesWithSave}
         />
       )}
+
       {/* Header */}
       <div className="bg-white shadow-sm border-b">
         <div className="px-4 py-3 flex justify-between items-center">
