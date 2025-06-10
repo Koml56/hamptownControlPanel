@@ -87,6 +87,7 @@ export interface PrepItem {
   isCustom: boolean;
   hasRecipe: boolean;
   recipe: Recipe | null;
+  frequency: number; // Days between preparations (not shown in UI)
 }
 
 export interface ScheduledPrep {
