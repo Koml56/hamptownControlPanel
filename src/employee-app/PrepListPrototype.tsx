@@ -71,7 +71,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
   const [showPriorityOptions, setShowPriorityOptions] = useState<number | string | null>(null);
   const [showTimeOptions, setShowTimeOptions] = useState<number | string | null>(null);
   const [assignmentStep, setAssignmentStep] = useState<Record<number, string | null>>({});
-  const [showSuggestedPreps, setShowSuggestedPreps] = useState(false);
+  const [showSuggestedPreps, setShowSuggestedPreps] = useState(true);
 
   const categories: Category[] = [
     { id: 'all', name: 'All Items', icon: '🍽️' },
