@@ -1,4 +1,4 @@
-// EmployeeApp.tsx - Updated to use integrated PrepList
+// EmployeeApp.tsx - Updated with Prep List Integration
 import React, { useState, useEffect, useCallback } from 'react';
 import { Users, CheckSquare, TrendingUp, Settings, Lock, LogOut, Calendar, Database, ChevronDown, X, Check, ShoppingBag, ChefHat } from 'lucide-react';
 
@@ -8,7 +8,7 @@ import TaskManager from './TaskManager';
 import Store from './Store';
 import AdminPanel from './AdminPanel';
 import DailyReports from './DailyReports';
-import PrepListPrototype from './PrepListPrototype'; // Use the correct filename
+import PrepListPrototype from './PrepListPrototype';
 
 // Hooks and Functions
 import { useFirebaseData, useAuth } from './hooks';
@@ -16,23 +16,21 @@ import { handleAdminLogin } from './adminFunctions';
 
 // Types and Constants
 import { getFormattedDate } from './utils';
+import { getDefaultStoreItems } from './defaultData';
 import type { ActiveTab, Employee, Task, DailyDataMap, TaskAssignments, StoreItem } from './types';
 
 const EmployeeApp = () => {
-  // Firebase and Auth hooks - now includes prep data
+  // Firebase and Auth hooks
   const {
     isLoading,
     lastSync,
     connectionStatus,
-    syncCount,
     employees,
     tasks,
     dailyData,
     completedTasks,
     taskAssignments,
     customRoles,
-    storeItems,
-    // ADD PREP STATE
     prepItems,
     scheduledPreps,
     prepSelections,
@@ -42,8 +40,6 @@ const EmployeeApp = () => {
     setCompletedTasks,
     setTaskAssignments,
     setCustomRoles,
-    setStoreItems,
-    // ADD PREP SETTERS
     setPrepItems,
     setScheduledPreps,
     setPrepSelections,
@@ -67,6 +63,7 @@ const EmployeeApp = () => {
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
   const [selectedDate, setSelectedDate] = useState(getFormattedDate(new Date()));
+  const [storeItems, setStoreItems] = useState<StoreItem[]>(getDefaultStoreItems());
 
   // Load data once on mount
   useEffect(() => {
@@ -149,7 +146,6 @@ const EmployeeApp = () => {
   }, [setCustomRoles, handleDataChange]);
 
   const setStoreItemsWithSave = useCallback((updater: (prev: StoreItem[]) => StoreItem[]) => {
-    console.log('🏪 Updating store items and triggering save...');
     setStoreItems(updater);
     handleDataChange();
   }, [setStoreItems, handleDataChange]);
@@ -266,17 +262,6 @@ const EmployeeApp = () => {
             Cleaning Tasks
           </button>
           <button
-            onClick={() => setActiveTab('store')}
-            className={`flex-1 py-3 px-4 text-center ${
-              activeTab === 'store' 
-                ? 'border-b-2 border-purple-500 text-purple-600 bg-purple-50' 
-                : 'text-gray-600'
-            }`}
-          >
-            <ShoppingBag className="w-5 h-5 mx-auto mb-1" />
-            Store
-          </button>
-          <button
             onClick={() => setActiveTab('preps')}
             className={`flex-1 py-3 px-4 text-center ${
               activeTab === 'preps' 
@@ -286,6 +271,17 @@ const EmployeeApp = () => {
           >
             <ChefHat className="w-5 h-5 mx-auto mb-1" />
             Prep List
+          </button>
+          <button
+            onClick={() => setActiveTab('store')}
+            className={`flex-1 py-3 px-4 text-center ${
+              activeTab === 'store' 
+                ? 'border-b-2 border-purple-500 text-purple-600 bg-purple-50' 
+                : 'text-gray-600'
+            }`}
+          >
+            <ShoppingBag className="w-5 h-5 mx-auto mb-1" />
+            Store
           </button>
           {isAdmin && (
             <button
@@ -329,28 +325,10 @@ const EmployeeApp = () => {
           {lastSync && connectionStatus === 'connected' && !isLoading && (
             <div 
               className="bg-white/80 backdrop-blur-sm rounded-full px-4 py-2 shadow-lg flex items-center space-x-2 border border-green-100 hover:bg-white/90 transition-all cursor-default"
-              title={`Last saved: ${lastSync}${syncCount > 0 ? ` • Updates received: ${syncCount}` : ''}`}
+              title={`Last saved: ${lastSync}`}
             >
               <div className="w-2 h-2 rounded-full bg-green-500"></div>
               <span className="text-green-700 text-xs">Saved</span>
-              
-              {/* Device count indicator */}
-              {connectionStatus === 'connected' && (
-                <div className="flex items-center space-x-1 ml-2 pl-2 border-l border-green-200">
-                  <div className="w-1 h-1 rounded-full bg-green-500 opacity-60" />
-                  <span className="text-xs text-green-600 opacity-75">
-                    {Math.floor(Math.random() * 3) + 2} devices
-                  </span>
-                </div>
-              )}
-              
-              {/* Real-time sync pulse indicator */}
-              {syncCount > 0 && (
-                <div className="absolute -top-1 -right-1">
-                  <div className="w-3 h-3 bg-green-400 rounded-full animate-ping" />
-                  <div className="absolute top-0 right-0 w-3 h-3 bg-green-500 rounded-full" />
-                </div>
-              )}
             </div>
           )}
 
@@ -392,18 +370,6 @@ const EmployeeApp = () => {
           />
         )}
 
-        {activeTab === 'store' && (
-          <Store
-            currentUser={currentUser}
-            employees={employees}
-            storeItems={storeItems}
-            dailyData={dailyData}
-            setEmployees={setEmployeesWithSave}
-            setDailyData={setDailyDataWithSave}
-            saveToFirebase={saveToFirebase}
-          />
-        )}
-
         {activeTab === 'preps' && (
           <PrepListPrototype
             currentUser={currentUser}
@@ -415,6 +381,18 @@ const EmployeeApp = () => {
             setScheduledPreps={setScheduledPreps}
             setPrepSelections={setPrepSelections}
             quickSave={quickSave}
+          />
+        )}
+
+        {activeTab === 'store' && (
+          <Store
+            currentUser={currentUser}
+            employees={employees}
+            storeItems={storeItems}
+            dailyData={dailyData}
+            setEmployees={setEmployeesWithSave}
+            setDailyData={setDailyDataWithSave}
+            saveToFirebase={saveToFirebase}
           />
         )}
 
