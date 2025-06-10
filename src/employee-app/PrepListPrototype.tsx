@@ -415,13 +415,10 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
 
   // Real Suggested Preps Function - based on actual completion data and frequency
   const renderSuggestedPrepsSection = () => {
-    // Don't show if no prep items exist yet
-    if (prepItems.length === 0) return null;
-    
     const today = new Date();
     
     // Calculate overdue preps based on frequency and last completion
-    const allOverduePreps = prepItems.map(prep => {
+    const overduePreps = prepItems.map(prep => {
       // Find the most recent completion of this prep
       const completions = scheduledPreps.filter(scheduledPrep => 
         scheduledPrep.prepId === prep.id && scheduledPrep.completed
@@ -464,7 +461,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
     .sort((a, b) => b.overdueDays - a.overdueDays) // Sort by most overdue first
     .slice(0, 3); // Show only top 3
     
-    const overduePreps = allOverduePreps;
+    if (overduePreps.length === 0) return null;
     
     return (
       <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded-lg">
@@ -473,7 +470,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
           className="w-full flex items-center justify-between text-left mb-3 hover:text-orange-600"
         >
           <h4 className="font-medium text-orange-800 flex items-center">
-            ⚠️ Suggested Preps {overduePreps.length > 0 ? `(${overduePreps.length})` : ''}
+            ⚠️ Suggested Preps ({overduePreps.length})
           </h4>
           <span className={`transition-transform ${showSuggestedPreps ? 'rotate-180' : 'rotate-0'}`}>
             ▼
@@ -482,158 +479,147 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
         
         {showSuggestedPreps && (
           <div className="space-y-2">
-            {overduePreps.length > 0 ? (
-              <>
-                {overduePreps.map(({ prep, daysSinceLastCompletion, overdueDays }) => {
-                  const isSelected = isPrepSelected(prep);
-                  const selection = getPrepSelection(prep);
-                  
-                  return (
-                    <div key={`suggested-${prep.id}`} className={`border rounded-lg p-3 transition-colors ${
-                      isSelected ? 'border-orange-500 bg-orange-100' : 'border-orange-300 hover:border-orange-400 bg-white'
-                    }`}>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3 flex-1">
-                          <button
-                            onClick={() => togglePrepSelection(prep)}
-                            className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-                              isSelected 
-                                ? 'bg-orange-500 border-orange-500' 
-                                : 'border-orange-400 hover:border-orange-500'
-                            }`}
-                          >
-                            {isSelected && <Check className="w-3 h-3 text-white" />}
-                          </button>
-                          <div className="flex-1 min-w-0">
-                            <h5 className={`font-medium text-sm truncate ${isSelected ? 'text-orange-900' : 'text-orange-800'}`}>
-                              {prep.name}
-                            </h5>
-                            <div className="flex items-center space-x-2">
-                              <p className="text-xs text-orange-600 truncate">
-                                {prep.estimatedTime} • {prep.category}
-                              </p>
-                              {prep.hasRecipe && (
-                                <button
-                                  onClick={() => prep.recipe && showRecipe(prep.recipe, prep.name)}
-                                  className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full hover:bg-green-200 transition-colors"
-                                >
-                                  📖
-                                </button>
-                              )}
-                            </div>
-                            <div className="text-xs text-red-600 font-medium mt-1">
-                              {daysSinceLastCompletion === 999 ? 'Never done' : 
-                               `${overdueDays} ${overdueDays === 1 ? 'day' : 'days'} overdue`}
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <div className="ml-3 flex-shrink-0">
-                          <div className="relative">
+            {overduePreps.map(({ prep, daysSinceLastCompletion, overdueDays }) => {
+              const isSelected = isPrepSelected(prep);
+              const selection = getPrepSelection(prep);
+              
+              return (
+                <div key={`suggested-${prep.id}`} className={`border rounded-lg p-3 transition-colors ${
+                  isSelected ? 'border-orange-500 bg-orange-100' : 'border-orange-300 hover:border-orange-400 bg-white'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3 flex-1">
+                      <button
+                        onClick={() => togglePrepSelection(prep)}
+                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                          isSelected 
+                            ? 'bg-orange-500 border-orange-500' 
+                            : 'border-orange-400 hover:border-orange-500'
+                        }`}
+                      >
+                        {isSelected && <Check className="w-3 h-3 text-white" />}
+                      </button>
+                      <div className="flex-1 min-w-0">
+                        <h5 className={`font-medium text-sm truncate ${isSelected ? 'text-orange-900' : 'text-orange-800'}`}>
+                          {prep.name}
+                        </h5>
+                        <div className="flex items-center space-x-2">
+                          <p className="text-xs text-orange-600 truncate">
+                            {prep.estimatedTime} • {prep.category}
+                          </p>
+                          {prep.hasRecipe && (
                             <button
-                              onClick={() => {
-                                if (showPriorityOptions === `suggested-${prep.id}`) {
-                                  resetWorkflow();
-                                } else {
-                                  setShowPriorityOptions(`suggested-${prep.id}`);
-                                }
-                              }}
-                              className={`px-3 py-1.5 rounded-lg text-xs transition-colors whitespace-nowrap ${
-                                isSelected 
-                                  ? priorities.find(p => p.id === selection.priority)?.color + ' font-medium'
-                                  : assignmentStep[prep.id] === 'timeSlot'
-                                  ? 'bg-green-100 text-green-700 font-medium'
-                                  : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                              }`}
+                              onClick={() => prep.recipe && showRecipe(prep.recipe, prep.name)}
+                              className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full hover:bg-green-200 transition-colors"
                             >
-                              {isSelected 
-                                ? `${priorities.find(p => p.id === selection.priority)?.name}${selection.timeSlot ? ` • ${timeSlots.find(t => t.id === selection.timeSlot)?.name.split(' ')[0]}` : ' • Anytime'}`
-                                : assignmentStep[prep.id] === 'timeSlot'
-                                ? 'Choose time'
-                                : 'Click to assign'
-                              }
+                              📖
                             </button>
-                            
-                            {showPriorityOptions === `suggested-${prep.id}` && (
-                              <div className="dropdown-container soft-dropdown absolute top-full right-0 mt-2 rounded-xl p-3 z-20 w-52 backdrop-filter backdrop-blur-lg bg-white/95 border border-white/30 shadow-xl">
-                                <div className="space-y-3">
-                                  <div>
-                                    <div className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
-                                      <span className="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
-                                      Choose Priority
-                                    </div>
-                                    <div className="space-y-2">
-                                      {priorities.map(priority => (
-                                        <button
-                                          key={priority.id}
-                                          onClick={() => updatePrepSelection(prep, 'priority', priority.id, 'suggested')}
-                                          className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 ${priority.color} backdrop-filter backdrop-blur-sm border border-white/20`}
-                                        >
-                                          <div className="flex items-center justify-between">
-                                            <span>{priority.name}</span>
-                                            <span className="text-xs opacity-70">{priority.icon}</span>
-                                          </div>
-                                        </button>
-                                      ))}
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-
-                            {showTimeOptions === `suggested-${prep.id}` && (
-                              <div className="dropdown-container soft-dropdown absolute top-full right-0 mt-2 rounded-xl p-3 z-20 w-64 backdrop-filter backdrop-blur-lg bg-white/95 border border-white/30 shadow-xl">
-                                <div className="space-y-3">
-                                  <div>
-                                    <div className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
-                                      <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
-                                      Choose Time Slot
-                                    </div>
-                                    <div className="space-y-2">
-                                      <button
-                                        onClick={() => updatePrepSelection(prep, 'timeSlot', '', 'suggested')}
-                                        className="w-full text-left px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 bg-gray-50 text-gray-700 hover:bg-gray-100 backdrop-filter backdrop-blur-sm border border-white/20"
-                                      >
-                                        <div className="flex items-center justify-between">
-                                          <span>Anytime</span>
-                                          <span className="text-xs opacity-70">🕐</span>
-                                        </div>
-                                      </button>
-                                      {timeSlots.map(slot => (
-                                        <button
-                                          key={slot.id}
-                                          onClick={() => updatePrepSelection(prep, 'timeSlot', slot.id, 'suggested')}
-                                          className="w-full text-left px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 bg-blue-50 text-blue-700 hover:bg-blue-100 backdrop-filter backdrop-blur-sm border border-white/20"
-                                        >
-                                          <div className="flex items-center justify-between">
-                                            <span>{slot.name.split(' ')[0]}</span>
-                                            <span className="text-xs opacity-70">{slot.icon}</span>
-                                          </div>
-                                        </button>
-                                      ))}
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </div>
+                          )}
+                        </div>
+                        <div className="text-xs text-red-600 font-medium mt-1">
+                          {daysSinceLastCompletion === 999 ? 'Never done' : 
+                           `${overdueDays} ${overdueDays === 1 ? 'day' : 'days'} overdue`}
                         </div>
                       </div>
                     </div>
-                  );
-                })}
-                <div className="mt-2 text-xs text-orange-600">
-                  💡 These items are overdue based on their preparation frequency
+                    
+                    <div className="ml-3 flex-shrink-0">
+                      <div className="relative">
+                        <button
+                          onClick={() => {
+                            if (showPriorityOptions === `suggested-${prep.id}`) {
+                              resetWorkflow();
+                            } else {
+                              setShowPriorityOptions(`suggested-${prep.id}`);
+                            }
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs transition-colors whitespace-nowrap ${
+                            isSelected 
+                              ? priorities.find(p => p.id === selection.priority)?.color + ' font-medium'
+                              : assignmentStep[prep.id] === 'timeSlot'
+                              ? 'bg-green-100 text-green-700 font-medium'
+                              : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                          }`}
+                        >
+                          {isSelected 
+                            ? `${priorities.find(p => p.id === selection.priority)?.name}${selection.timeSlot ? ` • ${timeSlots.find(t => t.id === selection.timeSlot)?.name.split(' ')[0]}` : ' • Anytime'}`
+                            : assignmentStep[prep.id] === 'timeSlot'
+                            ? 'Choose time'
+                            : 'Click to assign'
+                          }
+                        </button>
+                        
+                        {showPriorityOptions === `suggested-${prep.id}` && (
+                          <div className="dropdown-container soft-dropdown absolute top-full right-0 mt-2 rounded-xl p-3 z-20 w-52 backdrop-filter backdrop-blur-lg bg-white/95 border border-white/30 shadow-xl">
+                            <div className="space-y-3">
+                              <div>
+                                <div className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                                  <span className="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
+                                  Choose Priority
+                                </div>
+                                <div className="space-y-2">
+                                  {priorities.map(priority => (
+                                    <button
+                                      key={priority.id}
+                                      onClick={() => updatePrepSelection(prep, 'priority', priority.id, 'suggested')}
+                                      className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 ${priority.color} backdrop-filter backdrop-blur-sm border border-white/20`}
+                                    >
+                                      <div className="flex items-center justify-between">
+                                        <span>{priority.name}</span>
+                                        <span className="text-xs opacity-70">{priority.icon}</span>
+                                      </div>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {showTimeOptions === `suggested-${prep.id}` && (
+                          <div className="dropdown-container soft-dropdown absolute top-full right-0 mt-2 rounded-xl p-3 z-20 w-64 backdrop-filter backdrop-blur-lg bg-white/95 border border-white/30 shadow-xl">
+                            <div className="space-y-3">
+                              <div>
+                                <div className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                                  <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                                  Choose Time Slot
+                                </div>
+                                <div className="space-y-2">
+                                  <button
+                                    onClick={() => updatePrepSelection(prep, 'timeSlot', '', 'suggested')}
+                                    className="w-full text-left px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 bg-gray-50 text-gray-700 hover:bg-gray-100 backdrop-filter backdrop-blur-sm border border-white/20"
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <span>Anytime</span>
+                                      <span className="text-xs opacity-70">🕐</span>
+                                    </div>
+                                  </button>
+                                  {timeSlots.map(slot => (
+                                    <button
+                                      key={slot.id}
+                                      onClick={() => updatePrepSelection(prep, 'timeSlot', slot.id, 'suggested')}
+                                      className="w-full text-left px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 bg-blue-50 text-blue-700 hover:bg-blue-100 backdrop-filter backdrop-blur-sm border border-white/20"
+                                    >
+                                      <div className="flex items-center justify-between">
+                                        <span>{slot.name.split(' ')[0]}</span>
+                                        <span className="text-xs opacity-70">{slot.icon}</span>
+                                      </div>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </>
-            ) : (
-              <div className="text-center py-4">
-                <div className="text-green-600 text-sm font-medium">✅ All caught up!</div>
-                <div className="text-xs text-gray-500 mt-1">
-                  No prep items are currently overdue
-                </div>
-              </div>
-            )}
+              );
+            })}
+            <div className="mt-2 text-xs text-orange-600">
+              💡 These items are overdue based on their preparation frequency
+            </div>
           </div>
         )}
       </div>
