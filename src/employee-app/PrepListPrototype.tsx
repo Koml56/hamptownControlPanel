@@ -1,4 +1,4 @@
-//// PrepListPrototype.tsx - Complete implementation with all features
+// PrepListPrototype.tsx - Complete implementation with all features
 import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, Plus, ChefHat, Check, Star, Trash2, Users, Search, X } from 'lucide-react';
 import { getFormattedDate } from './utils';
