@@ -345,11 +345,19 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
 
   // Toggle prep completion (for today's view)
   const togglePrepCompletion = (scheduledPrepId: number): void => {
-    setScheduledPreps(prev => prev.map(prep => 
+    // Create updated data immediately
+    const updatedScheduledPreps = scheduledPreps.map(prep => 
       prep.id === scheduledPrepId 
         ? { ...prep, completed: !prep.completed }
         : prep
-    ));
+    );
+    
+    // Update state
+    setScheduledPreps(() => updatedScheduledPreps);
+    
+    // Immediately save to Firebase
+    console.log('🔥 Immediate save triggered by prep completion');
+    quickSave('scheduledPreps', updatedScheduledPreps);
   };
 
   // Filter preps
