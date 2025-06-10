@@ -16,7 +16,6 @@ import { handleAdminLogin } from './adminFunctions';
 
 // Types and Constants
 import { getFormattedDate } from './utils';
-import { getDefaultStoreItems } from './defaultData';
 import type { ActiveTab, Employee, Task, DailyDataMap, TaskAssignments, StoreItem } from './types';
 
 const EmployeeApp = () => {
@@ -34,6 +33,7 @@ const EmployeeApp = () => {
     prepItems,
     scheduledPreps,
     prepSelections,
+    storeItems,
     setEmployees,
     setTasks,
     setDailyData,
@@ -43,6 +43,7 @@ const EmployeeApp = () => {
     setPrepItems,
     setScheduledPreps,
     setPrepSelections,
+    setStoreItems,
     loadFromFirebase,
     saveToFirebase,
     quickSave
@@ -63,7 +64,6 @@ const EmployeeApp = () => {
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
   const [selectedDate, setSelectedDate] = useState(getFormattedDate(new Date()));
-  const [storeItems, setStoreItems] = useState<StoreItem[]>(getDefaultStoreItems());
 
   // Load data once on mount
   useEffect(() => {
