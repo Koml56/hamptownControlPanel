@@ -1,4 +1,4 @@
-// PrepListPrototype.tsx - Properly integrated with Firebase
+// PrepListPrototype.tsx - Complete implementation with all features
 import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, Plus, ChefHat, Check, Star, Trash2, Users, Search, X } from 'lucide-react';
 import { getFormattedDate } from './utils';
@@ -68,6 +68,10 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
   const [showRecipeModal, setShowRecipeModal] = useState(false);
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [selectedRecipeName, setSelectedRecipeName] = useState<string>('');
+  const [showPriorityOptions, setShowPriorityOptions] = useState<number | string | null>(null);
+  const [showTimeOptions, setShowTimeOptions] = useState<number | string | null>(null);
+  const [assignmentStep, setAssignmentStep] = useState<Record<number, string | null>>({});
+  const [shownRecipe, setShownRecipe] = useState<number | null>(null);
 
   const categories: Category[] = [
     { id: 'all', name: 'All Items', icon: '🍽️' },
@@ -100,11 +104,21 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
         { id: 2, name: 'Dice tomatoes', category: 'vegetables', estimatedTime: '10 min', isCustom: false, hasRecipe: false, recipe: null },
         { id: 3, name: 'Slice onions', category: 'vegetables', estimatedTime: '15 min', isCustom: false, hasRecipe: false, recipe: null },
         { id: 4, name: 'Prep cucumber slices', category: 'vegetables', estimatedTime: '10 min', isCustom: false, hasRecipe: false, recipe: null },
-        { id: 5, name: 'Make coleslaw mix', category: 'vegetables', estimatedTime: '20 min', isCustom: false, hasRecipe: true, recipe: null },
-        { id: 6, name: 'Marinate chicken breasts', category: 'proteins', estimatedTime: '30 min', isCustom: false, hasRecipe: true, recipe: null },
-        { id: 7, name: 'Season burger patties', category: 'proteins', estimatedTime: '20 min', isCustom: false, hasRecipe: true, recipe: null },
-        { id: 8, name: 'Mix ranch dressing', category: 'sauces', estimatedTime: '10 min', isCustom: false, hasRecipe: true, recipe: null },
-        { id: 9, name: 'Prepare garlic aioli', category: 'sauces', estimatedTime: '15 min', isCustom: false, hasRecipe: true, recipe: null },
+        { id: 5, name: 'Make coleslaw mix', category: 'vegetables', estimatedTime: '20 min', isCustom: false, hasRecipe: true, 
+          recipe: { ingredients: '• **2 cups** shredded cabbage\n• **1 cup** shredded carrots\n• **1/2 cup** mayonnaise\n• **2 tbsp** apple cider vinegar\n• **1 tsp** sugar\n• Salt and pepper to taste', 
+                   instructions: '1. **Mix vegetables**: Combine shredded cabbage and carrots in large bowl\n2. **Make dressing**: Whisk together mayo, vinegar, and sugar\n3. **Combine**: Pour dressing over vegetables and mix well\n4. **Season**: Add salt and pepper to taste\n5. **Chill**: Refrigerate for at least 30 minutes before serving' }},
+        { id: 6, name: 'Marinate chicken breasts', category: 'proteins', estimatedTime: '30 min', isCustom: false, hasRecipe: true,
+          recipe: { ingredients: '• **4** chicken breasts\n• **1/4 cup** olive oil\n• **2 tbsp** lemon juice\n• **3 cloves** garlic, minced\n• **1 tsp** dried herbs (thyme, rosemary)\n• Salt and black pepper', 
+                   instructions: '1. **Prepare marinade**: Mix oil, lemon juice, garlic, and herbs\n2. **Season chicken**: Pat dry and season with salt and pepper\n3. **Marinate**: Place in bag with marinade for *2-4 hours*\n4. **Rest**: Bring to room temperature before cooking' }},
+        { id: 7, name: 'Season burger patties', category: 'proteins', estimatedTime: '20 min', isCustom: false, hasRecipe: true,
+          recipe: { ingredients: '• **2 lbs** ground beef (80/20)\n• **2 tsp** salt\n• **1 tsp** black pepper\n• **1 tsp** garlic powder\n• **1/2 tsp** onion powder\n• **1/4 tsp** paprika', 
+                   instructions: '1. **Form patties**: Gently shape into 6oz portions\n2. **Season**: Sprinkle seasoning on both sides\n3. **Rest**: Let sit at room temperature for 15 minutes\n4. **Dimple**: Make small indent in center to prevent puffing' }},
+        { id: 8, name: 'Mix ranch dressing', category: 'sauces', estimatedTime: '10 min', isCustom: false, hasRecipe: true,
+          recipe: { ingredients: '• **1 cup** mayonnaise\n• **1/2 cup** sour cream\n• **1 packet** ranch seasoning mix\n• **2-3 tbsp** milk\n• **1 tbsp** fresh chives, chopped', 
+                   instructions: '1. **Combine base**: Whisk mayo and sour cream\n2. **Add seasoning**: Mix in ranch packet\n3. **Adjust consistency**: Add milk gradually\n4. **Garnish**: Fold in fresh chives\n5. **Chill**: Refrigerate for 30 minutes' }},
+        { id: 9, name: 'Prepare garlic aioli', category: 'sauces', estimatedTime: '15 min', isCustom: false, hasRecipe: true,
+          recipe: { ingredients: '• **3** egg yolks\n• **1 cup** olive oil\n• **4 cloves** garlic, minced\n• **2 tbsp** lemon juice\n• **1 tsp** Dijon mustard\n• Salt to taste', 
+                   instructions: '1. **Make base**: Whisk yolks, garlic, and mustard\n2. **Emulsify**: *Slowly* drizzle oil while whisking\n3. **Season**: Add lemon juice and salt\n4. **Adjust**: Thin with water if too thick' }},
         { id: 10, name: 'Slice bread for sandwiches', category: 'breads', estimatedTime: '10 min', isCustom: false, hasRecipe: false, recipe: null }
       ];
       
@@ -143,33 +157,112 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
     const selectionKey = `${getDateString(selectedDate)}-${prep.id}`;
     return prepSelections[selectionKey]?.selected || false;
   };
+
+  // Get prep selection details
   const getPrepSelection = (prep: PrepItem) => {
     const selectionKey = `${getDateString(selectedDate)}-${prep.id}`;
     return prepSelections[selectionKey] || { priority: 'medium', timeSlot: '', selected: false };
   };
 
-  // Update prep selection details
-  const updatePrepSelection = (prep: PrepItem, updates: Partial<{ priority: string; timeSlot: string }>) => {
+  // Update prep selection with smart workflow
+  const updatePrepSelection = (
+    prep: PrepItem, 
+    field: 'priority' | 'timeSlot', 
+    value: string, 
+    context: string = 'main'
+  ): void => {
     const selectionKey = `${getDateString(selectedDate)}-${prep.id}`;
-    const currentSelection = prepSelections[selectionKey];
     
-    if (!currentSelection?.selected) return; // Only update if already selected
-    
-    setPrepSelections(prev => ({
-      ...prev,
-      [selectionKey]: {
-        ...currentSelection,
-        ...updates
+    if (field === 'priority') {
+      // Step 1: Set priority and immediately move to time slot selection
+      setPrepSelections(prev => ({
+        ...prev,
+        [selectionKey]: { 
+          ...prev[selectionKey], 
+          priority: value,
+          selected: false // Don't auto-select yet
+        }
+      }));
+      
+      // Move to time slot selection step and immediately open time dropdown with context
+      setAssignmentStep(prev => ({ ...prev, [prep.id]: 'timeSlot' }));
+      setShowPriorityOptions(null);
+      
+      // Use context-specific time slot identifier
+      const timeSlotId = context === 'suggested' ? `suggested-${prep.id}` : prep.id;
+      setShowTimeOptions(timeSlotId);
+      
+    } else if (field === 'timeSlot') {
+      // Step 2: Set time slot, auto-check, and complete workflow
+      const currentSelection = prepSelections[selectionKey] || { priority: 'medium' };
+      
+      setPrepSelections(prev => ({
+        ...prev,
+        [selectionKey]: { 
+          ...prev[selectionKey], 
+          timeSlot: value,
+          selected: true // Auto-select when time is chosen
+        }
+      }));
+      
+      // Auto-add to scheduled preps
+      if (!isPrepSelected(prep)) {
+        const newScheduledPrep: ScheduledPrep = {
+          id: Date.now(),
+          prepId: prep.id,
+          name: prep.name,
+          category: prep.category,
+          estimatedTime: prep.estimatedTime,
+          isCustom: prep.isCustom,
+          hasRecipe: prep.hasRecipe,
+          recipe: prep.recipe,
+          scheduledDate: getDateString(selectedDate),
+          priority: currentSelection.priority,
+          timeSlot: value,
+          completed: false,
+          assignedTo: null,
+          notes: ''
+        };
+        setScheduledPreps(prev => [...prev, newScheduledPrep]);
+      } else {
+        // Update existing scheduled prep
+        setScheduledPreps(prev => prev.map(p => 
+          p.prepId === prep.id && p.scheduledDate === getDateString(selectedDate)
+            ? { ...p, priority: currentSelection.priority, timeSlot: value }
+            : p
+        ));
       }
-    }));
-    
-    // Update scheduled prep as well
-    setScheduledPreps(prev => prev.map(scheduledPrep => 
-      scheduledPrep.prepId === prep.id && scheduledPrep.scheduledDate === getDateString(selectedDate)
-        ? { ...scheduledPrep, ...updates }
-        : scheduledPrep
-    ));
+      
+      // Complete the workflow - close all dropdowns
+      setAssignmentStep(prev => ({ ...prev, [prep.id]: null }));
+      setShowPriorityOptions(null);
+      setShowTimeOptions(null);
+    }
   };
+
+  // Reset workflow when clicking outside
+  const resetWorkflow = () => {
+    setShowPriorityOptions(null);
+    setShowTimeOptions(null);
+    setAssignmentStep({});
+  };
+
+  // Add click outside handler
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent): void => {
+      // Check if click is inside any dropdown
+      const target = event.target as HTMLElement;
+      const isInsideDropdown = target.closest('.dropdown-container');
+      if (!isInsideDropdown) {
+        resetWorkflow();
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   // Show recipe modal
   const showRecipe = (recipe: Recipe, name: string) => {
@@ -282,8 +375,246 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
   const completedToday = todayScheduledPreps.filter(prep => prep.completed).length;
   const totalToday = todayScheduledPreps.length;
 
+  // Suggested Preps Function (items not done in 2+ days)
+  const renderSuggestedPrepsSection = () => {
+    // Calculate suggested preps (not done in last 2 days)
+    const twoDaysAgo = new Date();
+    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+    
+    const suggestedPreps = prepItems.filter(prep => {
+      // Check if this prep was completed in the last 2 days
+      const recentCompletions = scheduledPreps.filter(scheduledPrep => {
+        if (scheduledPrep.prepId !== prep.id) return false;
+        const scheduledDate = new Date(scheduledPrep.scheduledDate);
+        return scheduledDate >= twoDaysAgo && scheduledPrep.completed;
+      });
+      
+      // Also check if it matches current filters
+      const matchesCategory = selectedCategory === 'all' || prep.category === selectedCategory;
+      const matchesSearch = searchQuery === '' || 
+        prep.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        prep.category.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      return recentCompletions.length === 0 && matchesCategory && matchesSearch;
+    }).slice(0, 3); // Show max 3 suggestions
+    
+    if (suggestedPreps.length === 0) return null;
+    
+    return (
+      <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+        <h4 className="font-medium text-orange-800 mb-3 flex items-center">
+          🕐 Suggested Preps (Not done in 2+ days)
+        </h4>
+        <div className="space-y-2">
+          {suggestedPreps.map(prep => {
+            const isSelected = isPrepSelected(prep);
+            const selection = getPrepSelection(prep);
+            
+            return (
+              <div key={`suggested-${prep.id}`} className={`border rounded-lg p-3 transition-colors ${
+                isSelected ? 'border-orange-500 bg-orange-100' : 'border-orange-300 hover:border-orange-400 bg-white'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3 flex-1">
+                    <button
+                      onClick={() => togglePrepSelection(prep)}
+                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                        isSelected 
+                          ? 'bg-orange-500 border-orange-500' 
+                          : 'border-orange-400 hover:border-orange-500'
+                      }`}
+                    >
+                      {isSelected && <Check className="w-3 h-3 text-white" />}
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <h5 className={`font-medium text-sm truncate ${isSelected ? 'text-orange-900' : 'text-orange-800'}`}>
+                        {prep.name}
+                      </h5>
+                      <div className="flex items-center space-x-2">
+                        <p className="text-xs text-orange-600 truncate">
+                          {prep.estimatedTime} • {prep.category}
+                        </p>
+                        {prep.hasRecipe && (
+                          <button
+                            onClick={() => prep.recipe && showRecipe(prep.recipe, prep.name)}
+                            className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full hover:bg-green-200 transition-colors"
+                          >
+                            📖
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="ml-3 flex-shrink-0">
+                    <div className="relative">
+                      <button
+                        onClick={() => {
+                          if (showPriorityOptions === `suggested-${prep.id}`) {
+                            resetWorkflow();
+                          } else {
+                            setShowPriorityOptions(`suggested-${prep.id}`);
+                          }
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-xs transition-colors whitespace-nowrap ${
+                          isSelected 
+                            ? priorities.find(p => p.id === selection.priority)?.color + ' font-medium'
+                            : assignmentStep[prep.id] === 'timeSlot'
+                            ? 'bg-green-100 text-green-700 font-medium'
+                            : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                        }`}
+                      >
+                        {isSelected 
+                          ? `${priorities.find(p => p.id === selection.priority)?.name}${selection.timeSlot ? ` • ${timeSlots.find(t => t.id === selection.timeSlot)?.name.split(' ')[0]}` : ' • Anytime'}`
+                          : assignmentStep[prep.id] === 'timeSlot'
+                          ? 'Choose time'
+                          : 'Click to assign'
+                        }
+                      </button>
+                      
+                      {showPriorityOptions === `suggested-${prep.id}` && (
+                        <div className="dropdown-container soft-dropdown absolute top-full right-0 mt-2 rounded-xl p-3 z-20 w-52 backdrop-filter backdrop-blur-lg bg-white/95 border border-white/30 shadow-xl">
+                          <div className="space-y-3">
+                            <div>
+                              <div className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                                <span className="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
+                                Choose Priority
+                              </div>
+                              <div className="space-y-2">
+                                {priorities.map(priority => (
+                                  <button
+                                    key={priority.id}
+                                    onClick={() => updatePrepSelection(prep, 'priority', priority.id, 'suggested')}
+                                    className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 ${priority.color} backdrop-filter backdrop-blur-sm border border-white/20`}
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <span>{priority.name}</span>
+                                      <span className="text-xs opacity-70">{priority.icon}</span>
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {showTimeOptions === `suggested-${prep.id}` && (
+                        <div className="dropdown-container soft-dropdown absolute top-full right-0 mt-2 rounded-xl p-3 z-20 w-64 backdrop-filter backdrop-blur-lg bg-white/95 border border-white/30 shadow-xl">
+                          <div className="space-y-3">
+                            <div>
+                              <div className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                                <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                                Choose Time Slot
+                              </div>
+                              <div className="space-y-2">
+                                <button
+                                  onClick={() => updatePrepSelection(prep, 'timeSlot', '', 'suggested')}
+                                  className="w-full text-left px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 bg-gray-50 text-gray-700 hover:bg-gray-100 backdrop-filter backdrop-blur-sm border border-white/20"
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <span>Anytime</span>
+                                    <span className="text-xs opacity-70">🕐</span>
+                                  </div>
+                                </button>
+                                {timeSlots.map(slot => (
+                                  <button
+                                    key={slot.id}
+                                    onClick={() => updatePrepSelection(prep, 'timeSlot', slot.id, 'suggested')}
+                                    className="w-full text-left px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 bg-blue-50 text-blue-700 hover:bg-blue-100 backdrop-filter backdrop-blur-sm border border-white/20"
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <span>{slot.name.split(' ')[0]}</span>
+                                      <span className="text-xs opacity-70">{slot.icon}</span>
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="mt-2 text-xs text-orange-600">
+          💡 These prep items haven't been completed recently and might need attention
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
+      <style dangerouslySetInnerHTML={{
+        __html: `
+          .priority-glow {
+            position: relative;
+            z-index: 0;
+            font-weight: 600;
+            border-radius: 0.25rem;
+            padding: 0.125rem 0.25rem;
+          }
+          .priority-glow::before {
+            content: "";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 110%;
+            height: 2em;
+            transform: translate(-50%, -50%);
+            border-radius: 0.375rem;
+            filter: blur(6px);
+            z-index: -1;
+            opacity: 0.3;
+          }
+          .priority-low {
+            color: #047857;
+          }
+          .priority-low::before {
+            box-shadow: 0 0 8px 4px rgba(5, 150, 105, 0.4);
+          }
+          .priority-medium {
+            color: #92400e;
+          }
+          .priority-medium::before {
+            box-shadow: 0 0 8px 4px rgba(202, 138, 4, 0.4);
+          }
+          .priority-high {
+            color: #b91c1c;
+          }
+          .priority-high::before {
+            box-shadow: 0 0 8px 4px rgba(185, 28, 28, 0.4);
+          }
+          
+          .soft-dropdown {
+            backdrop-filter: blur(16px);
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15), 
+                        0 0 0 1px rgba(255, 255, 255, 0.05),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+          }
+          
+          .soft-button {
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+          }
+          
+          .soft-button:hover {
+            backdrop-filter: blur(12px);
+            box-shadow: 0 8px 15px -3px rgba(0, 0, 0, 0.1),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+          }
+        `
+      }} />
+
       {/* Header */}
       <div className="bg-white rounded-xl shadow-sm p-6">
         <div className="flex items-center justify-between mb-4">
@@ -379,45 +710,112 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
                 <p className="text-sm">Use the "Plan Preps" tab to schedule tasks.</p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {todayScheduledPreps.map(prep => {
-                  const priority = priorities.find(p => p.id === prep.priority);
-                  const timeSlot = timeSlots.find(t => t.id === prep.timeSlot);
+              <div className="space-y-4">
+                {/* Anytime Tasks */}
+                {(() => {
+                  const anytimePreps = todayScheduledPreps.filter(prep => prep.timeSlot === '');
+                  if (anytimePreps.length === 0) return null;
                   
                   return (
-                    <div key={prep.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
-                      <div className="flex items-center space-x-3">
-                        <button
-                          onClick={() => togglePrepCompletion(prep.id)}
-                          className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
-                            prep.completed 
-                              ? 'bg-green-500 border-green-500' 
-                              : 'border-gray-300 hover:border-green-500'
-                          }`}
-                        >
-                          {prep.completed && <Check className="w-4 h-4 text-white" />}
-                        </button>
-                        <div>
-                          <div className={`font-medium flex items-center space-x-2 ${prep.completed ? 'line-through text-gray-500' : 'text-gray-800'}`}>
-                            <span>{prep.name}</span>
-                            {prep.hasRecipe && (
-                              <button
-                                onClick={() => prep.recipe && showRecipe(prep.recipe, prep.name)}
-                                className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full hover:bg-green-200 transition-colors"
-                              >
-                                📖 Recipe
-                              </button>
-                            )}
-                          </div>
-                          <div className="text-sm text-gray-600">
-                            {prep.estimatedTime} • {prep.category}
-                            {prep.timeSlot && ` • ${timeSlot?.name || 'Scheduled'}`}
-                          </div>
-                        </div>
+                    <div>
+                      <h4 className="font-medium text-gray-700 mb-3 flex items-center">
+                        🕐 Anytime
+                      </h4>
+                      <div className="space-y-3">
+                        {anytimePreps.map(prep => {
+                          const priority = priorities.find(p => p.id === prep.priority);
+                          return (
+                            <div key={prep.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
+                              <div className="flex items-center space-x-3">
+                                <button
+                                  onClick={() => togglePrepCompletion(prep.id)}
+                                  className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
+                                    prep.completed 
+                                      ? 'bg-green-500 border-green-500' 
+                                      : 'border-gray-300 hover:border-green-500'
+                                  }`}
+                                >
+                                  {prep.completed && <Check className="w-4 h-4 text-white" />}
+                                </button>
+                                <div className="flex-1">
+                                  <div className={`font-medium flex items-center space-x-2 ${prep.completed ? 'line-through text-gray-500' : 'text-gray-800'}`}>
+                                    <span>{prep.name}</span>
+                                    {prep.hasRecipe && (
+                                      <button
+                                        onClick={() => prep.recipe && showRecipe(prep.recipe, prep.name)}
+                                        className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full hover:bg-green-200 transition-colors"
+                                      >
+                                        📖 Recipe
+                                      </button>
+                                    )}
+                                  </div>
+                                  <div className="text-sm text-gray-600">
+                                    {prep.estimatedTime} • {prep.category}
+                                  </div>
+                                </div>
+                              </div>
+                              <span className={`px-2 py-1 rounded-full text-xs ${priority?.color || 'bg-gray-100 text-gray-700'}`}>
+                                {priority?.name || 'Medium'}
+                              </span>
+                            </div>
+                          );
+                        })}
                       </div>
-                      <span className={`px-2 py-1 rounded-full text-xs ${priority?.color || 'bg-gray-100 text-gray-700'}`}>
-                        {priority?.name || 'Medium'}
-                      </span>
+                    </div>
+                  );
+                })()}
+                
+                {/* Time Slot Tasks */}
+                {timeSlots.map(timeSlot => {
+                  const slotPreps = todayScheduledPreps.filter(prep => prep.timeSlot === timeSlot.id);
+                  if (slotPreps.length === 0) return null;
+                  
+                  return (
+                    <div key={timeSlot.id}>
+                      <h4 className="font-medium text-gray-700 mb-3 flex items-center">
+                        <span className="mr-2">{timeSlot.icon}</span>
+                        {timeSlot.name}
+                      </h4>
+                      <div className="space-y-3">
+                        {slotPreps.map(prep => {
+                          const priority = priorities.find(p => p.id === prep.priority);
+                          return (
+                            <div key={prep.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
+                              <div className="flex items-center space-x-3">
+                                <button
+                                  onClick={() => togglePrepCompletion(prep.id)}
+                                  className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
+                                    prep.completed 
+                                      ? 'bg-green-500 border-green-500' 
+                                      : 'border-gray-300 hover:border-green-500'
+                                  }`}
+                                >
+                                  {prep.completed && <Check className="w-4 h-4 text-white" />}
+                                </button>
+                                <div className="flex-1">
+                                  <div className={`font-medium flex items-center space-x-2 ${prep.completed ? 'line-through text-gray-500' : 'text-gray-800'}`}>
+                                    <span>{prep.name}</span>
+                                    {prep.hasRecipe && (
+                                      <button
+                                        onClick={() => prep.recipe && showRecipe(prep.recipe, prep.name)}
+                                        className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full hover:bg-green-200 transition-colors"
+                                      >
+                                        📖 Recipe
+                                      </button>
+                                    )}
+                                  </div>
+                                  <div className="text-sm text-gray-600">
+                                    {prep.estimatedTime} • {prep.category}
+                                  </div>
+                                </div>
+                              </div>
+                              <span className={`px-2 py-1 rounded-full text-xs ${priority?.color || 'bg-gray-100 text-gray-700'}`}>
+                                {priority?.name || 'Medium'}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   );
                 })}
@@ -504,6 +902,9 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
               ))}
             </div>
 
+            {/* Suggested Preps Section */}
+            {renderSuggestedPrepsSection()}
+
             {/* Prep Items List */}
             <div className="space-y-3">
               {filteredPreps.map(prep => {
@@ -546,53 +947,101 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
                             <span>{prep.category}</span>
                             {prep.isCustom && <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs">Custom</span>}
                           </p>
+                          
+                          {/* Priority and Time Assignment UI */}
+                          <div className="mt-2">
+                            <div className="relative w-2/3">
+                              <button
+                                onClick={() => {
+                                  if (showPriorityOptions === prep.id) {
+                                    resetWorkflow();
+                                  } else {
+                                    setShowPriorityOptions(prep.id);
+                                  }
+                                }}
+                                className={`w-full px-2 py-1 rounded text-xs transition-colors ${
+                                  isSelected 
+                                    ? priorities.find(p => p.id === selection.priority)?.color + ' font-medium'
+                                    : assignmentStep[prep.id] === 'timeSlot'
+                                    ? 'bg-green-100 text-green-700 font-medium'
+                                    : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                                }`}
+                              >
+                                {isSelected 
+                                  ? `${priorities.find(p => p.id === selection.priority)?.name} Priority${selection.timeSlot ? ` • ${timeSlots.find(t => t.id === selection.timeSlot)?.name}` : ' • Anytime'}`
+                                  : assignmentStep[prep.id] === 'timeSlot'
+                                  ? 'Now choose time slot'
+                                  : 'Click to assign priority & time'
+                                }
+                              </button>
+                              
+                              {showPriorityOptions === prep.id && (
+                                <div className="dropdown-container soft-dropdown absolute top-full left-0 mt-2 rounded-xl p-3 z-20 w-full min-w-64 max-w-xs">
+                                  <div className="space-y-3">
+                                    <div>
+                                      <div className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                                        <span className="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
+                                        Choose Priority Level
+                                      </div>
+                                      <div className="space-y-2">
+                                        {priorities.map(priority => (
+                                          <button
+                                            key={priority.id}
+                                            onClick={() => updatePrepSelection(prep, 'priority', priority.id, 'main')}
+                                            className={`soft-button w-full text-left px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 ${priority.color}`}
+                                          >
+                                            <div className="flex items-center justify-between">
+                                              <span>{priority.name}</span>
+                                              <span className="text-xs opacity-70">{priority.icon}</span>
+                                            </div>
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+
+                              {showTimeOptions === prep.id && (
+                                <div className="dropdown-container soft-dropdown absolute top-full left-0 mt-2 rounded-xl p-3 z-20 w-full min-w-64 max-w-sm">
+                                  <div className="space-y-3">
+                                    <div>
+                                      <div className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                                        <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                                        Choose Time Slot
+                                      </div>
+                                      <div className="space-y-2">
+                                        <button
+                                          onClick={() => updatePrepSelection(prep, 'timeSlot', '', 'main')}
+                                          className="soft-button w-full text-left px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 bg-gray-50 text-gray-700 hover:bg-gray-100"
+                                        >
+                                          <div className="flex items-center justify-between">
+                                            <span>Anytime</span>
+                                            <span className="text-xs opacity-70">🕐</span>
+                                          </div>
+                                        </button>
+                                        {timeSlots.map(slot => (
+                                          <button
+                                            key={slot.id}
+                                            onClick={() => updatePrepSelection(prep, 'timeSlot', slot.id, 'main')}
+                                            className="soft-button w-full text-left px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 hover:scale-105 active:scale-95 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                                          >
+                                            <div className="flex items-center justify-between">
+                                              <span>{slot.name}</span>
+                                              <span className="text-xs opacity-70">{slot.icon}</span>
+                                            </div>
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
-
-                    {/* Selection Details - Show when selected */}
-                    {isSelected && (
-                      <div className="mt-4 pt-4 border-t border-blue-200 space-y-3">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {/* Priority Selection */}
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
-                            <div className="flex space-x-1">
-                              {priorities.map(priority => (
-                                <button
-                                  key={priority.id}
-                                  onClick={() => updatePrepSelection(prep, { priority: priority.id })}
-                                  className={`flex-1 px-3 py-2 text-xs rounded-lg border transition-colors ${
-                                    selection.priority === priority.id
-                                      ? `${priority.color} border-current`
-                                      : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
-                                  }`}
-                                >
-                                  {priority.icon} {priority.name}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-
-                          {/* Time Slot Selection */}
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Time Slot</label>
-                            <select
-                              value={selection.timeSlot}
-                              onChange={(e) => updatePrepSelection(prep, { timeSlot: e.target.value })}
-                              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                            >
-                              <option value="">Anytime</option>
-                              {timeSlots.map(slot => (
-                                <option key={slot.id} value={slot.id}>
-                                  {slot.icon} {slot.name}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 );
               })}
@@ -658,20 +1107,31 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
                       <div className="md:col-span-2 space-y-4">
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">Ingredients</label>
+                          <div className="mb-2 flex space-x-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const textarea = document.getElementById('ingredients-textarea') as HTMLTextAreaElement;
+                                const start = textarea.selectionStart;
+                                const end = textarea.selectionEnd;
+                                const text = textarea.value;
+                                const before = text.substring(0, start);
+                                const selection = text.substring(start, end);
+                                const after = text.substring(end);
+                                const newText = before + '**' + selection + '**' + after;
+                                setRecipeData(prev => ({ ...prev, instructions: newText }));
+                              }}
+                              className="px-2 py-1 bg-gray-100 rounded text-sm hover:bg-gray-200"
+                            >
+                              1.
+                            </button>
+                          </div>
                           <textarea
-                            value={recipeData.ingredients}
-                            onChange={(e) => setRecipeData(prev => ({ ...prev, ingredients: e.target.value }))}
-                            placeholder="List ingredients here..."
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 h-24"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Instructions</label>
-                          <textarea
+                            id="instructions-textarea"
                             value={recipeData.instructions}
                             onChange={(e) => setRecipeData(prev => ({ ...prev, instructions: e.target.value }))}
-                            placeholder="Enter cooking instructions..."
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 h-24"
+                            placeholder="Enter cooking instructions&#10;Use formatting buttons above to style text&#10;Example:&#10;1. Mix **flour** and *salt*&#10;2. Add water slowly"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 h-32 font-mono"
                           />
                         </div>
                       </div>
@@ -717,7 +1177,17 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
                       <div className="flex items-center space-x-3">
                         <span className="text-lg">{prep.timeSlot ? timeSlot?.icon : '🕐'}</span>
                         <div>
-                          <div className="font-medium text-gray-800">{prep.name}</div>
+                          <div className="font-medium text-gray-800 flex items-center space-x-2">
+                            <span>{prep.name}</span>
+                            {prep.hasRecipe && (
+                              <button
+                                onClick={() => prep.recipe && showRecipe(prep.recipe, prep.name)}
+                                className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full hover:bg-green-200 transition-colors"
+                              >
+                                📖
+                              </button>
+                            )}
+                          </div>
                           <div className="text-sm text-gray-600">
                             {prep.timeSlot ? timeSlot?.name : 'Anytime'} • {prep.estimatedTime}
                           </div>
@@ -752,71 +1222,6 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
               </div>
             </div>
           )}
-        </div>
-      )}
-
-      {/* Recipe Modal */}
-      {showRecipeModal && selectedRecipe && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                  <ChefHat className="w-5 h-5 text-green-600" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-800">{selectedRecipeName}</h3>
-                  <p className="text-sm text-gray-600">Recipe Details</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowRecipeModal(false)}
-                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Recipe Content */}
-            <div className="p-6 space-y-6">
-              {/* Ingredients */}
-              <div>
-                <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
-                  <span className="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm mr-2">🥄</span>
-                  Ingredients
-                </h4>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="whitespace-pre-wrap text-gray-700">
-                    {selectedRecipe.ingredients || 'No ingredients listed.'}
-                  </div>
-                </div>
-              </div>
-
-              {/* Instructions */}
-              <div>
-                <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
-                  <span className="w-6 h-6 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-sm mr-2">📝</span>
-                  Instructions
-                </h4>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="whitespace-pre-wrap text-gray-700">
-                    {selectedRecipe.instructions || 'No instructions provided.'}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="flex justify-end p-6 border-t bg-gray-50">
-              <button
-                onClick={() => setShowRecipeModal(false)}
-                className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-              >
-                Close Recipe
-              </button>
-            </div>
-          </div>
         </div>
       )}
 
@@ -1028,7 +1433,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
                                                       {prep.completed && <Check className="w-3 h-3 text-white" />}
                                                     </button>
                                                     <div>
-                                                      <div className={`font-medium text-sm flex items-center space-x-2 ${prep.completed ? 'line-through opacity-60' : ''}`}>
+                                                      <div className={`font-medium text-sm flex items-center space-x-2 priority-glow priority-${prep.priority} ${prep.completed ? 'line-through opacity-60' : ''}`}>
                                                         <span>{prep.name}</span>
                                                         {prep.hasRecipe && (
                                                           <button
@@ -1088,8 +1493,19 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
                                                       {prep.completed && <Check className="w-3 h-3 text-white" />}
                                                     </button>
                                                     <div>
-                                                      <div className={`font-medium text-sm ${prep.completed ? 'line-through opacity-60' : ''}`}>
-                                                        {prep.name}
+                                                      <div className={`font-medium text-sm flex items-center space-x-2 priority-glow priority-${prep.priority} ${prep.completed ? 'line-through opacity-60' : ''}`}>
+                                                        <span>{prep.name}</span>
+                                                        {prep.hasRecipe && (
+                                                          <button
+                                                            onClick={(e) => {
+                                                              e.stopPropagation();
+                                                              prep.recipe && showRecipe(prep.recipe, prep.name);
+                                                            }}
+                                                            className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full hover:bg-green-200 transition-colors"
+                                                          >
+                                                            📖
+                                                          </button>
+                                                        )}
                                                       </div>
                                                       <div className="text-xs text-gray-500">
                                                         {prep.estimatedTime} • {prep.category}
@@ -1190,8 +1606,178 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
           </div>
         </div>
       )}
+
+      {/* Recipe Modal */}
+      {showRecipeModal && selectedRecipe && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                  <ChefHat className="w-5 h-5 text-green-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-800">{selectedRecipeName}</h3>
+                  <p className="text-sm text-gray-600">Recipe Details</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowRecipeModal(false)}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Recipe Content */}
+            <div className="p-6 space-y-6">
+              {/* Ingredients */}
+              <div>
+                <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
+                  <span className="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm mr-2">🥄</span>
+                  Ingredients
+                </h4>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div 
+                    className="whitespace-pre-wrap text-gray-700"
+                    dangerouslySetInnerHTML={{
+                      __html: selectedRecipe.ingredients
+                        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                        .replace(/\n/g, '<br/>')
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Instructions */}
+              <div>
+                <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center">
+                  <span className="w-6 h-6 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-sm mr-2">📝</span>
+                  Instructions
+                </h4>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div 
+                    className="whitespace-pre-wrap text-gray-700"
+                    dangerouslySetInnerHTML={{
+                      __html: selectedRecipe.instructions
+                        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                        .replace(/\n/g, '<br/>')
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-end p-6 border-t bg-gray-50">
+              <button
+                onClick={() => setShowRecipeModal(false)}
+                className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+              >
+                Close Recipe
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
-export default PrepListPrototype;
+export default PrepListPrototype; ingredients: newText }));
+                              }}
+                              className="px-2 py-1 bg-gray-100 rounded text-sm font-bold hover:bg-gray-200"
+                            >
+                              B
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const textarea = document.getElementById('ingredients-textarea') as HTMLTextAreaElement;
+                                const start = textarea.selectionStart;
+                                const end = textarea.selectionEnd;
+                                const text = textarea.value;
+                                const before = text.substring(0, start);
+                                const selection = text.substring(start, end);
+                                const after = text.substring(end);
+                                const newText = before + '*' + selection + '*' + after;
+                                setRecipeData(prev => ({ ...prev, ingredients: newText }));
+                              }}
+                              className="px-2 py-1 bg-gray-100 rounded text-sm italic hover:bg-gray-200"
+                            >
+                              I
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const textarea = document.getElementById('ingredients-textarea') as HTMLTextAreaElement;
+                                const start = textarea.selectionStart;
+                                const text = textarea.value;
+                                const before = text.substring(0, start);
+                                const after = text.substring(start);
+                                const newText = before + '\n• ' + after;
+                                setRecipeData(prev => ({ ...prev, ingredients: newText }));
+                              }}
+                              className="px-2 py-1 bg-gray-100 rounded text-sm hover:bg-gray-200"
+                            >
+                              •
+                            </button>
+                          </div>
+                          <textarea
+                            id="ingredients-textarea"
+                            value={recipeData.ingredients}
+                            onChange={(e) => setRecipeData(prev => ({ ...prev, ingredients: e.target.value }))}
+                            placeholder="Enter ingredients (one per line)&#10;Use formatting buttons above to style text&#10;Example:&#10;• **2 cups** flour&#10;• *1 tsp* salt"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 h-32 font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Instructions</label>
+                          <div className="mb-2 flex space-x-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const textarea = document.getElementById('instructions-textarea') as HTMLTextAreaElement;
+                                const start = textarea.selectionStart;
+                                const end = textarea.selectionEnd;
+                                const text = textarea.value;
+                                const before = text.substring(0, start);
+                                const selection = text.substring(start, end);
+                                const after = text.substring(end);
+                                const newText = before + '**' + selection + '**' + after;
+                                setRecipeData(prev => ({ ...prev, instructions: newText }));
+                              }}
+                              className="px-2 py-1 bg-gray-100 rounded text-sm font-bold hover:bg-gray-200"
+                            >
+                              B
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const textarea = document.getElementById('instructions-textarea') as HTMLTextAreaElement;
+                                const start = textarea.selectionStart;
+                                const end = textarea.selectionEnd;
+                                const text = textarea.value;
+                                const before = text.substring(0, start);
+                                const selection = text.substring(start, end);
+                                const after = text.substring(end);
+                                const newText = before + '*' + selection + '*' + after;
+                                setRecipeData(prev => ({ ...prev, instructions: newText }));
+                              }}
+                              className="px-2 py-1 bg-gray-100 rounded text-sm italic hover:bg-gray-200"
+                            >
+                              I
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const textarea = document.getElementById('instructions-textarea') as HTMLTextAreaElement;
+                                const start = textarea.selectionStart;
+                                const text = textarea.value;
+                                const before = text.substring(0, start);
+                                const after = text.substring(start);
+                                const newText = before + '\n1. ' + after;
+                                setRecipeData(prev => ({ ...prev,
