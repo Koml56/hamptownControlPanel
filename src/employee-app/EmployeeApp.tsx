@@ -1,6 +1,6 @@
-// EmployeeApp.tsx - Updated to handle store items from Firebase
+// EmployeeApp.tsx - Updated to use integrated PrepList
 import React, { useState, useEffect, useCallback } from 'react';
-import { Users, CheckSquare, TrendingUp, Settings, Lock, LogOut, Calendar, Database, ChevronDown, X, Check, ShoppingBag } from 'lucide-react';
+import { Users, CheckSquare, TrendingUp, Settings, Lock, LogOut, Calendar, Database, ChevronDown, X, Check, ShoppingBag, ChefHat } from 'lucide-react';
 
 // Components
 import MoodTracker from './MoodTracker';
@@ -8,19 +8,18 @@ import TaskManager from './TaskManager';
 import Store from './Store';
 import AdminPanel from './AdminPanel';
 import DailyReports from './DailyReports';
-import PrepListPrototype from './PrepListPrototype';
+import PrepListPrototype from './PrepListPrototype'; // Use the correct filename
 
 // Hooks and Functions
 import { useFirebaseData, useAuth } from './hooks';
 import { handleAdminLogin } from './adminFunctions';
-import { ChefHat } from 'lucide-react';
 
 // Types and Constants
 import { getFormattedDate } from './utils';
 import type { ActiveTab, Employee, Task, DailyDataMap, TaskAssignments, StoreItem } from './types';
 
 const EmployeeApp = () => {
-  // Firebase and Auth hooks
+  // Firebase and Auth hooks - now includes prep data
   const {
     isLoading,
     lastSync,
@@ -32,14 +31,22 @@ const EmployeeApp = () => {
     completedTasks,
     taskAssignments,
     customRoles,
-    storeItems, // Get store items from Firebase hook
+    storeItems,
+    // ADD PREP STATE
+    prepItems,
+    scheduledPreps,
+    prepSelections,
     setEmployees,
     setTasks,
     setDailyData,
     setCompletedTasks,
     setTaskAssignments,
     setCustomRoles,
-    setStoreItems, // Get store items setter
+    setStoreItems,
+    // ADD PREP SETTERS
+    setPrepItems,
+    setScheduledPreps,
+    setPrepSelections,
     loadFromFirebase,
     saveToFirebase,
     quickSave
@@ -141,7 +148,6 @@ const EmployeeApp = () => {
     handleDataChange();
   }, [setCustomRoles, handleDataChange]);
 
-  // Add store items setter with save
   const setStoreItemsWithSave = useCallback((updater: (prev: StoreItem[]) => StoreItem[]) => {
     console.log('🏪 Updating store items and triggering save...');
     setStoreItems(updater);
@@ -311,7 +317,7 @@ const EmployeeApp = () => {
       </div>
 
       <div className="p-4 space-y-6">
-        {/* Floating Status Indicator - Old Design with Device Count */}
+        {/* Floating Status Indicator */}
         <div className="fixed bottom-20 right-4 z-50">
           {isLoading && (
             <div className="bg-white/80 backdrop-blur-sm rounded-full px-4 py-2 shadow-lg flex items-center space-x-2 border border-blue-100">
@@ -328,7 +334,7 @@ const EmployeeApp = () => {
               <div className="w-2 h-2 rounded-full bg-green-500"></div>
               <span className="text-green-700 text-xs">Saved</span>
               
-              {/* Device count indicator from new design */}
+              {/* Device count indicator */}
               {connectionStatus === 'connected' && (
                 <div className="flex items-center space-x-1 ml-2 pl-2 border-l border-green-200">
                   <div className="w-1 h-1 rounded-full bg-green-500 opacity-60" />
@@ -398,6 +404,20 @@ const EmployeeApp = () => {
           />
         )}
 
+        {activeTab === 'preps' && (
+          <PrepListPrototype
+            currentUser={currentUser}
+            connectionStatus={connectionStatus}
+            prepItems={prepItems}
+            scheduledPreps={scheduledPreps}
+            prepSelections={prepSelections}
+            setPrepItems={setPrepItems}
+            setScheduledPreps={setScheduledPreps}
+            setPrepSelections={setPrepSelections}
+            quickSave={quickSave}
+          />
+        )}
+
         {activeTab === 'admin' && isAdmin && (
           <AdminPanel
             employees={employees}
@@ -417,16 +437,6 @@ const EmployeeApp = () => {
             setSelectedDate={setSelectedDate}
             dailyData={dailyData}
             employees={employees}
-            connectionStatus={connectionStatus}
-          />
-        )}
-
-        {activeTab === 'preps' && (
-          <PrepListPrototype
-            currentUser={currentUser}
-            loadFromFirebase={loadFromFirebase}
-            saveToFirebase={saveToFirebase}
-            quickSave={quickSave}
             connectionStatus={connectionStatus}
           />
         )}
