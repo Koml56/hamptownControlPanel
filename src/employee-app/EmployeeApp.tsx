@@ -1,4 +1,4 @@
-// EmployeeApp.tsx - Updated with Prep List Integration
+// EmployeeApp.tsx - Optimized to prevent infinite loops with PrepList integration
 import React, { useState, useEffect, useCallback } from 'react';
 import { Users, CheckSquare, TrendingUp, Settings, Lock, LogOut, Calendar, Database, ChevronDown, X, Check, ShoppingBag, ChefHat } from 'lucide-react';
 
@@ -16,7 +16,8 @@ import { handleAdminLogin } from './adminFunctions';
 
 // Types and Constants
 import { getFormattedDate } from './utils';
-import type { ActiveTab, Employee, Task, DailyDataMap, TaskAssignments, StoreItem, PrepItem, ScheduledPrep, PrepSelections } from './types';
+import { getDefaultStoreItems } from './defaultData';
+import type { ActiveTab, Employee, Task, DailyDataMap, TaskAssignments, StoreItem } from './types';
 
 const EmployeeApp = () => {
   // Firebase and Auth hooks
@@ -33,7 +34,6 @@ const EmployeeApp = () => {
     prepItems,
     scheduledPreps,
     prepSelections,
-    storeItems,
     setEmployees,
     setTasks,
     setDailyData,
@@ -43,7 +43,6 @@ const EmployeeApp = () => {
     setPrepItems,
     setScheduledPreps,
     setPrepSelections,
-    setStoreItems,
     loadFromFirebase,
     saveToFirebase,
     quickSave
@@ -64,6 +63,7 @@ const EmployeeApp = () => {
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
   const [selectedDate, setSelectedDate] = useState(getFormattedDate(new Date()));
+  const [storeItems, setStoreItems] = useState<StoreItem[]>(getDefaultStoreItems());
 
   // Load data once on mount
   useEffect(() => {
@@ -149,22 +149,6 @@ const EmployeeApp = () => {
     setStoreItems(updater);
     handleDataChange();
   }, [setStoreItems, handleDataChange]);
-
-  // Enhanced prep list setters that trigger save
-  const setPrepItemsWithSave = useCallback((updater: (prev: PrepItem[]) => PrepItem[]) => {
-    setPrepItems(updater);
-    handleDataChange();
-  }, [setPrepItems, handleDataChange]);
-
-  const setScheduledPrepsWithSave = useCallback((updater: (prev: ScheduledPrep[]) => ScheduledPrep[]) => {
-    setScheduledPreps(updater);
-    handleDataChange();
-  }, [setScheduledPreps, handleDataChange]);
-
-  const setPrepSelectionsWithSave = useCallback((updater: (prev: PrepSelections) => PrepSelections) => {
-    setPrepSelections(updater);
-    handleDataChange();
-  }, [setPrepSelections, handleDataChange]);
 
   const currentEmployee = employees.find(emp => emp.id === currentUser.id);
 
@@ -254,10 +238,10 @@ const EmployeeApp = () => {
 
       {/* Tab Navigation */}
       <div className="bg-white border-b">
-        <div className="flex">
+        <div className="flex overflow-x-auto">
           <button
             onClick={() => setActiveTab('mood')}
-            className={`flex-1 py-3 px-4 text-center ${
+            className={`flex-shrink-0 py-3 px-4 text-center ${
               activeTab === 'mood' 
                 ? 'border-b-2 border-blue-500 text-blue-600 bg-blue-50' 
                 : 'text-gray-600'
@@ -268,7 +252,7 @@ const EmployeeApp = () => {
           </button>
           <button
             onClick={() => setActiveTab('tasks')}
-            className={`flex-1 py-3 px-4 text-center ${
+            className={`flex-shrink-0 py-3 px-4 text-center ${
               activeTab === 'tasks' 
                 ? 'border-b-2 border-blue-500 text-blue-600 bg-blue-50' 
                 : 'text-gray-600'
@@ -278,9 +262,9 @@ const EmployeeApp = () => {
             Cleaning Tasks
           </button>
           <button
-            onClick={() => setActiveTab('preps')}
-            className={`flex-1 py-3 px-4 text-center ${
-              activeTab === 'preps' 
+            onClick={() => setActiveTab('prep')}
+            className={`flex-shrink-0 py-3 px-4 text-center ${
+              activeTab === 'prep' 
                 ? 'border-b-2 border-green-500 text-green-600 bg-green-50' 
                 : 'text-gray-600'
             }`}
@@ -290,7 +274,7 @@ const EmployeeApp = () => {
           </button>
           <button
             onClick={() => setActiveTab('store')}
-            className={`flex-1 py-3 px-4 text-center ${
+            className={`flex-shrink-0 py-3 px-4 text-center ${
               activeTab === 'store' 
                 ? 'border-b-2 border-purple-500 text-purple-600 bg-purple-50' 
                 : 'text-gray-600'
@@ -302,7 +286,7 @@ const EmployeeApp = () => {
           {isAdmin && (
             <button
               onClick={() => setActiveTab('admin')}
-              className={`flex-1 py-3 px-4 text-center ${
+              className={`flex-shrink-0 py-3 px-4 text-center ${
                 activeTab === 'admin' 
                   ? 'border-b-2 border-red-500 text-red-600 bg-red-50' 
                   : 'text-gray-600'
@@ -315,7 +299,7 @@ const EmployeeApp = () => {
           {isAdmin && (
             <button
               onClick={() => setActiveTab('reports')}
-              className={`flex-1 py-3 px-4 text-center ${
+              className={`flex-shrink-0 py-3 px-4 text-center ${
                 activeTab === 'reports' 
                   ? 'border-b-2 border-orange-500 text-orange-600 bg-orange-50' 
                   : 'text-gray-600'
@@ -386,16 +370,16 @@ const EmployeeApp = () => {
           />
         )}
 
-        {activeTab === 'preps' && (
+        {activeTab === 'prep' && (
           <PrepListPrototype
             currentUser={currentUser}
             connectionStatus={connectionStatus}
             prepItems={prepItems}
             scheduledPreps={scheduledPreps}
             prepSelections={prepSelections}
-            setPrepItems={setPrepItemsWithSave}
-            setScheduledPreps={setScheduledPrepsWithSave}
-            setPrepSelections={setPrepSelectionsWithSave}
+            setPrepItems={setPrepItems}
+            setScheduledPreps={setScheduledPreps}
+            setPrepSelections={setPrepSelections}
             quickSave={quickSave}
           />
         )}
