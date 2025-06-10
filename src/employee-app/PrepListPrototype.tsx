@@ -735,7 +735,10 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
                             <div key={prep.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
                               <div className="flex items-center space-x-3">
                                 <button
-                                  onClick={() => togglePrepCompletion(prep.id)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    togglePrepCompletion(prep.id);
+                                  }}
                                   className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
                                     prep.completed 
                                       ? 'bg-green-500 border-green-500' 
@@ -790,7 +793,10 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
                             <div key={prep.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
                               <div className="flex items-center space-x-3">
                                 <button
-                                  onClick={() => togglePrepCompletion(prep.id)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    togglePrepCompletion(prep.id);
+                                  }}
                                   className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
                                     prep.completed 
                                       ? 'bg-green-500 border-green-500' 
