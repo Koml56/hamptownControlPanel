@@ -116,4 +116,4 @@ export interface PrepSelections {
 
 export type Priority = 'low' | 'medium' | 'high';
 export type ConnectionStatus = 'connecting' | 'connected' | 'error';
-export type ActiveTab = 'mood' | 'tasks' | 'store' | 'admin' | 'reports' | 'prep';
+export type ActiveTab = 'mood' | 'tasks' | 'store' | 'admin' | 'reports' | 'preps';
