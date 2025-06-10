@@ -11,10 +11,11 @@ import type {
   CurrentUser,
   PrepItem,
   ScheduledPrep,
-  PrepSelections
+  PrepSelections,
+  StoreItem
 } from './types';
 
-// Miграция данных
+// Миграция данных
 const migrateEmployeeData = (employees: any[]): Employee[] => {
   if (!employees || !Array.isArray(employees)) return getDefaultEmployees();
 
@@ -58,6 +59,9 @@ export const useFirebaseData = () => {
   const [prepItems, setPrepItems] = useState<PrepItem[]>([]);
   const [scheduledPreps, setScheduledPreps] = useState<ScheduledPrep[]>([]);
   const [prepSelections, setPrepSelections] = useState<PrepSelections>({});
+  
+  // Store items state
+  const [storeItems, setStoreItems] = useState<StoreItem[]>([]);
 
   const firebaseService = new FirebaseService();
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -94,7 +98,8 @@ export const useFirebaseData = () => {
       customRolesLength: customRoles.length,
       prepItemsLength: prepItems.length,
       scheduledPrepsLength: scheduledPreps.length,
-      prepSelectionsKeys: Object.keys(prepSelections).length
+      prepSelectionsKeys: Object.keys(prepSelections).length,
+      storeItemsLength: storeItems.length
     });
 
     if (currentDataHash === lastSaveDataRef.current) {
@@ -112,7 +117,8 @@ export const useFirebaseData = () => {
       customRoles,
       prepItems,
       scheduledPreps,
-      prepSelections
+      prepSelections,
+      storeItems
     });
 
     setIsLoading(true);
@@ -126,7 +132,8 @@ export const useFirebaseData = () => {
         customRoles,
         prepItems,
         scheduledPreps,
-        prepSelections
+        prepSelections,
+        storeItems
       });
 
       setLastSync(new Date().toLocaleTimeString());
@@ -147,6 +154,7 @@ export const useFirebaseData = () => {
     prepItems,
     scheduledPreps,
     prepSelections,
+    storeItems,
     connectionStatus,
     isLoading
   ]);
@@ -185,6 +193,9 @@ export const useFirebaseData = () => {
       setPrepItems(data.prepItems || []);
       setScheduledPreps(data.scheduledPreps || []);
       setPrepSelections(data.prepSelections || {});
+      
+      // Load store items
+      setStoreItems(data.storeItems || []);
 
       setConnectionStatus('connected');
       setLastSync(new Date().toLocaleTimeString());
@@ -198,7 +209,8 @@ export const useFirebaseData = () => {
         customRolesLength: data.customRoles.length,
         prepItemsLength: (data.prepItems || []).length,
         scheduledPrepsLength: (data.scheduledPreps || []).length,
-        prepSelectionsKeys: Object.keys(data.prepSelections || {}).length
+        prepSelectionsKeys: Object.keys(data.prepSelections || {}).length,
+        storeItemsLength: (data.storeItems || []).length
       });
       lastSaveDataRef.current = dataHash;
 
@@ -212,6 +224,7 @@ export const useFirebaseData = () => {
       setPrepItems([]);
       setScheduledPreps([]);
       setPrepSelections({});
+      setStoreItems([]);
     } finally {
       setIsLoading(false);
     }
@@ -220,7 +233,7 @@ export const useFirebaseData = () => {
   // Вызывает save при изменении зависимостей
   useEffect(() => {
     saveToFirebase();
-  }, [employees, tasks, dailyData, completedTasks, taskAssignments, customRoles, prepItems, scheduledPreps, prepSelections]);
+  }, [employees, tasks, dailyData, completedTasks, taskAssignments, customRoles, prepItems, scheduledPreps, prepSelections, storeItems]);
 
   // Очистка таймера при размонтировании
   useEffect(() => {
@@ -245,6 +258,7 @@ export const useFirebaseData = () => {
     prepItems,
     scheduledPreps,
     prepSelections,
+    storeItems,
 
     // Setters
     setEmployees,
@@ -256,6 +270,7 @@ export const useFirebaseData = () => {
     setPrepItems,
     setScheduledPreps,
     setPrepSelections,
+    setStoreItems,
 
     // Actions
     loadFromFirebase,
