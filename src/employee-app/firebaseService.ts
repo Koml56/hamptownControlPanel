@@ -1,7 +1,7 @@
 // firebaseService.ts
 import { FIREBASE_CONFIG } from './constants';
 import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData } from './defaultData';
-import type { Employee, Task, DailyDataMap, TaskAssignments, PrepItem, ScheduledPrep, PrepSelections } from './types';
+import type { Employee, Task, DailyDataMap, TaskAssignments, PrepItem, ScheduledPrep, PrepSelections, StoreItem } from './types';
 
 export class FirebaseService {
   private baseUrl = FIREBASE_CONFIG.databaseURL;
@@ -19,7 +19,8 @@ export class FirebaseService {
         rolesRes,
         prepItemsRes,
         scheduledPrepsRes,
-        prepSelectionsRes
+        prepSelectionsRes,
+        storeItemsRes
       ] = await Promise.all([
         fetch(`${this.baseUrl}/employees.json`),
         fetch(`${this.baseUrl}/tasks.json`),
@@ -29,7 +30,8 @@ export class FirebaseService {
         fetch(`${this.baseUrl}/customRoles.json`),
         fetch(`${this.baseUrl}/prepItems.json`),
         fetch(`${this.baseUrl}/scheduledPreps.json`),
-        fetch(`${this.baseUrl}/prepSelections.json`)
+        fetch(`${this.baseUrl}/prepSelections.json`),
+        fetch(`${this.baseUrl}/storeItems.json`)
       ]);
       
       const employeesData = await employeesRes.json();
@@ -41,6 +43,7 @@ export class FirebaseService {
       const prepItemsData = await prepItemsRes.json();
       const scheduledPrepsData = await scheduledPrepsRes.json();
       const prepSelectionsData = await prepSelectionsRes.json();
+      const storeItemsData = await storeItemsRes.json();
       
       // Migrate employees data to include points if missing
       const migratedEmployees = employeesData ? employeesData.map((emp: any) => ({
@@ -69,7 +72,8 @@ export class FirebaseService {
         customRoles: customRolesData || ['Cleaner', 'Manager', 'Supervisor'],
         prepItems: prepItemsData || [],
         scheduledPreps: scheduledPrepsData || [],
-        prepSelections: prepSelectionsData || {}
+        prepSelections: prepSelectionsData || {},
+        storeItems: storeItemsData || []
       };
       
     } catch (error) {
@@ -116,6 +120,7 @@ export class FirebaseService {
     prepItems: PrepItem[];
     scheduledPreps: ScheduledPrep[];
     prepSelections: PrepSelections;
+    storeItems: StoreItem[];
   }) {
     console.log('🔥 Saving to Firebase...');
     
@@ -156,6 +161,10 @@ export class FirebaseService {
         fetch(`${this.baseUrl}/prepSelections.json`, {
           method: 'PUT',
           body: JSON.stringify(data.prepSelections)
+        }),
+        fetch(`${this.baseUrl}/storeItems.json`, {
+          method: 'PUT',
+          body: JSON.stringify(data.storeItems)
         })
       ]);
       
