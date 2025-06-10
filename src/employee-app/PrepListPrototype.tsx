@@ -1,10 +1,10 @@
-// PrepList.tsx - Properly integrated with Firebase
+// PrepListPrototype.tsx - Properly integrated with Firebase
 import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, Plus, ChefHat, Check, Star, Trash2, Users, Search, X } from 'lucide-react';
 import { getFormattedDate } from './utils';
 import type { PrepItem, ScheduledPrep, PrepSelections, Priority, Recipe, CurrentUser, ConnectionStatus } from './types';
 
-interface PrepListProps {
+interface PrepListPrototypeProps {
   currentUser: CurrentUser;
   connectionStatus: ConnectionStatus;
   // Firebase data from main hooks
@@ -38,7 +38,7 @@ interface PriorityInfo {
   icon: string;
 }
 
-const PrepList: React.FC<PrepListProps> = ({
+const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
   currentUser,
   connectionStatus,
   prepItems,
@@ -1018,4 +1018,4 @@ const PrepList: React.FC<PrepListProps> = ({
   );
 };
 
-export default PrepList;
+export default PrepListPrototype;
