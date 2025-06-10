@@ -1,8 +1,7 @@
-// hooks.ts - Enhanced with instant sync and prep support
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { FirebaseService } from './firebaseService';
 import { getFormattedDate } from './utils';
-import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData, getDefaultStoreItems } from './defaultData';
+import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData } from './defaultData';
 import type {
   Employee,
   Task,
@@ -10,47 +9,43 @@ import type {
   TaskAssignments,
   ConnectionStatus,
   CurrentUser,
-  StoreItem,
   PrepItem,
   ScheduledPrep,
   PrepSelections
 } from './types';
 
-// Helper function to get today's completed tasks from daily data
-const getTodayCompletedTasks = (dailyData: DailyDataMap): Set<number> => {
-  const today = getFormattedDate(new Date());
-  const todayData = dailyData[today];
-  
-  if (!todayData || !Array.isArray(todayData.completedTasks)) {
-    return new Set<number>();
-  }
-  
-  const completedTaskIds = todayData.completedTasks.map((completion: any) => completion.taskId);
-  return new Set(completedTaskIds);
+// Miграция данных
+const migrateEmployeeData = (employees: any[]): Employee[] => {
+  if (!employees || !Array.isArray(employees)) return getDefaultEmployees();
+
+  return employees.map(emp => ({
+    id: emp.id || 0,
+    name: emp.name || 'Unknown',
+    mood: emp.mood || 3,
+    lastUpdated: emp.lastUpdated || 'Not updated',
+    role: emp.role || 'Cleaner',
+    lastMoodDate: emp.lastMoodDate || null,
+    points: typeof emp.points === 'number' ? emp.points : 0
+  }));
 };
 
-// Helper function to get today's task assignments from daily data
-const getTodayTaskAssignments = (dailyData: DailyDataMap): TaskAssignments => {
-  const today = getFormattedDate(new Date());
-  const todayData = dailyData[today];
-  
-  if (!todayData || !Array.isArray(todayData.completedTasks)) {
-    return {};
-  }
-  
-  const assignments: TaskAssignments = {};
-  todayData.completedTasks.forEach((completion: any) => {
-    assignments[completion.taskId] = completion.employeeId;
-  });
-  
-  return assignments;
+const migrateTaskData = (tasks: any[]): Task[] => {
+  if (!tasks || !Array.isArray(tasks)) return getDefaultTasks();
+
+  return tasks.map(task => ({
+    id: task.id || 0,
+    task: task.task || 'Unknown Task',
+    location: task.location || 'Unknown Location',
+    priority: task.priority || 'medium',
+    estimatedTime: task.estimatedTime || '30 min',
+    points: typeof task.points === 'number' ? task.points : 5
+  }));
 };
 
 export const useFirebaseData = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
-  const [syncCount, setSyncCount] = useState(0);
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -58,201 +53,114 @@ export const useFirebaseData = () => {
   const [completedTasks, setCompletedTasks] = useState<Set<number>>(new Set());
   const [taskAssignments, setTaskAssignments] = useState<TaskAssignments>({});
   const [customRoles, setCustomRoles] = useState<string[]>(['Cleaner', 'Manager', 'Supervisor']);
-  const [storeItems, setStoreItems] = useState<StoreItem[]>([]);
-  
-  // ADD PREP STATE
+
+  // New prep list state
   const [prepItems, setPrepItems] = useState<PrepItem[]>([]);
   const [scheduledPreps, setScheduledPreps] = useState<ScheduledPrep[]>([]);
   const [prepSelections, setPrepSelections] = useState<PrepSelections>({});
-  
-  const [currentDate, setCurrentDate] = useState<string>(getFormattedDate(new Date()));
 
-  const firebaseService = useRef(new FirebaseService());
+  const firebaseService = new FirebaseService();
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const isReceivingUpdate = useRef(false);
+  const lastSaveDataRef = useRef<string>('');
 
-  // Real-time sync callbacks
-  const realtimeCallbacks = useCallback(() => ({
-    onEmployeesUpdate: (newEmployees: Employee[]) => {
-      console.log('⚡ Instant employees sync received');
-      isReceivingUpdate.current = true;
-      setEmployees(newEmployees);
-      setSyncCount(prev => prev + 1);
-      setTimeout(() => { isReceivingUpdate.current = false; }, 50);
-    },
-
-    onTasksUpdate: (newTasks: Task[]) => {
-      console.log('⚡ Instant tasks sync received');
-      isReceivingUpdate.current = true;
-      setTasks(newTasks);
-      setSyncCount(prev => prev + 1);
-      setTimeout(() => { isReceivingUpdate.current = false; }, 50);
-    },
-
-    onDailyDataUpdate: (newDailyData: DailyDataMap) => {
-      console.log('⚡ Instant daily data sync received');
-      isReceivingUpdate.current = true;
-      setDailyData(newDailyData);
-      
-      // Update completed tasks and assignments for today
-      const todayCompleted = getTodayCompletedTasks(newDailyData);
-      const todayAssignments = getTodayTaskAssignments(newDailyData);
-      setCompletedTasks(todayCompleted);
-      setTaskAssignments(todayAssignments);
-      
-      setSyncCount(prev => prev + 1);
-      setTimeout(() => { isReceivingUpdate.current = false; }, 50);
-    },
-
-    onCustomRolesUpdate: (newRoles: string[]) => {
-      console.log('⚡ Instant custom roles sync received');
-      isReceivingUpdate.current = true;
-      setCustomRoles(newRoles);
-      setSyncCount(prev => prev + 1);
-      setTimeout(() => { isReceivingUpdate.current = false; }, 50);
-    },
-
-    onStoreItemsUpdate: (newStoreItems: StoreItem[]) => {
-      console.log('⚡ Instant store items sync received');
-      isReceivingUpdate.current = true;
-      setStoreItems(newStoreItems);
-      setSyncCount(prev => prev + 1);
-      setTimeout(() => { isReceivingUpdate.current = false; }, 50);
-    },
-
-    // ADD PREP CALLBACKS
-    onPrepItemsUpdate: (newPrepItems: PrepItem[]) => {
-      console.log('⚡ Instant prep items sync received');
-      isReceivingUpdate.current = true;
-      setPrepItems(newPrepItems);
-      setSyncCount(prev => prev + 1);
-      setTimeout(() => { isReceivingUpdate.current = false; }, 50);
-    },
-
-    onScheduledPrepsUpdate: (newScheduledPreps: ScheduledPrep[]) => {
-      console.log('⚡ Instant scheduled preps sync received');
-      isReceivingUpdate.current = true;
-      setScheduledPreps(newScheduledPreps);
-      setSyncCount(prev => prev + 1);
-      setTimeout(() => { isReceivingUpdate.current = false; }, 50);
-    },
-
-    onPrepSelectionsUpdate: (newPrepSelections: PrepSelections) => {
-      console.log('⚡ Instant prep selections sync received');
-      isReceivingUpdate.current = true;
-      setPrepSelections(newPrepSelections);
-      setSyncCount(prev => prev + 1);
-      setTimeout(() => { isReceivingUpdate.current = false; }, 50);
-    },
-
-    onConnectionChange: (status: 'connected' | 'disconnected' | 'error') => {
-      console.log(`⚡ Connection status: ${status}`);
-      setConnectionStatus(status === 'disconnected' ? 'error' : 'connected');
+  // Quick save function for individual fields
+  const quickSave = useCallback(async (field: string, data: any) => {
+    if (connectionStatus !== 'connected') return;
+    
+    try {
+      const baseUrl = 'https://hamptown-panel-default-rtdb.firebaseio.com';
+      await fetch(`${baseUrl}/${field}.json`, {
+        method: 'PUT',
+        body: JSON.stringify(data)
+      });
+      console.log(`✅ Quick saved ${field}`);
+    } catch (error) {
+      console.error(`❌ Quick save failed for ${field}:`, error);
     }
-  }), []);
+  }, [connectionStatus]);
 
-  // Setup real-time listeners
-  useEffect(() => {
-    console.log('🚀 Setting up instant synchronization with prep support...');
-    firebaseService.current.setupRealtimeListeners(realtimeCallbacks());
-
-    return () => {
-      firebaseService.current.cleanup();
-    };
-  }, [realtimeCallbacks]);
-
-  // Check for date change and reset daily tasks
-  useEffect(() => {
-    const checkDateChange = () => {
-      const today = getFormattedDate(new Date());
-      
-      if (currentDate !== today) {
-        console.log(`📅 Date changed from ${currentDate} to ${today} - resetting daily tasks`);
-        
-        setCurrentDate(today);
-        
-        const todayCompleted = getTodayCompletedTasks(dailyData);
-        const todayAssignments = getTodayTaskAssignments(dailyData);
-        
-        setCompletedTasks(todayCompleted);
-        setTaskAssignments(todayAssignments);
-        
-        console.log(`✅ Reset complete - ${todayCompleted.size} tasks completed today`);
-      }
-    };
-
-    checkDateChange();
-    const interval = setInterval(checkDateChange, 60000);
-    return () => clearInterval(interval);
-  }, [currentDate, dailyData]);
-
-  // Instant save function with optimistic updates
-  const instantSave = useCallback(async () => {
-    if (connectionStatus !== 'connected' || isReceivingUpdate.current) {
+  // Функция отложенного сохранения
+  const debouncedSave = useCallback(async () => {
+    if (connectionStatus !== 'connected' || isLoading) {
       return;
     }
 
-    console.log('⚡ Instant save triggered...');
-    setLastSync(new Date().toLocaleTimeString());
+    const currentDataHash = JSON.stringify({
+      employees: employees.length,
+      tasks: tasks.length,
+      dailyDataHash: JSON.stringify(dailyData),
+      completedTasksSize: completedTasks.size,
+      taskAssignmentsKeys: Object.keys(taskAssignments).length,
+      customRolesLength: customRoles.length,
+      prepItemsLength: prepItems.length,
+      scheduledPrepsLength: scheduledPreps.length,
+      prepSelectionsKeys: Object.keys(prepSelections).length
+    });
 
+    if (currentDataHash === lastSaveDataRef.current) {
+      console.log('debouncedSave aborted: data hash unchanged');
+      return;
+    }
+
+    console.log('🔄 Saving data to Firebase...');
+    console.log('📦 Data snapshot:', {
+      employees,
+      tasks,
+      dailyData,
+      completedTasks: Array.from(completedTasks),
+      taskAssignments,
+      customRoles,
+      prepItems,
+      scheduledPreps,
+      prepSelections
+    });
+
+    setIsLoading(true);
     try {
-      // Fire instant saves for all data - don't wait
-      await firebaseService.current.saveData({
+      await firebaseService.saveData({
         employees,
         tasks,
         dailyData,
+        completedTasks,
+        taskAssignments,
         customRoles,
-        storeItems,
-        // ADD PREP DATA
         prepItems,
         scheduledPreps,
         prepSelections
       });
 
-      console.log('⚡ Instant save completed');
+      setLastSync(new Date().toLocaleTimeString());
+      lastSaveDataRef.current = currentDataHash;
     } catch (error) {
-      console.error('❌ Instant save failed:', error);
+      console.error('Save failed:', error);
       setConnectionStatus('error');
+    } finally {
+      setIsLoading(false);
     }
   }, [
     employees,
     tasks,
     dailyData,
+    completedTasks,
+    taskAssignments,
     customRoles,
-    storeItems,
     prepItems,
     scheduledPreps,
     prepSelections,
-    connectionStatus
+    connectionStatus,
+    isLoading
   ]);
 
-  // Optimistic save with immediate UI update
+  // Вызывает debouncedSave с задержкой
   const saveToFirebase = useCallback(() => {
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
 
-    // Instant save - no delay for immediate feel
     saveTimeoutRef.current = setTimeout(() => {
-      instantSave();
-    }, 100); // Minimal delay just to batch rapid changes
-  }, [instantSave]);
-
-  // Instant field save for critical operations
-  const quickSave = useCallback(async (field: string, data: any) => {
-    if (connectionStatus !== 'connected' || isReceivingUpdate.current) {
-      return;
-    }
-
-    console.log(`⚡ Quick saving ${field} instantly...`);
-    setLastSync(new Date().toLocaleTimeString());
-    
-    try {
-      await firebaseService.current.saveField(field, data);
-    } catch (error) {
-      console.error(`❌ Quick save failed for ${field}:`, error);
-    }
-  }, [connectionStatus]);
+      debouncedSave();
+    }, 2000);
+  }, [debouncedSave]);
 
   const loadFromFirebase = useCallback(async () => {
     if (isLoading) return;
@@ -261,57 +169,60 @@ export const useFirebaseData = () => {
     setConnectionStatus('connecting');
 
     try {
-      const data = await firebaseService.current.loadData();
+      const data = await firebaseService.loadData();
 
-      setEmployees(data.employees);
-      setTasks(data.tasks);
+      const finalEmployees = migrateEmployeeData(data.employees);
+      const finalTasks = migrateTaskData(data.tasks);
+
+      setEmployees(finalEmployees);
+      setTasks(finalTasks);
       setDailyData(data.dailyData);
+      setCompletedTasks(new Set(data.completedTasks));
+      setTaskAssignments(data.taskAssignments);
       setCustomRoles(data.customRoles);
-      setStoreItems(data.storeItems);
-      
-      // LOAD PREP DATA
+
+      // Load prep list data
       setPrepItems(data.prepItems || []);
       setScheduledPreps(data.scheduledPreps || []);
       setPrepSelections(data.prepSelections || {});
 
-      const today = getFormattedDate(new Date());
-      setCurrentDate(today);
-      
-      const todayCompleted = getTodayCompletedTasks(data.dailyData);
-      const todayAssignments = getTodayTaskAssignments(data.dailyData);
-      
-      setCompletedTasks(todayCompleted);
-      setTaskAssignments(todayAssignments);
-
       setConnectionStatus('connected');
       setLastSync(new Date().toLocaleTimeString());
 
-      console.log(`✅ Initial data loaded - Today (${today}): ${todayCompleted.size} completed tasks`);
+      const dataHash = JSON.stringify({
+        employees: finalEmployees.length,
+        tasks: finalTasks.length,
+        dailyDataKeys: Object.keys(data.dailyData).length,
+        completedTasksSize: data.completedTasks.size,
+        taskAssignmentsKeys: Object.keys(data.taskAssignments).length,
+        customRolesLength: data.customRoles.length,
+        prepItemsLength: (data.prepItems || []).length,
+        scheduledPrepsLength: (data.scheduledPreps || []).length,
+        prepSelectionsKeys: Object.keys(data.prepSelections || {}).length
+      });
+      lastSaveDataRef.current = dataHash;
 
     } catch (error) {
       setConnectionStatus('error');
+
       setEmployees(getDefaultEmployees());
       setTasks(getDefaultTasks());
       setDailyData(getEmptyDailyData());
-      setStoreItems(getDefaultStoreItems());
+      // Initialize empty prep list data on error
       setPrepItems([]);
       setScheduledPreps([]);
       setPrepSelections({});
-      setCompletedTasks(new Set());
-      setTaskAssignments({});
     } finally {
       setIsLoading(false);
     }
   }, [isLoading]);
 
-  // Auto-save when data changes (with optimistic updates)
+  // Вызывает save при изменении зависимостей
   useEffect(() => {
-    if (!isReceivingUpdate.current) {
-      saveToFirebase();
-    }
-  }, [employees, tasks, dailyData, customRoles, storeItems, prepItems, scheduledPreps, prepSelections, saveToFirebase]);
+    saveToFirebase();
+  }, [employees, tasks, dailyData, completedTasks, taskAssignments, customRoles, prepItems, scheduledPreps, prepSelections]);
 
-  // Cleanup timeout on unmount
+  // Очистка таймера при размонтировании
   useEffect(() => {
     return () => {
       if (saveTimeoutRef.current) {
@@ -325,28 +236,23 @@ export const useFirebaseData = () => {
     isLoading,
     lastSync,
     connectionStatus,
-    syncCount,
     employees,
     tasks,
     dailyData,
     completedTasks,
     taskAssignments,
     customRoles,
-    storeItems,
-    // ADD PREP STATE
     prepItems,
     scheduledPreps,
     prepSelections,
 
-    // Setters (with optimistic updates)
+    // Setters
     setEmployees,
     setTasks,
     setDailyData,
     setCompletedTasks,
     setTaskAssignments,
     setCustomRoles,
-    setStoreItems,
-    // ADD PREP SETTERS
     setPrepItems,
     setScheduledPreps,
     setPrepSelections,
@@ -354,8 +260,7 @@ export const useFirebaseData = () => {
     // Actions
     loadFromFirebase,
     saveToFirebase,
-    quickSave,
-    instantSave // New: for immediate saves
+    quickSave
   };
 };
 
