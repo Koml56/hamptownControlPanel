@@ -31,6 +31,7 @@ export { default as TaskManager } from './TaskManager';
 export { default as Store } from './Store';
 export { default as AdminPanel } from './AdminPanel';
 export { default as DailyReports } from './DailyReports';
+export { default as PrepListPrototype } from './PrepListPrototype';
 
 // Main App Component
 export { default as EmployeeApp } from './EmployeeApp';
