@@ -74,12 +74,12 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
 
   const categories: Category[] = [
     { id: 'all', name: 'All Items', icon: '🍽️' },
-    { id: 'vegetables', name: 'Vegetables', icon: '🥗' },
-    { id: 'proteins', name: 'Proteins', icon: '🥩' },
-    { id: 'sauces', name: 'Sauces', icon: '🧂' },
-    { id: 'breads', name: 'Breads', icon: '🍞' },
-    { id: 'sides', name: 'Sides', icon: '🍟' },
-    { id: 'desserts', name: 'Desserts', icon: '🍰' }
+    { id: 'majoneesit', name: 'Majoneesit', icon: '🥄' },
+    { id: 'proteiinit', name: 'Proteiinit', icon: '🥩' },
+    { id: 'kasvikset', name: 'Kasvikset', icon: '🥗' },
+    { id: 'marinointi', name: 'Marinointi & pikkelöinti', icon: '🥒' },
+    { id: 'kastikkeet', name: 'Kastikkeet', icon: '🧂' },
+    { id: 'muut', name: 'Muut', icon: '🔧' }
   ];
 
   const timeSlots: TimeSlot[] = [
@@ -99,26 +99,54 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
   useEffect(() => {
     if (prepItems.length === 0) {
       const defaultPreps: PrepItem[] = [
-        { id: 1, name: 'Cut lettuce for salads', category: 'vegetables', estimatedTime: '15 min', isCustom: false, hasRecipe: false, recipe: null },
-        { id: 2, name: 'Dice tomatoes', category: 'vegetables', estimatedTime: '10 min', isCustom: false, hasRecipe: false, recipe: null },
-        { id: 3, name: 'Slice onions', category: 'vegetables', estimatedTime: '15 min', isCustom: false, hasRecipe: false, recipe: null },
-        { id: 4, name: 'Prep cucumber slices', category: 'vegetables', estimatedTime: '10 min', isCustom: false, hasRecipe: false, recipe: null },
-        { id: 5, name: 'Make coleslaw mix', category: 'vegetables', estimatedTime: '20 min', isCustom: false, hasRecipe: true, 
-          recipe: { ingredients: '• **2 cups** shredded cabbage\n• **1 cup** shredded carrots\n• **1/2 cup** mayonnaise\n• **2 tbsp** apple cider vinegar\n• **1 tsp** sugar\n• Salt and pepper to taste', 
-                   instructions: '1. **Mix vegetables**: Combine shredded cabbage and carrots in large bowl\n2. **Make dressing**: Whisk together mayo, vinegar, and sugar\n3. **Combine**: Pour dressing over vegetables and mix well\n4. **Season**: Add salt and pepper to taste\n5. **Chill**: Refrigerate for at least 30 minutes before serving' }},
-        { id: 6, name: 'Marinate chicken breasts', category: 'proteins', estimatedTime: '30 min', isCustom: false, hasRecipe: true,
-          recipe: { ingredients: '• **4** chicken breasts\n• **1/4 cup** olive oil\n• **2 tbsp** lemon juice\n• **3 cloves** garlic, minced\n• **1 tsp** dried herbs (thyme, rosemary)\n• Salt and black pepper', 
-                   instructions: '1. **Prepare marinade**: Mix oil, lemon juice, garlic, and herbs\n2. **Season chicken**: Pat dry and season with salt and pepper\n3. **Marinate**: Place in bag with marinade for *2-4 hours*\n4. **Rest**: Bring to room temperature before cooking' }},
-        { id: 7, name: 'Season burger patties', category: 'proteins', estimatedTime: '20 min', isCustom: false, hasRecipe: true,
-          recipe: { ingredients: '• **2 lbs** ground beef (80/20)\n• **2 tsp** salt\n• **1 tsp** black pepper\n• **1 tsp** garlic powder\n• **1/2 tsp** onion powder\n• **1/4 tsp** paprika', 
-                   instructions: '1. **Form patties**: Gently shape into 6oz portions\n2. **Season**: Sprinkle seasoning on both sides\n3. **Rest**: Let sit at room temperature for 15 minutes\n4. **Dimple**: Make small indent in center to prevent puffing' }},
-        { id: 8, name: 'Mix ranch dressing', category: 'sauces', estimatedTime: '10 min', isCustom: false, hasRecipe: true,
-          recipe: { ingredients: '• **1 cup** mayonnaise\n• **1/2 cup** sour cream\n• **1 packet** ranch seasoning mix\n• **2-3 tbsp** milk\n• **1 tbsp** fresh chives, chopped', 
-                   instructions: '1. **Combine base**: Whisk mayo and sour cream\n2. **Add seasoning**: Mix in ranch packet\n3. **Adjust consistency**: Add milk gradually\n4. **Garnish**: Fold in fresh chives\n5. **Chill**: Refrigerate for 30 minutes' }},
-        { id: 9, name: 'Prepare garlic aioli', category: 'sauces', estimatedTime: '15 min', isCustom: false, hasRecipe: true,
-          recipe: { ingredients: '• **3** egg yolks\n• **1 cup** olive oil\n• **4 cloves** garlic, minced\n• **2 tbsp** lemon juice\n• **1 tsp** Dijon mustard\n• Salt to taste', 
-                   instructions: '1. **Make base**: Whisk yolks, garlic, and mustard\n2. **Emulsify**: *Slowly* drizzle oil while whisking\n3. **Season**: Add lemon juice and salt\n4. **Adjust**: Thin with water if too thick' }},
-        { id: 10, name: 'Slice bread for sandwiches', category: 'breads', estimatedTime: '10 min', isCustom: false, hasRecipe: false, recipe: null }
+        // Majoneesit
+        { id: 1, name: 'Valkosipulimajoneesi', category: 'majoneesit', estimatedTime: '15 min', isCustom: false, hasRecipe: true, 
+          recipe: { ingredients: '• **1 cup** majoneesi\n• **3-4** valkosipulin kynttä, hienoksi hakattuna\n• **1 rkl** sitruunamehua\n• **Suolaa** ja **mustapippuria** maun mukaan', 
+                   instructions: '1. **Sekoita**: Yhdistä majoneesi ja hienonnettu valkosipuli\n2. **Mausta**: Lisää sitruunamehu, suola ja pippuri\n3. **Anna maustua**: Anna seisoa jääkaapissa vähintään 30 minuuttia\n4. **Tarkista maku**: Säädä mausteita tarpeen mukaan' }},
+        { id: 2, name: 'Chilimajoneesi', category: 'majoneesit', estimatedTime: '10 min', isCustom: false, hasRecipe: true,
+          recipe: { ingredients: '• **1 cup** majoneesi\n• **2-3 rkl** sriracha-kastiketta\n• **1 tl** hunajaa\n• **1 tl** limemehua', 
+                   instructions: '1. **Yhdistä**: Sekoita majoneesi ja sriracha-kastike\n2. **Makeutus**: Lisää hunaja ja limemehu\n3. **Sekoita hyvin**: Varmista tasainen sekoitus\n4. **Maista ja säädä**: Lisää chilimakua tai hunajaa tarpeen mukaan' }},
+        { id: 3, name: 'Kevätsipulimajoneesi', category: 'majoneesit', estimatedTime: '10 min', isCustom: false, hasRecipe: false, recipe: null },
+        { id: 4, name: 'Bad Santa -majoneesi', category: 'majoneesit', estimatedTime: '15 min', isCustom: false, hasRecipe: false, recipe: null },
+        { id: 5, name: 'Manse-majoneesi', category: 'majoneesit', estimatedTime: '12 min', isCustom: false, hasRecipe: false, recipe: null },
+        
+        // Proteiinit
+        { id: 6, name: 'Marinoitu kana', category: 'proteiinit', estimatedTime: '30 min', isCustom: false, hasRecipe: true,
+          recipe: { ingredients: '• **4** kananfileetä\n• **1/4 cup** oliiviöljyä\n• **2 rkl** sitruunamehua\n• **3** valkosipulin kynttä, murskattuna\n• **1 tl** kuivattuja yrttejä\n• **Suolaa** ja **pippuria**', 
+                   instructions: '1. **Valmista marinade**: Sekoita öljy, sitruunamehu, valkosipuli ja yrtit\n2. **Mausta kana**: Hiero kanaan suolaa ja pippuria\n3. **Marinoi**: Laita kana marinادiin 2-4 tunniksi\n4. **Huoneenlämpö**: Anna tulla huoneenlämpöön ennen kypsennystä' }},
+        { id: 7, name: 'Lihapullat', category: 'proteiinit', estimatedTime: '45 min', isCustom: false, hasRecipe: true,
+          recipe: { ingredients: '• **500g** jauhelihaa\n• **1** sipuli, hienoksi hakattuna\n• **1** muna\n• **1/2 cup** korppujauhoja\n• **Suolaa**, **pippuria**, **mausteet**', 
+                   instructions: '1. **Sekoita**: Yhdistä kaikki ainekset kulhossa\n2. **Muotoile**: Tee tasakokoisia palloja\n3. **Kypsennä**: Paista pannulla tai uunissa\n4. **Valmista**: Kypsyys 65°C sisälämpötila' }},
+        
+        // Kasvikset
+        { id: 8, name: 'Tuoreet tomaatit (leikattu)', category: 'kasvikset', estimatedTime: '15 min', isCustom: false, hasRecipe: false, recipe: null },
+        { id: 9, name: 'Kevätsipuli', category: 'kasvikset', estimatedTime: '10 min', isCustom: false, hasRecipe: false, recipe: null },
+        
+        // Marinointi & pikkelöinti
+        { id: 10, name: 'Marinoitu punasipuli', category: 'marinointi', estimatedTime: '20 min', isCustom: false, hasRecipe: true,
+          recipe: { ingredients: '• **2** punasipulia, ohuksi viipaloiduna\n• **1/2 cup** valkoviinietikkaa\n• **2 rkl** sokeria\n• **1 tl** suolaa\n• **1** laakerinlehti', 
+                   instructions: '1. **Liuota**: Sekoita etikka, sokeri ja suola\n2. **Sipulit**: Laita viipaloidut sipulit kulhoon\n3. **Kaada liuos**: Kaada kuuma liuos sipulien päälle\n4. **Anna marinोoitua**: Vähintään 30 minuuttia ennen käyttöä' }},
+        { id: 11, name: 'Pikkelöity punasipuli', category: 'marinointi', estimatedTime: '25 min', isCustom: false, hasRecipe: false, recipe: null },
+        { id: 12, name: 'Pikkelöity tomaatti', category: 'marinointi', estimatedTime: '20 min', isCustom: false, hasRecipe: false, recipe: null },
+        { id: 13, name: 'Pikkelöity kurkku', category: 'marinointi', estimatedTime: '20 min', isCustom: false, hasRecipe: false, recipe: null },
+        { id: 14, name: 'Paholaisen hillo', category: 'marinointi', estimatedTime: '30 min', isCustom: false, hasRecipe: false, recipe: null },
+        { id: 15, name: 'Hapan omena -hillo', category: 'marinointi', estimatedTime: '35 min', isCustom: false, hasRecipe: false, recipe: null },
+        { id: 16, name: 'Marinoitu punakaali', category: 'marinointi', estimatedTime: '25 min', isCustom: false, hasRecipe: false, recipe: null },
+        
+        // Kastikkeet
+        { id: 17, name: 'Konjakki-sinappi', category: 'kastikkeet', estimatedTime: '15 min', isCustom: false, hasRecipe: true,
+          recipe: { ingredients: '• **1/2 cup** dijon-sinappia\n• **3 rkl** konjakkia\n• **1 rkl** hunajaa\n• **1 tl** valkosipulijauhetta', 
+                   instructions: '1. **Sekoita**: Yhdistä sinappi ja konjakki\n2. **Makeutus**: Lisää hunaja ja valkosipulijauhe\n3. **Sekoita hyvin**: Varmista tasainen sekoitus\n4. **Anna vetäytyä**: Säilytä jääkaapissa käyttöön asti' }},
+        { id: 18, name: 'BBQ-hunaja-sinappi', category: 'kastikkeet', estimatedTime: '12 min', isCustom: false, hasRecipe: false, recipe: null },
+        
+        // Muut
+        { id: 19, name: 'Täytä kylmävitriini', category: 'muut', estimatedTime: '20 min', isCustom: false, hasRecipe: false, recipe: null },
+        { id: 20, name: 'Vaihda öljy', category: 'muut', estimatedTime: '15 min', isCustom: false, hasRecipe: false, recipe: null },
+        { id: 21, name: 'Asiakasjuomakaappi kuntoon', category: 'muut', estimatedTime: '25 min', isCustom: false, hasRecipe: false, recipe: null },
+        { id: 22, name: 'Alkoholijuomakaappi kuntoon', category: 'muut', estimatedTime: '20 min', isCustom: false, hasRecipe: false, recipe: null },
+        { id: 23, name: 'Keitä smash-perunat', category: 'muut', estimatedTime: '45 min', isCustom: false, hasRecipe: true,
+          recipe: { ingredients: '• **1kg** pieniä perunoita\n• **Suolaa** keitinveteen\n• **Oliiviöljyä**\n• **Rosmariinia**\n• **Merisuolaa**\n• **Mustapippuria**', 
+                   instructions: '1. **Keitä**: Keitä perunat kuoressa suolavedessä kypsiksi\n2. **Valuta**: Anna valua ja jäähtyä hieman\n3. **Smash**: Litistä perunat haarukalla kevyesti\n4. **Paista**: Paista uunissa 200°C öljyssä ja mausteissa kultaisiksi' }}
       ];
       
       setPrepItems(() => defaultPreps);
@@ -323,7 +351,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
     const customPrep: PrepItem = {
       id: Date.now(),
       name: newPrepName.trim(),
-      category: selectedCategory === 'all' ? 'vegetables' : selectedCategory,
+      category: selectedCategory === 'all' ? 'majoneesit' : selectedCategory,
       estimatedTime: '20 min',
       isCustom: true,
       hasRecipe: showRecipeForm,
@@ -338,6 +366,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
     setShowAddCustom(false);
     setShowRecipeForm(false);
     setRecipeData({ ingredients: '', instructions: '' });
+    setSelectedCategory('majoneesit');
     
     // Auto-select the new custom prep
     togglePrepSelection(customPrep);
@@ -1096,7 +1125,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
                       <select
-                        value={selectedCategory === 'all' ? 'vegetables' : selectedCategory}
+                        value={selectedCategory === 'all' ? 'majoneesit' : selectedCategory}
                         onChange={(e) => setSelectedCategory(e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                       >
@@ -1256,6 +1285,8 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
                         setNewPrepName('');
                         setShowRecipeForm(false);
                         setRecipeData({ ingredients: '', instructions: '' });
+                        setSelectedCategory('majoneesit');
+                        setSelectedCategory('majoneesit');
                       }}
                       className="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors"
                     >
