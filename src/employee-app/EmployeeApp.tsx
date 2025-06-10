@@ -16,7 +16,7 @@ import { handleAdminLogin } from './adminFunctions';
 
 // Types and Constants
 import { getFormattedDate } from './utils';
-import type { ActiveTab, Employee, Task, DailyDataMap, TaskAssignments, StoreItem } from './types';
+import type { ActiveTab, Employee, Task, DailyDataMap, TaskAssignments, StoreItem, PrepItem, ScheduledPrep, PrepSelections } from './types';
 
 const EmployeeApp = () => {
   // Firebase and Auth hooks
@@ -149,6 +149,22 @@ const EmployeeApp = () => {
     setStoreItems(updater);
     handleDataChange();
   }, [setStoreItems, handleDataChange]);
+
+  // Enhanced prep list setters that trigger save
+  const setPrepItemsWithSave = useCallback((updater: (prev: PrepItem[]) => PrepItem[]) => {
+    setPrepItems(updater);
+    handleDataChange();
+  }, [setPrepItems, handleDataChange]);
+
+  const setScheduledPrepsWithSave = useCallback((updater: (prev: ScheduledPrep[]) => ScheduledPrep[]) => {
+    setScheduledPreps(updater);
+    handleDataChange();
+  }, [setScheduledPreps, handleDataChange]);
+
+  const setPrepSelectionsWithSave = useCallback((updater: (prev: PrepSelections) => PrepSelections) => {
+    setPrepSelections(updater);
+    handleDataChange();
+  }, [setPrepSelections, handleDataChange]);
 
   const currentEmployee = employees.find(emp => emp.id === currentUser.id);
 
@@ -377,9 +393,9 @@ const EmployeeApp = () => {
             prepItems={prepItems}
             scheduledPreps={scheduledPreps}
             prepSelections={prepSelections}
-            setPrepItems={setPrepItems}
-            setScheduledPreps={setScheduledPreps}
-            setPrepSelections={setPrepSelections}
+            setPrepItems={setPrepItemsWithSave}
+            setScheduledPreps={setScheduledPrepsWithSave}
+            setPrepSelections={setPrepSelectionsWithSave}
             quickSave={quickSave}
           />
         )}
