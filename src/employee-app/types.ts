@@ -1,4 +1,4 @@
-// types.ts
+// types.ts - Complete with prep support
 export interface Employee {
   id: number;
   name: string;
@@ -39,42 +39,7 @@ export interface Purchase {
   status: 'pending' | 'approved' | 'redeemed';
 }
 
-export interface DailyData {
-  completedTasks: Array<{
-    taskId: number;
-    employeeId: number;
-    completedAt: string;
-    taskName: string;
-    date: string;
-    pointsEarned: number; // New: points earned from this task
-  }>;
-  employeeMoods: Array<{
-    employeeId: number;
-    mood: number;
-    updatedAt: string;
-  }>;
-  purchases: Array<Purchase>; // New: daily purchases
-  totalTasks: number;
-  completionRate: number;
-  totalPointsEarned: number; // New: total points earned today
-  totalPointsSpent: number; // New: total points spent today
-}
-
-export interface DailyDataMap {
-  [date: string]: DailyData;
-}
-
-export interface TaskAssignments {
-  [taskId: number]: number;
-}
-
-export interface CurrentUser {
-  id: number;
-  name: string;
-}
-
-export type Priority = 'low' | 'medium' | 'high';
-export type ConnectionStatus = 'connecting' | 'connected' | 'error';
+// PREP TYPES
 export interface Recipe {
   ingredients: string;
   instructions: string;
@@ -115,4 +80,40 @@ export interface PrepSelections {
   };
 }
 
+export interface DailyData {
+  completedTasks: Array<{
+    taskId: number;
+    employeeId: number;
+    completedAt: string;
+    taskName: string;
+    date: string;
+    pointsEarned: number; // New: points earned from this task
+  }>;
+  employeeMoods: Array<{
+    employeeId: number;
+    mood: number;
+    updatedAt: string;
+  }>;
+  purchases: Array<Purchase>; // New: daily purchases
+  totalTasks: number;
+  completionRate: number;
+  totalPointsEarned: number; // New: total points earned today
+  totalPointsSpent: number; // New: total points spent today
+}
+
+export interface DailyDataMap {
+  [date: string]: DailyData;
+}
+
+export interface TaskAssignments {
+  [taskId: number]: number;
+}
+
+export interface CurrentUser {
+  id: number;
+  name: string;
+}
+
+export type Priority = 'low' | 'medium' | 'high';
+export type ConnectionStatus = 'connecting' | 'connected' | 'error';
 export type ActiveTab = 'mood' | 'tasks' | 'store' | 'admin' | 'reports' | 'preps';
