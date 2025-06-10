@@ -1,4 +1,4 @@
-// types.ts - Complete with prep support
+// types.ts
 export interface Employee {
   id: number;
   name: string;
@@ -39,47 +39,6 @@ export interface Purchase {
   status: 'pending' | 'approved' | 'redeemed';
 }
 
-// PREP TYPES
-export interface Recipe {
-  ingredients: string;
-  instructions: string;
-}
-
-export interface PrepItem {
-  id: number;
-  name: string;
-  category: string;
-  estimatedTime: string;
-  isCustom: boolean;
-  hasRecipe: boolean;
-  recipe: Recipe | null;
-}
-
-export interface ScheduledPrep {
-  id: number;
-  prepId: number;
-  name: string;
-  category: string;
-  estimatedTime: string;
-  isCustom: boolean;
-  hasRecipe: boolean;
-  recipe: Recipe | null;
-  scheduledDate: string;
-  priority: string;
-  timeSlot: string;
-  completed: boolean;
-  assignedTo: number | null;
-  notes: string;
-}
-
-export interface PrepSelections {
-  [key: string]: {
-    priority: string;
-    timeSlot: string;
-    selected: boolean;
-  };
-}
-
 export interface DailyData {
   completedTasks: Array<{
     taskId: number;
@@ -114,6 +73,47 @@ export interface CurrentUser {
   name: string;
 }
 
+// New Prep List Types
+export interface Recipe {
+  ingredients: string;
+  instructions: string;
+}
+
+export interface PrepItem {
+  id: number;
+  name: string;
+  category: string;
+  estimatedTime: string;
+  isCustom: boolean;
+  hasRecipe: boolean;
+  recipe: Recipe | null;
+}
+
+export interface ScheduledPrep {
+  id: number;
+  prepId: number;
+  name: string;
+  category: string;
+  estimatedTime: string;
+  isCustom: boolean;
+  hasRecipe: boolean;
+  recipe: Recipe | null;
+  scheduledDate: string;
+  priority: Priority;
+  timeSlot: string;
+  completed: boolean;
+  assignedTo: number | null;
+  notes: string;
+}
+
+export interface PrepSelections {
+  [key: string]: {
+    priority: Priority;
+    timeSlot: string;
+    selected: boolean;
+  };
+}
+
 export type Priority = 'low' | 'medium' | 'high';
 export type ConnectionStatus = 'connecting' | 'connected' | 'error';
-export type ActiveTab = 'mood' | 'tasks' | 'store' | 'admin' | 'reports' | 'preps';
+export type ActiveTab = 'mood' | 'tasks' | 'store' | 'admin' | 'reports' | 'prep';
