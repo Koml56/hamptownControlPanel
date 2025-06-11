@@ -2,7 +2,7 @@
   "name": "WorkVibe - Employee Management",
   "short_name": "WorkVibe",
   "description": "Track mood, complete tasks, manage prep lists and earn points",
-  "start_url": "/",
+  "start_url": "/hamptownControlPanel/",
   "display": "standalone",
   "background_color": "#3B82F6",
   "theme_color": "#3B82F6",
