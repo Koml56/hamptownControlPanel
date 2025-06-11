@@ -2,7 +2,7 @@
   "name": "employee-mood-app",
   "version": "1.0.0",
   "private": true,
-  "homepage": "https://Koml56.github.io/",
+  "homepage": "https://koml56.github.io/hamptownControlPanel/",
   "dependencies": {
     "@types/node": "^16.18.0",
     "@types/react": "^18.2.0",
