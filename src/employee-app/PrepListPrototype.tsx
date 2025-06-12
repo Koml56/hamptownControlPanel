@@ -72,6 +72,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
   const [showTimeOptions, setShowTimeOptions] = useState<number | string | null>(null);
   const [assignmentStep, setAssignmentStep] = useState<Record<number, string | null>>({});
   const [showSuggestedPreps, setShowSuggestedPreps] = useState(true);
+  const [movedPrepsNotification, setMovedPrepsNotification] = useState<number>(0);
 
   const categories: Category[] = [
     { id: 'all', name: 'All Items', icon: '🍽️' },
@@ -155,6 +156,88 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
     }
   }, [prepItems.length, setPrepItems, quickSave]);
 
+  // Check and move incomplete preps to tomorrow (run once per day)
+  useEffect(() => {
+    const moveIncompletePreps = () => {
+      const today = new Date();
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const todayStr = getDateString(today);
+      const yesterdayStr = getDateString(yesterday);
+      
+      // Find incomplete preps from yesterday
+      const incompletePreps = scheduledPreps.filter(prep => 
+        prep.scheduledDate === yesterdayStr && !prep.completed
+      );
+      
+      if (incompletePreps.length > 0) {
+        console.log(`🔄 Moving ${incompletePreps.length} incomplete preps from ${yesterdayStr} to ${todayStr}`);
+        
+        // Show notification
+        setMovedPrepsNotification(incompletePreps.length);
+        setTimeout(() => setMovedPrepsNotification(0), 8000); // Hide after 8 seconds
+        
+        // Remove from yesterday and add to today
+        const movedPreps = incompletePreps.map(prep => ({
+          ...prep,
+          id: Date.now() + Math.random(), // New ID to avoid conflicts
+          scheduledDate: todayStr
+        }));
+        
+        setScheduledPreps(prev => [
+          ...prev.filter(prep => 
+            !(prep.scheduledDate === yesterdayStr && !prep.completed)
+          ),
+          ...movedPreps
+        ]);
+        
+        // Update prep selections for today
+        const newSelections: PrepSelections = {};
+        incompletePreps.forEach(prep => {
+          const selectionKey = `${todayStr}-${prep.prepId}`;
+          newSelections[selectionKey] = {
+            priority: prep.priority,
+            timeSlot: prep.timeSlot,
+            selected: true
+          };
+        });
+        
+        setPrepSelections(prev => ({ ...prev, ...newSelections }));
+        
+        // Save immediately
+        quickSave('scheduledPreps', [
+          ...scheduledPreps.filter(prep => 
+            !(prep.scheduledDate === yesterdayStr && !prep.completed)
+          ),
+          ...movedPreps
+        ]);
+      }
+    };
+    
+    // Check on app load and once per day
+    const lastMoveCheck = localStorage.getItem('lastPrepMoveCheck');
+    const todayStr = getDateString(new Date());
+    
+    if (lastMoveCheck !== todayStr) {
+      moveIncompletePreps();
+      localStorage.setItem('lastPrepMoveCheck', todayStr);
+    }
+    
+    // Set up daily check at midnight
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 1, 0, 0); // 12:01 AM
+    
+    const timeUntilMidnight = tomorrow.getTime() - now.getTime();
+    const midnightTimer = setTimeout(() => {
+      moveIncompletePreps();
+      localStorage.setItem('lastPrepMoveCheck', getDateString(new Date()));
+    }, timeUntilMidnight);
+    
+    return () => clearTimeout(midnightTimer);
+  }, [scheduledPreps, setPrepSelections, setScheduledPreps, quickSave]);
+
   // Utility functions
   const getDateString = (date: Date): string => {
     // Use local date to avoid timezone issues
@@ -196,7 +279,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
     return prepSelections[selectionKey] || { priority: 'medium', timeSlot: '', selected: false };
   };
 
-  // Update prep selection with smart workflow
+  // Update prep selection with smart workflow - FIXED to prevent duplicates
   const updatePrepSelection = (
     prep: PrepItem, 
     field: 'priority' | 'timeSlot', 
@@ -204,6 +287,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
     context: string = 'main'
   ): void => {
     const selectionKey = `${getDateString(selectedDate)}-${prep.id}`;
+    const currentSelection = prepSelections[selectionKey] || { priority: 'medium' as Priority, timeSlot: '', selected: false };
     
     if (field === 'priority') {
       // Step 1: Set priority and immediately move to time slot selection
@@ -212,7 +296,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
         [selectionKey]: { 
           ...prev[selectionKey], 
           priority: value as Priority,
-          selected: false // Don't auto-select yet
+          selected: currentSelection.selected // Keep current selection state
         }
       }));
       
@@ -226,21 +310,35 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
       
     } else if (field === 'timeSlot') {
       // Step 2: Set time slot, auto-check, and complete workflow
-      const currentSelection = prepSelections[selectionKey] || { priority: 'medium' as Priority };
+      const updatedSelection = {
+        priority: currentSelection.priority,
+        timeSlot: value,
+        selected: true // Auto-select when time is chosen
+      };
       
       setPrepSelections(prev => ({
         ...prev,
-        [selectionKey]: { 
-          ...prev[selectionKey], 
-          timeSlot: value,
-          selected: true // Auto-select when time is chosen
-        }
+        [selectionKey]: updatedSelection
       }));
       
-      // Auto-add to scheduled preps
-      if (!isPrepSelected(prep)) {
+      // Check if prep is already scheduled to prevent duplicates
+      const existingScheduledPrep = scheduledPreps.find(p => 
+        p.prepId === prep.id && p.scheduledDate === getDateString(selectedDate)
+      );
+      
+      if (existingScheduledPrep) {
+        // Update existing scheduled prep
+        console.log(`🔄 Updating existing prep: ${prep.name} with new priority/time`);
+        setScheduledPreps(prev => prev.map(p => 
+          p.prepId === prep.id && p.scheduledDate === getDateString(selectedDate)
+            ? { ...p, priority: updatedSelection.priority, timeSlot: value }
+            : p
+        ));
+      } else {
+        // Create new scheduled prep only if it doesn't exist
+        console.log(`➕ Creating new scheduled prep: ${prep.name}`);
         const newScheduledPrep: ScheduledPrep = {
-          id: Date.now(),
+          id: Date.now() + Math.random(), // Ensure unique ID
           prepId: prep.id,
           name: prep.name,
           category: prep.category,
@@ -249,20 +347,13 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
           hasRecipe: prep.hasRecipe,
           recipe: prep.recipe,
           scheduledDate: getDateString(selectedDate),
-          priority: currentSelection.priority,
+          priority: updatedSelection.priority,
           timeSlot: value,
           completed: false,
           assignedTo: null,
           notes: ''
         };
         setScheduledPreps(prev => [...prev, newScheduledPrep]);
-      } else {
-        // Update existing scheduled prep
-        setScheduledPreps(prev => prev.map(p => 
-          p.prepId === prep.id && p.scheduledDate === getDateString(selectedDate)
-            ? { ...p, priority: currentSelection.priority, timeSlot: value }
-            : p
-        ));
       }
       
       // Complete the workflow - close all dropdowns
@@ -303,7 +394,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
     setShowRecipeModal(true);
   };
 
-  // Toggle prep selection
+  // Toggle prep selection - FIXED to prevent duplicates
   const togglePrepSelection = (prep: PrepItem): void => {
     const selectionKey = `${getDateString(selectedDate)}-${prep.id}`;
     const isSelected = prepSelections[selectionKey]?.selected;
@@ -317,35 +408,55 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
       });
       
       // Remove from scheduled preps
+      console.log(`➖ Removing prep from schedule: ${prep.name}`);
       setScheduledPreps(prev => prev.filter(p => 
         !(p.prepId === prep.id && p.scheduledDate === getDateString(selectedDate))
       ));
     } else {
-      // Add selection with defaults
-      const newSelection = { priority: 'medium' as Priority, timeSlot: '', selected: true };
-      setPrepSelections(prev => ({
-        ...prev,
-        [selectionKey]: newSelection
-      }));
+      // Check if prep is already scheduled to prevent duplicates
+      const existingScheduledPrep = scheduledPreps.find(p => 
+        p.prepId === prep.id && p.scheduledDate === getDateString(selectedDate)
+      );
       
-      // Add to scheduled preps
-      const newScheduledPrep: ScheduledPrep = {
-        id: Date.now(),
-        prepId: prep.id,
-        name: prep.name,
-        category: prep.category,
-        estimatedTime: prep.estimatedTime,
-        isCustom: prep.isCustom,
-        hasRecipe: prep.hasRecipe,
-        recipe: prep.recipe,
-        scheduledDate: getDateString(selectedDate),
-        priority: 'medium',
-        timeSlot: '',
-        completed: false,
-        assignedTo: null,
-        notes: ''
-      };
-      setScheduledPreps(prev => [...prev, newScheduledPrep]);
+      if (existingScheduledPrep) {
+        // Just update the selection state, don't create duplicate
+        console.log(`🔄 Prep already scheduled, just updating selection: ${prep.name}`);
+        setPrepSelections(prev => ({
+          ...prev,
+          [selectionKey]: { 
+            priority: existingScheduledPrep.priority, 
+            timeSlot: existingScheduledPrep.timeSlot, 
+            selected: true 
+          }
+        }));
+      } else {
+        // Add selection with defaults and create new scheduled prep
+        console.log(`➕ Adding new prep to schedule: ${prep.name}`);
+        const newSelection = { priority: 'medium' as Priority, timeSlot: '', selected: true };
+        setPrepSelections(prev => ({
+          ...prev,
+          [selectionKey]: newSelection
+        }));
+        
+        // Add to scheduled preps
+        const newScheduledPrep: ScheduledPrep = {
+          id: Date.now() + Math.random(), // Ensure unique ID
+          prepId: prep.id,
+          name: prep.name,
+          category: prep.category,
+          estimatedTime: prep.estimatedTime,
+          isCustom: prep.isCustom,
+          hasRecipe: prep.hasRecipe,
+          recipe: prep.recipe,
+          scheduledDate: getDateString(selectedDate),
+          priority: 'medium',
+          timeSlot: '',
+          completed: false,
+          assignedTo: null,
+          notes: ''
+        };
+        setScheduledPreps(prev => [...prev, newScheduledPrep]);
+      }
     }
   };
 
@@ -756,6 +867,38 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Moved Preps Notification */}
+      {movedPrepsNotification > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <svg className="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3 flex-1">
+              <h3 className="text-sm font-medium text-blue-800">
+                📅 Prep items moved to today
+              </h3>
+              <div className="mt-1 text-sm text-blue-600">
+                {movedPrepsNotification} incomplete prep{movedPrepsNotification > 1 ? 's' : ''} from yesterday {movedPrepsNotification > 1 ? 'have' : 'has'} been automatically moved to today's schedule.
+              </div>
+            </div>
+            <div className="flex-shrink-0">
+              <button
+                onClick={() => setMovedPrepsNotification(0)}
+                className="text-blue-400 hover:text-blue-600"
+              >
+                <span className="sr-only">Close</span>
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Today's Preps View */}
       {activeView === 'today' && (
