@@ -118,3 +118,17 @@ export interface CurrentUser {
 export type Priority = 'low' | 'medium' | 'high';
 export type ConnectionStatus = 'connecting' | 'connected' | 'error';
 export type ActiveTab = 'mood' | 'tasks' | 'store' | 'admin' | 'reports' | 'prep';
+
+// Admin Panel Props Interface
+export interface AdminPanelProps {
+  employees: Employee[];
+  tasks: Task[];
+  customRoles: string[];
+  storeItems: StoreItem[];
+  prepItems: PrepItem[];
+  setEmployees: (updater: (prev: Employee[]) => Employee[]) => void;
+  setTasks: (updater: (prev: Task[]) => Task[]) => void;
+  setCustomRoles: (updater: (prev: string[]) => string[]) => void;
+  setStoreItems: (updater: (prev: StoreItem[]) => StoreItem[]) => void;
+  setPrepItems: (updater: (prev: PrepItem[]) => PrepItem[]) => void;
+}
