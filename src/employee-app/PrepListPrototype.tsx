@@ -1557,11 +1557,11 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
                     </div>
                     
                     {/* Expanded Content */}
-                    <div className={`transition-all duration-500 ease-in-out ${
+                    <div className={`transition-all duration-500 ease-in-out overflow-hidden ${
                       isExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
                     }`}>
                       {isExpanded && (
-                        <div className="p-4 space-y-3">
+                        <div className="p-4 space-y-3 overflow-y-auto max-h-80">
                           {datePreps.length === 0 ? (
                             <div className="text-center py-8">
                               <div className="text-gray-400 text-sm">No prep tasks scheduled</div>
