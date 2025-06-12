@@ -291,14 +291,19 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
     
     if (field === 'priority') {
       // Step 1: Set priority and immediately move to time slot selection
-      setPrepSelections(prev => ({
-        ...prev,
+      const updatedSelections = {
+        ...prepSelections,
         [selectionKey]: { 
-          ...prev[selectionKey], 
+          ...prepSelections[selectionKey], 
           priority: value as Priority,
           selected: currentSelection.selected // Keep current selection state
         }
-      }));
+      };
+      
+      setPrepSelections(updatedSelections);
+      
+      // Save selections immediately
+      quickSave('prepSelections', updatedSelections);
       
       // Move to time slot selection step and immediately open time dropdown with context
       setAssignmentStep(prev => ({ ...prev, [prep.id]: 'timeSlot' }));
@@ -316,24 +321,29 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
         selected: true // Auto-select when time is chosen
       };
       
-      setPrepSelections(prev => ({
-        ...prev,
+      const updatedSelections = {
+        ...prepSelections,
         [selectionKey]: updatedSelection
-      }));
+      };
+      
+      setPrepSelections(updatedSelections);
       
       // Check if prep is already scheduled to prevent duplicates
       const existingScheduledPrep = scheduledPreps.find(p => 
         p.prepId === prep.id && p.scheduledDate === getDateString(selectedDate)
       );
       
+      let updatedScheduledPreps;
+      
       if (existingScheduledPrep) {
         // Update existing scheduled prep
         console.log(`🔄 Updating existing prep: ${prep.name} with new priority/time`);
-        setScheduledPreps(prev => prev.map(p => 
+        updatedScheduledPreps = scheduledPreps.map(p => 
           p.prepId === prep.id && p.scheduledDate === getDateString(selectedDate)
             ? { ...p, priority: updatedSelection.priority, timeSlot: value }
             : p
-        ));
+        );
+        setScheduledPreps(updatedScheduledPreps);
       } else {
         // Create new scheduled prep only if it doesn't exist
         console.log(`➕ Creating new scheduled prep: ${prep.name}`);
@@ -353,8 +363,20 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
           assignedTo: null,
           notes: ''
         };
-        setScheduledPreps(prev => [...prev, newScheduledPrep]);
+        updatedScheduledPreps = [...scheduledPreps, newScheduledPrep];
+        setScheduledPreps(updatedScheduledPreps);
       }
+      
+      // Save both selections and scheduled preps immediately
+      console.log('💾 Saving prep selection changes to Firebase...');
+      Promise.all([
+        quickSave('prepSelections', updatedSelections),
+        quickSave('scheduledPreps', updatedScheduledPreps)
+      ]).then(() => {
+        console.log('✅ Prep selection changes saved successfully');
+      }).catch(error => {
+        console.error('❌ Failed to save prep selection changes:', error);
+      });
       
       // Complete the workflow - close all dropdowns
       setAssignmentStep(prev => ({ ...prev, [prep.id]: null }));
