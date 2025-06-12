@@ -1,6 +1,6 @@
 // AdminPanel.tsx
 import React, { useState } from 'react';
-import { Users, CheckSquare, Plus, Trash2, Edit3, Save, Settings, UserPlus, Star, ShoppingBag, Package } from 'lucide-react';
+import { Users, CheckSquare, Plus, Trash2, Edit3, Save, Settings, UserPlus, Star, ShoppingBag, Package, ChefHat, Clock, Utensils } from 'lucide-react';
 import { getMoodColor } from './utils';
 import { 
   addEmployee, 
@@ -12,37 +12,31 @@ import {
   addCustomRole,
   removeCustomRole
 } from './adminFunctions';
-import type { Employee, Task, Priority, StoreItem } from './types';
-
-interface AdminPanelProps {
-  employees: Employee[];
-  tasks: Task[];
-  customRoles: string[];
-  storeItems: StoreItem[];
-  setEmployees: (updater: (prev: Employee[]) => Employee[]) => void;
-  setTasks: (updater: (prev: Task[]) => Task[]) => void;
-  setCustomRoles: (updater: (prev: string[]) => string[]) => void;
-  setStoreItems: (updater: (prev: StoreItem[]) => StoreItem[]) => void;
-}
+import type { Employee, Task, Priority, StoreItem, PrepItem, Recipe, AdminPanelProps } from './types';
 
 const AdminPanel: React.FC<AdminPanelProps> = ({
   employees,
   tasks,
   customRoles,
   storeItems,
+  prepItems,
   setEmployees,
   setTasks,
   setCustomRoles,
-  setStoreItems
+  setStoreItems,
+  setPrepItems
 }) => {
   const [showRoleManagement, setShowRoleManagement] = useState(false);
   const [showStoreManagement, setShowStoreManagement] = useState(false);
+  const [showPrepManagement, setShowPrepManagement] = useState(false);
   const [newEmployeeName, setNewEmployeeName] = useState('');
   const [newEmployeeRole, setNewEmployeeRole] = useState('Cleaner');
   const [newRoleName, setNewRoleName] = useState('');
   const [editingEmployee, setEditingEmployee] = useState<number | null>(null);
   const [editingTask, setEditingTask] = useState<number | null>(null);
-  const [editingStoreItem, setEditingStoreItem] = useState<number | null>(null);
+  const [editingStoreItem, setEditingStoreItem] = useState<number | string | null>(null);
+  const [editingPrepItem, setEditingPrepItem] = useState<number | string | null>(null);
+  const [showRecipeEditor, setShowRecipeEditor] = useState<number | string | null>(null);
   
   // Store item form state
   const [newItemName, setNewItemName] = useState('');
@@ -50,6 +44,23 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const [newItemCost, setNewItemCost] = useState('');
   const [newItemCategory, setNewItemCategory] = useState<'food' | 'break' | 'reward' | 'social'>('food');
   const [newItemIcon, setNewItemIcon] = useState('🎁');
+
+  // Prep item form state
+  const [newPrepName, setNewPrepName] = useState('');
+  const [newPrepCategory, setNewPrepCategory] = useState('majoneesit');
+  const [newPrepTime, setNewPrepTime] = useState('');
+  const [newPrepFrequency, setNewPrepFrequency] = useState('');
+  const [newPrepHasRecipe, setNewPrepHasRecipe] = useState(false);
+  const [newPrepRecipe, setNewPrepRecipe] = useState<Recipe>({ ingredients: '', instructions: '' });
+
+  const prepCategories = [
+    { id: 'majoneesit', name: 'Majoneesit', icon: '🥄' },
+    { id: 'proteiinit', name: 'Proteiinit', icon: '🥩' },
+    { id: 'kasvikset', name: 'Kasvikset', icon: '🥗' },
+    { id: 'marinointi', name: 'Marinointi & pikkelöinti', icon: '🥒' },
+    { id: 'kastikkeet', name: 'Kastikkeet', icon: '🧂' },
+    { id: 'muut', name: 'Muut', icon: '🔧' }
+  ];
 
   const handleAddEmployee = () => {
     addEmployee(
@@ -101,6 +112,85 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     if (window.confirm('Are you sure you want to remove this store item?')) {
       setStoreItems(prev => prev.filter(item => item.id !== id));
     }
+  };
+
+  // Prep management functions
+  const handleAddPrepItem = () => {
+    if (newPrepName.trim() && newPrepTime.trim() && newPrepFrequency.trim()) {
+      const newItem: PrepItem = {
+        id: Math.max(...prepItems.map(item => item.id), 0) + 1,
+        name: newPrepName.trim(),
+        category: newPrepCategory,
+        estimatedTime: newPrepTime.trim(),
+        isCustom: true,
+        hasRecipe: newPrepHasRecipe,
+        frequency: parseInt(newPrepFrequency) || 1,
+        recipe: newPrepHasRecipe ? newPrepRecipe : null
+      };
+      setPrepItems(prev => [...prev, newItem]);
+      setNewPrepName('');
+      setNewPrepCategory('majoneesit');
+      setNewPrepTime('');
+      setNewPrepFrequency('');
+      setNewPrepHasRecipe(false);
+      setNewPrepRecipe({ ingredients: '', instructions: '' });
+    }
+  };
+
+  const handleUpdatePrepItem = (id: number, field: keyof PrepItem, value: any) => {
+    setPrepItems(prev => prev.map(item => 
+      item.id === id ? { ...item, [field]: value } : item
+    ));
+  };
+
+  const handleUpdatePrepRecipe = (id: number, field: keyof Recipe, value: string) => {
+    setPrepItems(prev => prev.map(item => 
+      item.id === id ? { 
+        ...item, 
+        recipe: item.recipe ? { ...item.recipe, [field]: value } : { ingredients: '', instructions: '', [field]: value }
+      } : item
+    ));
+  };
+
+  const handleRemovePrepItem = (id: number) => {
+    if (window.confirm('Are you sure you want to remove this prep item?')) {
+      setPrepItems(prev => prev.filter(item => item.id !== id));
+    }
+  };
+
+  const addFormattingToPrepRecipe = (id: number, field: keyof Recipe, format: string) => {
+    const item = prepItems.find(p => p.id === id);
+    if (!item?.recipe) return;
+
+    const textarea = document.getElementById(`${field}-${id}`) as HTMLTextAreaElement;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = item.recipe[field];
+    const before = text.substring(0, start);
+    const selection = text.substring(start, end);
+    const after = text.substring(end);
+
+    let newText = '';
+    switch (format) {
+      case 'bold':
+        newText = before + '**' + selection + '**' + after;
+        break;
+      case 'italic':
+        newText = before + '*' + selection + '*' + after;
+        break;
+      case 'bullet':
+        newText = before + '\n• ' + after;
+        break;
+      case 'number':
+        newText = before + '\n1. ' + after;
+        break;
+      default:
+        return;
+    }
+
+    handleUpdatePrepRecipe(id, field, newText);
   };
 
   return (
@@ -403,6 +493,339 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
               {storeItems.length === 0 && (
                 <div className="text-center py-8 text-gray-500">
                   No store items yet. Add your first item above!
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Prep List Management */}
+      <div className={`bg-white rounded-xl shadow-sm mb-6 ${showPrepManagement ? 'p-6' : 'p-2'}`}>
+        <button
+          onClick={() => setShowPrepManagement(!showPrepManagement)}
+          className={`w-full flex items-center justify-between hover:text-gray-600 ${
+            showPrepManagement 
+              ? 'text-lg font-semibold text-gray-800 mb-4' 
+              : 'text-sm font-medium text-gray-700 py-1'
+          }`}
+        >
+          <div className="flex items-center">
+            <ChefHat className={`mr-2 ${showPrepManagement ? 'w-5 h-5' : 'w-4 h-4'}`} />
+            Prep List Management
+          </div>
+          <span className={`transition-transform ${showPrepManagement ? 'text-xl rotate-180' : 'text-sm'}`}>
+            ▼
+          </span>
+        </button>
+        
+        {showPrepManagement && (
+          <>
+            {/* Add Prep Item */}
+            <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+              <h4 className="font-medium text-gray-700 mb-3">Add New Prep Item</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Prep Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g., Valkosipulimajoneesi"
+                    value={newPrepName}
+                    onChange={(e) => setNewPrepName(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                  <select
+                    value={newPrepCategory}
+                    onChange={(e) => setNewPrepCategory(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                  >
+                    {prepCategories.map(category => (
+                      <option key={category.id} value={category.id}>
+                        {category.icon} {category.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Estimated Time</label>
+                  <input
+                    type="text"
+                    placeholder="e.g., 15 min"
+                    value={newPrepTime}
+                    onChange={(e) => setNewPrepTime(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Frequency (days)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="30"
+                    placeholder="3"
+                    value={newPrepFrequency}
+                    onChange={(e) => setNewPrepFrequency(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="flex items-center space-x-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={newPrepHasRecipe}
+                      onChange={(e) => setNewPrepHasRecipe(e.target.checked)}
+                      className="rounded border-gray-300 text-green-500 focus:ring-green-500"
+                    />
+                    <span>Include Recipe</span>
+                  </label>
+                </div>
+                
+                {newPrepHasRecipe && (
+                  <div className="md:col-span-2 space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Ingredients</label>
+                      <textarea
+                        value={newPrepRecipe.ingredients}
+                        onChange={(e) => setNewPrepRecipe(prev => ({ ...prev, ingredients: e.target.value }))}
+                        placeholder="• **1 cup** majoneesi&#10;• **3-4** valkosipulin kynttä"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 h-24 font-mono text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Instructions</label>
+                      <textarea
+                        value={newPrepRecipe.instructions}
+                        onChange={(e) => setNewPrepRecipe(prev => ({ ...prev, instructions: e.target.value }))}
+                        placeholder="1. **Sekoita**: Yhdistä majoneesi ja valkosipuli&#10;2. **Mausta**: Lisää sitruunamehu"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 h-24 font-mono text-sm"
+                      />
+                    </div>
+                  </div>
+                )}
+                
+                <div className="md:col-span-2">
+                  <button
+                    onClick={handleAddPrepItem}
+                    className="w-full bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 flex items-center justify-center"
+                  >
+                    <ChefHat className="w-4 h-4 mr-2" />
+                    Add Prep Item
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Prep Items List */}
+            <div className="space-y-3">
+              <h4 className="font-medium text-gray-700">Current Prep Items ({prepItems.length})</h4>
+              {prepItems.map(item => {
+                const category = prepCategories.find(c => c.id === item.category);
+                return (
+                  <div key={item.id} className="border rounded-lg p-4 bg-white">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 grid grid-cols-1 md:grid-cols-5 gap-4">
+                        {/* Name */}
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1">Name</label>
+                          {editingPrepItem === item.id ? (
+                            <input
+                              type="text"
+                              value={item.name}
+                              onChange={(e) => handleUpdatePrepItem(item.id, 'name', e.target.value)}
+                              className="w-full px-2 py-1 border rounded text-sm"
+                            />
+                          ) : (
+                            <div className="font-medium text-gray-800 flex items-center">
+                              <span className="text-lg mr-2">{category?.icon}</span>
+                              {item.name}
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Category */}
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1">Category</label>
+                          {editingPrepItem === item.id ? (
+                            <select
+                              value={item.category}
+                              onChange={(e) => handleUpdatePrepItem(item.id, 'category', e.target.value)}
+                              className="w-full px-2 py-1 border rounded text-sm"
+                            >
+                              {prepCategories.map(cat => (
+                                <option key={cat.id} value={cat.id}>{cat.name}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span className="text-sm text-gray-600">{category?.name}</span>
+                          )}
+                        </div>
+                        
+                        {/* Time */}
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1">Time</label>
+                          {editingPrepItem === item.id ? (
+                            <input
+                              type="text"
+                              value={item.estimatedTime}
+                              onChange={(e) => handleUpdatePrepItem(item.id, 'estimatedTime', e.target.value)}
+                              className="w-full px-2 py-1 border rounded text-sm"
+                            />
+                          ) : (
+                            <div className="flex items-center text-sm text-gray-600">
+                              <Clock className="w-3 h-3 mr-1" />
+                              {item.estimatedTime}
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Frequency */}
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1">Frequency</label>
+                          {editingPrepItem === item.id ? (
+                            <input
+                              type="number"
+                              min="1"
+                              max="30"
+                              value={item.frequency}
+                              onChange={(e) => handleUpdatePrepItem(item.id, 'frequency', parseInt(e.target.value) || 1)}
+                              className="w-full px-2 py-1 border rounded text-sm"
+                            />
+                          ) : (
+                            <span className="text-sm text-gray-600">Every {item.frequency} days</span>
+                          )}
+                        </div>
+                        
+                        {/* Recipe Status */}
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1">Recipe</label>
+                          <div className="flex items-center space-x-2">
+                            <button
+                              onClick={() => handleUpdatePrepItem(item.id, 'hasRecipe', !item.hasRecipe)}
+                              className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                item.hasRecipe 
+                                  ? 'bg-green-100 text-green-700' 
+                                  : 'bg-gray-100 text-gray-700'
+                              }`}
+                            >
+                              {item.hasRecipe ? '📖 Has Recipe' : 'No Recipe'}
+                            </button>
+                            {item.hasRecipe && (
+                              <button
+                                onClick={() => setShowRecipeEditor(showRecipeEditor === item.id ? null : item.id)}
+                                className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs hover:bg-blue-200"
+                              >
+                                <Utensils className="w-3 h-3 inline mr-1" />
+                                Edit
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Actions */}
+                      <div className="flex gap-2 ml-4">
+                        {editingPrepItem === item.id ? (
+                          <button
+                            onClick={() => setEditingPrepItem(null)}
+                            className="p-1 text-green-600 hover:text-green-800"
+                          >
+                            <Save className="w-4 h-4" />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => setEditingPrepItem(item.id)}
+                            className="p-1 text-blue-600 hover:text-blue-800"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleRemovePrepItem(item.id)}
+                          className="p-1 text-red-600 hover:text-red-800"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                    
+                    {/* Recipe Editor */}
+                    {showRecipeEditor === item.id && item.hasRecipe && (
+                      <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                        <h5 className="font-medium text-gray-700 mb-3">Recipe Editor</h5>
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Ingredients</label>
+                            <div className="mb-2 flex space-x-2">
+                              <button
+                                onClick={() => addFormattingToPrepRecipe(item.id, 'ingredients', 'bold')}
+                                className="px-2 py-1 bg-gray-100 rounded text-sm font-bold hover:bg-gray-200"
+                              >
+                                B
+                              </button>
+                              <button
+                                onClick={() => addFormattingToPrepRecipe(item.id, 'ingredients', 'italic')}
+                                className="px-2 py-1 bg-gray-100 rounded text-sm italic hover:bg-gray-200"
+                              >
+                                I
+                              </button>
+                              <button
+                                onClick={() => addFormattingToPrepRecipe(item.id, 'ingredients', 'bullet')}
+                                className="px-2 py-1 bg-gray-100 rounded text-sm hover:bg-gray-200"
+                              >
+                                •
+                              </button>
+                            </div>
+                            <textarea
+                              id={`ingredients-${item.id}`}
+                              value={item.recipe?.ingredients || ''}
+                              onChange={(e) => handleUpdatePrepRecipe(item.id, 'ingredients', e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 h-24 font-mono text-sm"
+                              placeholder="• **1 cup** majoneesi&#10;• **3-4** valkosipulin kynttä"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Instructions</label>
+                            <div className="mb-2 flex space-x-2">
+                              <button
+                                onClick={() => addFormattingToPrepRecipe(item.id, 'instructions', 'bold')}
+                                className="px-2 py-1 bg-gray-100 rounded text-sm font-bold hover:bg-gray-200"
+                              >
+                                B
+                              </button>
+                              <button
+                                onClick={() => addFormattingToPrepRecipe(item.id, 'instructions', 'italic')}
+                                className="px-2 py-1 bg-gray-100 rounded text-sm italic hover:bg-gray-200"
+                              >
+                                I
+                              </button>
+                              <button
+                                onClick={() => addFormattingToPrepRecipe(item.id, 'instructions', 'number')}
+                                className="px-2 py-1 bg-gray-100 rounded text-sm hover:bg-gray-200"
+                              >
+                                1.
+                              </button>
+                            </div>
+                            <textarea
+                              id={`instructions-${item.id}`}
+                              value={item.recipe?.instructions || ''}
+                              onChange={(e) => handleUpdatePrepRecipe(item.id, 'instructions', e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 h-24 font-mono text-sm"
+                              placeholder="1. **Sekoita**: Yhdistä majoneesi ja valkosipuli&#10;2. **Mausta**: Lisää sitruunamehu"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              
+              {prepItems.length === 0 && (
+                <div className="text-center py-8 text-gray-500">
+                  No prep items yet. Add your first prep item above!
                 </div>
               )}
             </div>
