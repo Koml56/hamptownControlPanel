@@ -1,5 +1,5 @@
 // PrepListPrototype.tsx - Complete implementation with all features
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, Plus, ChefHat, Check, Star, Trash2, Users, Search, X } from 'lucide-react';
 import { getFormattedDate } from './utils';
 import type { PrepItem, ScheduledPrep, PrepSelections, Priority, Recipe, CurrentUser, ConnectionStatus } from './types';
@@ -190,13 +190,6 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
     return prepSelections[selectionKey]?.selected || false;
   };
 
-  // Check if prep is already scheduled for current date
-  const isPrepScheduled = (prep: PrepItem): boolean => {
-    return scheduledPreps.some(scheduledPrep => 
-      scheduledPrep.prepId === prep.id && scheduledPrep.scheduledDate === getDateString(selectedDate)
-    );
-  };
-
   // Get prep selection details
   const getPrepSelection = (prep: PrepItem) => {
     const selectionKey = `${getDateString(selectedDate)}-${prep.id}`;
@@ -244,9 +237,8 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
         }
       }));
       
-      // Check if prep is already scheduled for this date
-      if (!isPrepScheduled(prep)) {
-        // Create new scheduled prep
+      // Auto-add to scheduled preps
+      if (!isPrepSelected(prep)) {
         const newScheduledPrep: ScheduledPrep = {
           id: Date.now(),
           prepId: prep.id,
@@ -287,80 +279,6 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
     setAssignmentStep({});
   };
 
-  // Auto-reschedule incomplete preps from previous days
-  const rescheduleOverduePreps = useCallback(() => {
-    const today = new Date();
-    const todayStr = getDateString(today);
-    
-    // Find incomplete preps from previous days
-    const overduePreps = scheduledPreps.filter(prep => {
-      const prepDate = new Date(prep.scheduledDate);
-      return prepDate < today && !prep.completed;
-    });
-    
-    if (overduePreps.length === 0) return;
-    
-    console.log(`🔄 Found ${overduePreps.length} overdue preps, moving to today`);
-    
-    // Show notification to user
-    const prepNames = overduePreps.map(p => p.name).slice(0, 3).join(', ');
-    const extraCount = overduePreps.length - 3;
-    const message = overduePreps.length <= 3 
-      ? `Moved ${prepNames} to today`
-      : `Moved ${prepNames} and ${extraCount} more preps to today`;
-    
-    // You can replace this alert with a toast notification system
-    if (overduePreps.length > 0) {
-      console.log(`📅 ${message}`);
-    }
-    
-    // Update overdue preps to today's date
-    const updatedScheduledPreps = scheduledPreps.map(prep => {
-      const prepDate = new Date(prep.scheduledDate);
-      if (prepDate < today && !prep.completed) {
-        return { ...prep, scheduledDate: todayStr };
-      }
-      return prep;
-    });
-    
-    setScheduledPreps(updatedScheduledPreps);
-    
-    // Update prep selections for the moved preps
-    const updatedSelections = { ...prepSelections };
-    overduePreps.forEach(prep => {
-      const oldKey = `${prep.scheduledDate}-${prep.prepId}`;
-      const newKey = `${todayStr}-${prep.prepId}`;
-      
-      if (updatedSelections[oldKey]) {
-        updatedSelections[newKey] = updatedSelections[oldKey];
-        delete updatedSelections[oldKey];
-      }
-    });
-    
-    setPrepSelections(updatedSelections);
-    
-    // Save immediately
-    quickSave('scheduledPreps', updatedScheduledPreps);
-    quickSave('prepSelections', updatedSelections);
-    
-  }, [scheduledPreps, prepSelections, setScheduledPreps, setPrepSelections, quickSave]);
-
-  // Auto-reschedule on component mount and daily
-  useEffect(() => {
-    if (scheduledPreps.length > 0) {
-      rescheduleOverduePreps();
-    }
-  }, [rescheduleOverduePreps, scheduledPreps.length]);
-
-  // Check for overdue preps every hour
-  useEffect(() => {
-    const interval = setInterval(() => {
-      rescheduleOverduePreps();
-    }, 3600000); // 1 hour
-    
-    return () => clearInterval(interval);
-  }, [rescheduleOverduePreps]);
-
   // Add click outside handler
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent): void => {
@@ -389,10 +307,9 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
   const togglePrepSelection = (prep: PrepItem): void => {
     const selectionKey = `${getDateString(selectedDate)}-${prep.id}`;
     const isSelected = prepSelections[selectionKey]?.selected;
-    const isScheduled = isPrepScheduled(prep);
     
-    if (isSelected || isScheduled) {
-      // Remove selection and scheduled prep
+    if (isSelected) {
+      // Remove selection
       setPrepSelections(prev => {
         const newSelections = { ...prev };
         delete newSelections[selectionKey];
@@ -411,26 +328,24 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
         [selectionKey]: newSelection
       }));
       
-      // Add to scheduled preps (only if not already scheduled)
-      if (!isScheduled) {
-        const newScheduledPrep: ScheduledPrep = {
-          id: Date.now(),
-          prepId: prep.id,
-          name: prep.name,
-          category: prep.category,
-          estimatedTime: prep.estimatedTime,
-          isCustom: prep.isCustom,
-          hasRecipe: prep.hasRecipe,
-          recipe: prep.recipe,
-          scheduledDate: getDateString(selectedDate),
-          priority: 'medium',
-          timeSlot: '',
-          completed: false,
-          assignedTo: null,
-          notes: ''
-        };
-        setScheduledPreps(prev => [...prev, newScheduledPrep]);
-      }
+      // Add to scheduled preps
+      const newScheduledPrep: ScheduledPrep = {
+        id: Date.now(),
+        prepId: prep.id,
+        name: prep.name,
+        category: prep.category,
+        estimatedTime: prep.estimatedTime,
+        isCustom: prep.isCustom,
+        hasRecipe: prep.hasRecipe,
+        recipe: prep.recipe,
+        scheduledDate: getDateString(selectedDate),
+        priority: 'medium',
+        timeSlot: '',
+        completed: false,
+        assignedTo: null,
+        notes: ''
+      };
+      setScheduledPreps(prev => [...prev, newScheduledPrep]);
     }
   };
 
@@ -569,7 +484,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
         {showSuggestedPreps && (
           <div className="space-y-2">
             {overduePreps.map(({ prep, daysSinceLastCompletion, overdueDays }) => {
-              const isSelected = isPrepSelected(prep) || isPrepScheduled(prep);
+              const isSelected = isPrepSelected(prep);
               const selection = getPrepSelection(prep);
               
               return (
@@ -795,29 +710,6 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
           
           {/* Connection Status */}
           <div className="flex items-center space-x-2">
-            {/* Overdue Preps Indicator */}
-            {(() => {
-              const today = new Date();
-              const overdueCount = scheduledPreps.filter(prep => {
-                const prepDate = new Date(prep.scheduledDate);
-                return prepDate < today && !prep.completed;
-              }).length;
-              
-              if (overdueCount > 0) {
-                return (
-                  <button
-                    onClick={rescheduleOverduePreps}
-                    className="flex items-center space-x-1 bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-medium hover:bg-orange-200 transition-colors"
-                    title={`${overdueCount} overdue prep${overdueCount === 1 ? '' : 's'} - click to reschedule`}
-                  >
-                    <Clock className="w-3 h-3" />
-                    <span>{overdueCount} overdue</span>
-                  </button>
-                );
-              }
-              return null;
-            })()}
-            
             <div className={`w-2 h-2 rounded-full ${
               connectionStatus === 'connected' ? 'bg-green-500' : 'bg-red-500'
             }`}></div>
@@ -1104,7 +996,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
             {/* Prep Items List */}
             <div className="space-y-3">
               {filteredPreps.map(prep => {
-                const isSelected = isPrepSelected(prep) || isPrepScheduled(prep);
+                const isSelected = isPrepSelected(prep);
                 const selection = getPrepSelection(prep);
 
                 return (
