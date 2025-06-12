@@ -402,10 +402,12 @@ const EmployeeApp = () => {
             tasks={tasks}
             customRoles={customRoles}
             storeItems={storeItems}
+            prepItems={prepItems}
             setEmployees={setEmployeesWithSave}
             setTasks={setTasksWithSave}
             setCustomRoles={setCustomRolesWithSave}
             setStoreItems={setStoreItemsWithSave}
+            setPrepItems={setPrepItems}
           />
         )}
 
