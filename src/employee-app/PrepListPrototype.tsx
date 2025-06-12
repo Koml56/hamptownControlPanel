@@ -1,5 +1,5 @@
 // PrepListPrototype.tsx - Complete implementation with all features
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Calendar, Clock, Plus, ChefHat, Check, Star, Trash2, Users, Search, X } from 'lucide-react';
 import { getFormattedDate } from './utils';
 import type { PrepItem, ScheduledPrep, PrepSelections, Priority, Recipe, CurrentUser, ConnectionStatus } from './types';
