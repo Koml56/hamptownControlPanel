@@ -12,8 +12,8 @@ root.render(
   </React.StrictMode>
 );
 
-// PWA Service Worker Registration
-if ('serviceWorker' in navigator) {
+// PWA Service Worker Registration - with better error handling
+if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
       .then((registration) => {
@@ -39,7 +39,7 @@ if ('serviceWorker' in navigator) {
         });
       })
       .catch((error) => {
-        console.error('❌ PWA Service Worker registration failed:', error);
+        console.warn('⚠️ PWA Service Worker not available (development mode or missing sw.js):', error.message);
       });
 
     // Listen for service worker messages
