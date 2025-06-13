@@ -73,10 +73,11 @@ const checkAndResetDailyTasks = (
       return false;
     }
     
-    console.log('🔄 Resetting completed tasks AND task assignments for new day');
-    console.log('📋 Before reset:', { 
+    console.log('🔄 DAILY RESET: Clearing completed tasks AND task assignments for new day');
+    console.log('📋 Before daily reset:', { 
       completedTasksCount: completedTasks.size, 
-      assignmentsCount: Object.keys(taskAssignments).length 
+      assignmentsCount: Object.keys(taskAssignments).length,
+      taskAssignments: taskAssignments
     });
     
     // Mark reset as in progress to prevent duplicates
@@ -90,7 +91,8 @@ const checkAndResetDailyTasks = (
     setTaskAssignments(() => emptyAssignments);
     localStorage.setItem('lastTaskResetDate', today);
     
-    console.log('✅ After reset: All tasks unmarked and unassigned');
+    console.log('✅ After daily reset: All tasks unmarked and unassigned');
+    console.log('📋 Task assignments cleared:', emptyAssignments);
     
     // Save both empty sets directly to Firebase
     setTimeout(async () => {
@@ -99,7 +101,8 @@ const checkAndResetDailyTasks = (
           quickSave('completedTasks', []),
           quickSave('taskAssignments', {})
         ]);
-        console.log('✅ Reset saved to Firebase (tasks + assignments cleared)');
+        console.log('✅ DAILY RESET: Both completedTasks AND taskAssignments saved to Firebase');
+        console.log('📤 Saved to Firebase: completedTasks=[], taskAssignments={}');
         // Clear the reset in progress flag after successful save
         localStorage.removeItem('resetInProgress');
       } catch (error) {
