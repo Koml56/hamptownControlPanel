@@ -107,9 +107,9 @@ export class MultiDeviceSyncService {
           if (remoteEmp.points > merged[localIndex].points) {
             merged[localIndex] = { ...merged[localIndex], points: remoteEmp.points };
           }
-          // Keep most recent mood update
+          // Keep most recent mood update - FIXED: Added proper null checks
           if (remoteEmp.lastMoodDate && (!merged[localIndex].lastMoodDate || 
-              remoteEmp.lastMoodDate > merged[localIndex].lastMoodDate)) {
+              (merged[localIndex].lastMoodDate !== null && remoteEmp.lastMoodDate > merged[localIndex].lastMoodDate))) {
             merged[localIndex].mood = remoteEmp.mood;
             merged[localIndex].lastMoodDate = remoteEmp.lastMoodDate;
             merged[localIndex].lastUpdated = remoteEmp.lastUpdated;
