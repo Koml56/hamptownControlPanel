@@ -74,6 +74,10 @@ const checkAndResetDailyTasks = (
     }
     
     console.log('🔄 Resetting completed tasks AND task assignments for new day');
+    console.log('📋 Before reset:', { 
+      completedTasksCount: completedTasks.size, 
+      assignmentsCount: Object.keys(taskAssignments).length 
+    });
     
     // Mark reset as in progress to prevent duplicates
     localStorage.setItem('resetInProgress', today);
@@ -85,6 +89,8 @@ const checkAndResetDailyTasks = (
     setCompletedTasks(emptySet);
     setTaskAssignments(() => emptyAssignments);
     localStorage.setItem('lastTaskResetDate', today);
+    
+    console.log('✅ After reset: All tasks unmarked and unassigned');
     
     // Save both empty sets directly to Firebase
     setTimeout(async () => {
