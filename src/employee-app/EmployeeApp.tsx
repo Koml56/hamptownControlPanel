@@ -1,4 +1,4 @@
-// EmployeeApp.tsx - Main application component with daily task reset functionality
+// EmployeeApp.tsx - Main application component with fixed daily task reset functionality
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Users, 
@@ -122,16 +122,19 @@ const EmployeeApp: React.FC = () => {
         lastResetDate, 
         today, 
         completedTasksSize: completedTasks.size,
-        shouldShow: lastResetDate === today && lastNotificationDate !== today && completedTasks.size === 0
+        taskAssignmentsCount: Object.keys(taskAssignments).length,
+        shouldShow: lastResetDate === today && lastNotificationDate !== today && 
+                   (completedTasks.size === 0 && Object.keys(taskAssignments).length === 0)
       });
       
       // Show notification if:
       // 1. A reset happened today (lastResetDate === today)
       // 2. We haven't shown notification today (lastNotificationDate !== today)
-      // 3. Tasks are actually cleared (completedTasks.size === 0)
+      // 3. Tasks are actually cleared (completedTasks.size === 0 AND taskAssignments is empty)
       if (lastResetDate === today && 
           lastNotificationDate !== today && 
-          completedTasks.size === 0) {
+          completedTasks.size === 0 &&
+          Object.keys(taskAssignments).length === 0) {
         
         console.log('📢 Showing daily reset notification');
         setShowDailyResetNotification(true);
@@ -149,7 +152,7 @@ const EmployeeApp: React.FC = () => {
       const timer = setTimeout(checkDailyReset, 2000); // Wait 2 seconds for stability
       return () => clearTimeout(timer);
     }
-  }, [completedTasks.size, isLoading, connectionStatus]); // More specific dependencies
+  }, [completedTasks.size, taskAssignments, isLoading, connectionStatus]); // More specific dependencies
 
   // Update user mood when current user changes
   useEffect(() => {
@@ -211,11 +214,17 @@ const EmployeeApp: React.FC = () => {
     handleDataChange();
   }, [storeItems, setFirebaseStoreItems, handleDataChange]);
 
-  // Manual reset function for testing (admin only)
+  // FIXED: Manual reset function for testing (admin only) - Now clears BOTH completed tasks AND task assignments
   const handleManualReset = useCallback(() => {
     if (!isAdmin) return;
     
-    console.log('🧪 Manual reset triggered by admin');
+    console.log('🧪 MANUAL RESET: Triggered by admin');
+    console.log('📋 Before manual reset:', { 
+      completedTasksCount: completedTasks.size, 
+      taskAssignmentsCount: Object.keys(taskAssignments).length,
+      taskAssignments: taskAssignments
+    });
+    
     const today = getFormattedDate(new Date());
     
     // Clear all related localStorage flags
@@ -223,9 +232,13 @@ const EmployeeApp: React.FC = () => {
     localStorage.removeItem('lastDailyResetNotification');
     localStorage.removeItem('resetCheckedToday');
     
-    // Perform the reset
+    // Perform the reset - BOTH completed tasks AND task assignments
     setCompletedTasks(new Set());
+    setTaskAssignments(() => ({})); // Clear all task assignments
     localStorage.setItem('lastTaskResetDate', today);
+    
+    console.log('✅ MANUAL RESET: Cleared both completed tasks AND task assignments');
+    console.log('📋 After manual reset: { completedTasks: Set(0), taskAssignments: {} }');
     
     // Show notification
     setShowDailyResetNotification(true);
@@ -233,11 +246,18 @@ const EmployeeApp: React.FC = () => {
       setShowDailyResetNotification(false);
     }, 8000);
     
-    // Save to Firebase
+    // Save BOTH to Firebase
     setTimeout(() => {
-      quickSave('completedTasks', []);
+      Promise.all([
+        quickSave('completedTasks', []),
+        quickSave('taskAssignments', {})
+      ]).then(() => {
+        console.log('✅ MANUAL RESET: Both completedTasks=[] and taskAssignments={} saved to Firebase');
+      }).catch((error) => {
+        console.error('❌ MANUAL RESET: Failed to save to Firebase:', error);
+      });
     }, 500);
-  }, [isAdmin, setCompletedTasks, quickSave]);
+  }, [isAdmin, setCompletedTasks, setTaskAssignments, quickSave, completedTasks, taskAssignments]);
 
   // Event handlers
   const handleAdminLoginSubmit = () => {
@@ -437,7 +457,7 @@ const EmployeeApp: React.FC = () => {
                     🌅 New Day, Fresh Start!
                   </h3>
                   <p className="mt-1 text-sm text-blue-600">
-                    All cleaning tasks have been reset for today. Time to start fresh and earn those points!
+                    All cleaning tasks and assignments have been reset for today. Time to start fresh and earn those points!
                   </p>
                 </div>
                 <div className="flex-shrink-0 ml-3">
@@ -456,12 +476,12 @@ const EmployeeApp: React.FC = () => {
 
         {/* Floating Status Indicator */}
         <div className="fixed bottom-20 right-4 z-50 space-y-2">
-          {/* Admin Test Reset Button */}
+          {/* Admin Test Reset Button - FIXED to clear both */}
           {isAdmin && (
             <button
               onClick={handleManualReset}
               className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-full shadow-lg transition-colors text-sm font-medium"
-              title="Test Daily Reset (Admin Only)"
+              title="Test Daily Reset - Clears both tasks AND assignments (Admin Only)"
             >
               🧪 Test Reset
             </button>
