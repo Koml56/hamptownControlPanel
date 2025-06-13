@@ -1,6 +1,20 @@
-// EmployeeApp.tsx - Optimized to prevent infinite loops with PrepList integration
+// EmployeeApp.tsx - Main application component with daily task reset functionality
 import React, { useState, useEffect, useCallback } from 'react';
-import { Users, CheckSquare, TrendingUp, Settings, Lock, LogOut, Calendar, Database, ChevronDown, X, Check, ShoppingBag, ChefHat } from 'lucide-react';
+import { 
+  Users, 
+  CheckSquare, 
+  TrendingUp, 
+  Settings, 
+  Lock, 
+  LogOut, 
+  Calendar, 
+  Database, 
+  ChevronDown, 
+  X, 
+  Check, 
+  ShoppingBag, 
+  ChefHat 
+} from 'lucide-react';
 
 // Components
 import MoodTracker from './MoodTracker';
@@ -19,7 +33,7 @@ import { getFormattedDate } from './utils';
 import { getDefaultStoreItems } from './defaultData';
 import type { ActiveTab, Employee, Task, DailyDataMap, TaskAssignments, StoreItem } from './types';
 
-const EmployeeApp = () => {
+const EmployeeApp: React.FC = () => {
   // Firebase and Auth hooks
   const {
     isLoading,
@@ -34,6 +48,7 @@ const EmployeeApp = () => {
     prepItems,
     scheduledPreps,
     prepSelections,
+    storeItems: firebaseStoreItems,
     setEmployees,
     setTasks,
     setDailyData,
@@ -43,6 +58,7 @@ const EmployeeApp = () => {
     setPrepItems,
     setScheduledPreps,
     setPrepSelections,
+    setStoreItems: setFirebaseStoreItems,
     loadFromFirebase,
     saveToFirebase,
     quickSave
@@ -64,11 +80,12 @@ const EmployeeApp = () => {
   const [adminPassword, setAdminPassword] = useState('');
   const [selectedDate, setSelectedDate] = useState(getFormattedDate(new Date()));
   const [storeItems, setStoreItems] = useState<StoreItem[]>(getDefaultStoreItems());
+  const [showDailyResetNotification, setShowDailyResetNotification] = useState(false);
 
-  // Load data once on mount
+  // Initialize on mount
   useEffect(() => {
     loadFromFirebase();
-  }, []); // Empty dependency array - only run once
+  }, [loadFromFirebase]);
 
   // Set up periodic auto-save (every 5 minutes)
   useEffect(() => {
@@ -81,12 +98,28 @@ const EmployeeApp = () => {
     return () => clearInterval(interval);
   }, [connectionStatus, isLoading, saveToFirebase]);
 
-  // Optimized data change handler - only save when user makes changes
-  const handleDataChange = useCallback(() => {
-    if (connectionStatus === 'connected') {
-      saveToFirebase();
-    }
-  }, [connectionStatus, saveToFirebase]);
+  // Check for daily reset notification
+  useEffect(() => {
+    const checkDailyReset = () => {
+      const lastNotificationDate = localStorage.getItem('lastDailyResetNotification');
+      const today = getFormattedDate(new Date());
+      
+      if (lastNotificationDate !== today) {
+        const hasResetOccurred = localStorage.getItem('lastTaskResetDate') === today;
+        if (hasResetOccurred && completedTasks.size === 0) {
+          setShowDailyResetNotification(true);
+          localStorage.setItem('lastDailyResetNotification', today);
+          
+          // Auto-hide notification after 10 seconds
+          setTimeout(() => {
+            setShowDailyResetNotification(false);
+          }, 10000);
+        }
+      }
+    };
+
+    checkDailyReset();
+  }, [completedTasks]);
 
   // Update user mood when current user changes
   useEffect(() => {
@@ -96,23 +129,19 @@ const EmployeeApp = () => {
     }
   }, [currentUser.id, employees]);
 
-  const handleAdminLoginSubmit = () => {
-    const success = handleAdminLogin(adminPassword, setIsAdmin, setActiveTab, setAdminPassword);
-    if (success) {
-      setShowAdminLogin(false);
+  // Sync Firebase store items with local state
+  useEffect(() => {
+    if (firebaseStoreItems && firebaseStoreItems.length > 0) {
+      setStoreItems(firebaseStoreItems);
     }
-  };
+  }, [firebaseStoreItems]);
 
-  const handleUserSwitch = (employee: Employee) => {
-    switchUser(employee);
-    setShowUserSwitcher(false);
-    setActiveTab('mood');
-  };
-
-  const handleAdminLogout = () => {
-    logoutAdmin();
-    setActiveTab('mood');
-  };
+  // Optimized data change handler
+  const handleDataChange = useCallback(() => {
+    if (connectionStatus === 'connected') {
+      saveToFirebase();
+    }
+  }, [connectionStatus, saveToFirebase]);
 
   // Enhanced setters that trigger save
   const setEmployeesWithSave = useCallback((updater: (prev: Employee[]) => Employee[]) => {
@@ -146,9 +175,30 @@ const EmployeeApp = () => {
   }, [setCustomRoles, handleDataChange]);
 
   const setStoreItemsWithSave = useCallback((updater: (prev: StoreItem[]) => StoreItem[]) => {
-    setStoreItems(updater);
+    const newItems = typeof updater === 'function' ? updater(storeItems) : updater;
+    setStoreItems(newItems);
+    setFirebaseStoreItems(() => newItems);
     handleDataChange();
-  }, [setStoreItems, handleDataChange]);
+  }, [storeItems, setFirebaseStoreItems, handleDataChange]);
+
+  // Event handlers
+  const handleAdminLoginSubmit = () => {
+    const success = handleAdminLogin(adminPassword, setIsAdmin, setActiveTab, setAdminPassword);
+    if (success) {
+      setShowAdminLogin(false);
+    }
+  };
+
+  const handleUserSwitch = (employee: Employee) => {
+    switchUser(employee);
+    setShowUserSwitcher(false);
+    setActiveTab('mood');
+  };
+
+  const handleAdminLogout = () => {
+    logoutAdmin();
+    setActiveTab('mood');
+  };
 
   const currentEmployee = employees.find(emp => emp.id === currentUser.id);
 
@@ -244,44 +294,44 @@ const EmployeeApp = () => {
             className={`flex-shrink-0 py-3 px-4 text-center ${
               activeTab === 'mood' 
                 ? 'border-b-2 border-blue-500 text-blue-600 bg-blue-50' 
-                : 'text-gray-600'
+                : 'text-gray-600 hover:text-gray-800'
             }`}
           >
             <TrendingUp className="w-5 h-5 mx-auto mb-1" />
-            Mood Tracker
+            <span className="text-sm">Mood Tracker</span>
           </button>
           <button
             onClick={() => setActiveTab('tasks')}
             className={`flex-shrink-0 py-3 px-4 text-center ${
               activeTab === 'tasks' 
                 ? 'border-b-2 border-blue-500 text-blue-600 bg-blue-50' 
-                : 'text-gray-600'
+                : 'text-gray-600 hover:text-gray-800'
             }`}
           >
             <CheckSquare className="w-5 h-5 mx-auto mb-1" />
-            Cleaning Tasks
+            <span className="text-sm">Cleaning Tasks</span>
           </button>
           <button
             onClick={() => setActiveTab('prep')}
             className={`flex-shrink-0 py-3 px-4 text-center ${
               activeTab === 'prep' 
                 ? 'border-b-2 border-green-500 text-green-600 bg-green-50' 
-                : 'text-gray-600'
+                : 'text-gray-600 hover:text-gray-800'
             }`}
           >
             <ChefHat className="w-5 h-5 mx-auto mb-1" />
-            Prep List
+            <span className="text-sm">Prep List</span>
           </button>
           <button
             onClick={() => setActiveTab('store')}
             className={`flex-shrink-0 py-3 px-4 text-center ${
               activeTab === 'store' 
                 ? 'border-b-2 border-purple-500 text-purple-600 bg-purple-50' 
-                : 'text-gray-600'
+                : 'text-gray-600 hover:text-gray-800'
             }`}
           >
             <ShoppingBag className="w-5 h-5 mx-auto mb-1" />
-            Store
+            <span className="text-sm">Store</span>
           </button>
           {isAdmin && (
             <button
@@ -289,11 +339,11 @@ const EmployeeApp = () => {
               className={`flex-shrink-0 py-3 px-4 text-center ${
                 activeTab === 'admin' 
                   ? 'border-b-2 border-red-500 text-red-600 bg-red-50' 
-                  : 'text-gray-600'
+                  : 'text-gray-600 hover:text-gray-800'
               }`}
             >
               <Settings className="w-5 h-5 mx-auto mb-1" />
-              Admin Panel
+              <span className="text-sm">Admin Panel</span>
             </button>
           )}
           {isAdmin && (
@@ -302,17 +352,50 @@ const EmployeeApp = () => {
               className={`flex-shrink-0 py-3 px-4 text-center ${
                 activeTab === 'reports' 
                   ? 'border-b-2 border-orange-500 text-orange-600 bg-orange-50' 
-                  : 'text-gray-600'
+                  : 'text-gray-600 hover:text-gray-800'
               }`}
             >
               <Database className="w-5 h-5 mx-auto mb-1" />
-              Daily Reports
+              <span className="text-sm">Daily Reports</span>
             </button>
           )}
         </div>
       </div>
 
+      {/* Main Content Area */}
       <div className="p-4 space-y-6">
+        {/* Daily Reset Notification */}
+        {showDailyResetNotification && (
+          <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 max-w-md w-full mx-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 shadow-lg backdrop-blur-sm">
+              <div className="flex items-start">
+                <div className="flex-shrink-0">
+                  <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div className="ml-3 flex-1">
+                  <h3 className="text-sm font-medium text-blue-800">
+                    🌅 New Day, Fresh Start!
+                  </h3>
+                  <p className="mt-1 text-sm text-blue-600">
+                    All cleaning tasks have been reset for today. Time to start fresh and earn those points!
+                  </p>
+                </div>
+                <div className="flex-shrink-0 ml-3">
+                  <button
+                    onClick={() => setShowDailyResetNotification(false)}
+                    className="text-blue-400 hover:text-blue-600"
+                  >
+                    <span className="sr-only">Close</span>
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Floating Status Indicator */}
         <div className="fixed bottom-20 right-4 z-50">
           {isLoading && (
@@ -449,6 +532,7 @@ const EmployeeApp = () => {
                 onChange={(e) => setAdminPassword(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleAdminLoginSubmit()}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                autoFocus
               />
               <button
                 onClick={handleAdminLoginSubmit}
@@ -461,7 +545,7 @@ const EmployeeApp = () => {
         </div>
       )}
 
-      {/* Click outside to close dropdowns */}
+      {/* Click outside handlers */}
       {(showUserSwitcher || showAdminLogin) && (
         <div 
           className="fixed inset-0 z-30" 
