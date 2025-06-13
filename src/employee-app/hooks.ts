@@ -46,31 +46,17 @@ const migrateTaskData = (tasks: any[]): Task[] => {
 // Daily reset functionality
 const checkAndResetDailyTasks = (
   completedTasks: Set<number>,
-  setCompletedTasks: (tasks: Set<number>) => void,
-  quickSave: (field: string, data: any) => Promise<void>
+  setCompletedTasks: (tasks: Set<number>) => void
 ): boolean => {
   const today = getFormattedDate(new Date());
   const lastResetDate = localStorage.getItem('lastTaskResetDate');
   
-  console.log('🔍 Checking daily task reset:', { 
-    today, 
-    lastResetDate, 
-    completedTasksCount: completedTasks.size 
-  });
+  console.log('🔍 Checking daily task reset:', { today, lastResetDate, completedTasksSize: completedTasks.size });
   
   if (lastResetDate !== today && completedTasks.size > 0) {
     console.log('🔄 Resetting completed tasks for new day');
-    
-    // Clear completed tasks immediately
     setCompletedTasks(new Set());
-    
-    // Update localStorage
     localStorage.setItem('lastTaskResetDate', today);
-    
-    // Save empty array to Firebase
-    quickSave('completedTasks', []);
-    
-    console.log('✅ Tasks reset completed');
     return true; // Tasks were reset
   }
   
@@ -85,8 +71,7 @@ const checkAndResetDailyTasks = (
 // Set up midnight reset timer
 const setupMidnightReset = (
   completedTasks: Set<number>,
-  setCompletedTasks: (tasks: Set<number>) => void,
-  quickSave: (field: string, data: any) => Promise<void>
+  setCompletedTasks: (tasks: Set<number>) => void
 ): (() => void) => {
   let currentTimer: NodeJS.Timeout | null = null;
   
@@ -102,7 +87,7 @@ const setupMidnightReset = (
     
     return setTimeout(() => {
       console.log('🌅 Midnight reached - resetting daily tasks');
-      checkAndResetDailyTasks(completedTasks, setCompletedTasks, quickSave);
+      checkAndResetDailyTasks(completedTasks, setCompletedTasks);
       
       // Schedule the next reset
       currentTimer = scheduleNextReset();
@@ -245,7 +230,7 @@ export const useFirebaseData = () => {
 
     saveTimeoutRef.current = setTimeout(() => {
       debouncedSave();
-    }, 2000);
+    }, 1000); // Reduced to 1 second for better responsiveness
   }, [debouncedSave]);
 
   const loadFromFirebase = useCallback(async () => {
@@ -263,6 +248,7 @@ export const useFirebaseData = () => {
       setEmployees(finalEmployees);
       setTasks(finalTasks);
       setDailyData(data.dailyData);
+      setCompletedTasks(new Set(data.completedTasks));
       setTaskAssignments(data.taskAssignments);
       setCustomRoles(data.customRoles);
 
@@ -274,17 +260,6 @@ export const useFirebaseData = () => {
       // Load store items
       setStoreItems(data.storeItems || []);
 
-      // IMPORTANT: Set completed tasks AFTER checking for daily reset
-      const loadedCompletedTasks = new Set(data.completedTasks);
-      
-      // Check if we need to reset tasks for today
-      const wasReset = checkAndResetDailyTasks(loadedCompletedTasks, setCompletedTasks, quickSave);
-      
-      if (!wasReset) {
-        // Only set the loaded tasks if no reset was needed
-        setCompletedTasks(loadedCompletedTasks);
-      }
-
       setConnectionStatus('connected');
       setLastSync(new Date().toLocaleTimeString());
 
@@ -292,7 +267,7 @@ export const useFirebaseData = () => {
         employees: finalEmployees.length,
         tasks: finalTasks.length,
         dailyDataKeys: Object.keys(data.dailyData).length,
-        completedTasksSize: wasReset ? 0 : data.completedTasks.size,
+        completedTasksSize: data.completedTasks.size,
         taskAssignmentsKeys: Object.keys(data.taskAssignments).length,
         customRolesLength: data.customRoles.length,
         prepItemsLength: (data.prepItems || []).length,
@@ -302,13 +277,17 @@ export const useFirebaseData = () => {
       });
       lastSaveDataRef.current = dataHash;
 
+      // IMPORTANT: Check and reset daily tasks after loading data
+      setTimeout(() => {
+        checkAndResetDailyTasks(new Set(data.completedTasks), setCompletedTasks);
+      }, 1000);
+
     } catch (error) {
       setConnectionStatus('error');
 
       setEmployees(getDefaultEmployees());
       setTasks(getDefaultTasks());
       setDailyData(getEmptyDailyData());
-      setCompletedTasks(new Set());
       // Initialize empty prep list data on error
       setPrepItems([]);
       setScheduledPreps([]);
@@ -317,68 +296,63 @@ export const useFirebaseData = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading, quickSave]);
+  }, [isLoading]);
 
   // Setup daily reset functionality
   useEffect(() => {
-    // Only run this effect once on mount
-    console.log('🔧 Setting up daily reset functionality');
-    
+    // Check for daily reset on app initialization
+    if (completedTasks.size > 0) {
+      const wasReset = checkAndResetDailyTasks(completedTasks, setCompletedTasks);
+      if (wasReset) {
+        console.log('🆕 Daily tasks reset on app initialization');
+      }
+    }
+
     // Setup midnight reset timer
-    midnightResetCleanupRef.current = setupMidnightReset(completedTasks, setCompletedTasks, quickSave);
+    midnightResetCleanupRef.current = setupMidnightReset(completedTasks, setCompletedTasks);
 
     // Cleanup on unmount
     return () => {
       if (midnightResetCleanupRef.current) {
-        console.log('🧹 Cleaning up daily reset timer');
         midnightResetCleanupRef.current();
       }
     };
-  }, []); // Empty dependency array - only run once
+  }, []); // Only run once on mount
 
-  // Separate save effect to prevent infinite loops
+  // Re-setup midnight timer when completedTasks changes
   useEffect(() => {
-    // Only save if we're connected and not loading
-    if (connectionStatus === 'connected' && !isLoading) {
-      saveToFirebase();
+    if (midnightResetCleanupRef.current) {
+      midnightResetCleanupRef.current();
     }
-  }, [
-    employees, 
-    tasks, 
-    dailyData, 
-    completedTasks, 
-    taskAssignments, 
-    customRoles, 
-    prepItems, 
-    scheduledPreps, 
-    prepSelections, 
-    storeItems,
-    connectionStatus,
-    isLoading,
-    saveToFirebase
-  ]);
+    midnightResetCleanupRef.current = setupMidnightReset(completedTasks, setCompletedTasks);
+  }, [completedTasks, setCompletedTasks]);
 
-  // Cleanup timer on unmount only
+  // Вызывает save при изменении зависимостей (with debounce to prevent loops)
+  useEffect(() => {
+    // Don't save immediately on mount
+    if (employees.length === 0 && tasks.length === 0) return;
+    
+    console.log('📊 Data changed, scheduling save...', {
+      employeesCount: employees.length,
+      tasksCount: tasks.length,
+      completedTasksSize: completedTasks.size,
+      connectionStatus
+    });
+    
+    saveToFirebase();
+  }, [employees, tasks, dailyData, completedTasks, taskAssignments, customRoles, prepItems, scheduledPreps, prepSelections, storeItems]);
+
+  // Очистка таймера при размонтировании
   useEffect(() => {
     return () => {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
       }
+      if (midnightResetCleanupRef.current) {
+        midnightResetCleanupRef.current();
+      }
     };
   }, []);
-
-  // Debug function to manually test reset (available in browser console)
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      (window as any).debugResetTasks = () => {
-        console.log('🧪 DEBUG: Manually resetting tasks');
-        setCompletedTasks(new Set());
-        quickSave('completedTasks', []);
-        localStorage.removeItem('lastTaskResetDate');
-        console.log('✅ DEBUG: Tasks reset completed');
-      };
-    }
-  }, [setCompletedTasks, quickSave]);
 
   return {
     // State
