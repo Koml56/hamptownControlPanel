@@ -138,28 +138,7 @@ const EmployeeApp: React.FC = () => {
 
   // Update user mood when current user changes
   useEffect(() => {
-    // Manual reset function for testing (admin only)
-  const handleManualReset = useCallback(() => {
-    if (!isAdmin) return;
-    
-    console.log('🧪 Manual reset triggered by admin');
-    setCompletedTasks(new Set());
-    localStorage.setItem('lastTaskResetDate', getFormattedDate(new Date()));
-    localStorage.removeItem('lastDailyResetNotification'); // Allow notification to show again
-    
-    // Show notification
-    setShowDailyResetNotification(true);
-    setTimeout(() => {
-      setShowDailyResetNotification(false);
-    }, 8000);
-    
-    // Save to Firebase
-    setTimeout(() => {
-      quickSave('completedTasks', []);
-    }, 500);
-  }, [isAdmin, setCompletedTasks, quickSave]);
-
-  const currentEmployee = employees.find(emp => emp.id === currentUser.id);
+    const currentEmployee = employees.find(emp => emp.id === currentUser.id);
     if (currentEmployee) {
       setUserMood(currentEmployee.mood);
     }
@@ -216,6 +195,27 @@ const EmployeeApp: React.FC = () => {
     setFirebaseStoreItems(() => newItems);
     handleDataChange();
   }, [storeItems, setFirebaseStoreItems, handleDataChange]);
+
+  // Manual reset function for testing (admin only)
+  const handleManualReset = useCallback(() => {
+    if (!isAdmin) return;
+    
+    console.log('🧪 Manual reset triggered by admin');
+    setCompletedTasks(new Set());
+    localStorage.setItem('lastTaskResetDate', getFormattedDate(new Date()));
+    localStorage.removeItem('lastDailyResetNotification'); // Allow notification to show again
+    
+    // Show notification
+    setShowDailyResetNotification(true);
+    setTimeout(() => {
+      setShowDailyResetNotification(false);
+    }, 8000);
+    
+    // Save to Firebase
+    setTimeout(() => {
+      quickSave('completedTasks', []);
+    }, 500);
+  }, [isAdmin, setCompletedTasks, quickSave]);
 
   // Event handlers
   const handleAdminLoginSubmit = () => {
