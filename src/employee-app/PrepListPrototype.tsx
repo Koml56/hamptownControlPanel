@@ -936,63 +936,6 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
               </div>
             ) : (
               <div className="space-y-4">
-                {/* Anytime Tasks */}
-                {(() => {
-                  const anytimePreps = todayScheduledPreps.filter(prep => prep.timeSlot === '');
-                  if (anytimePreps.length === 0) return null;
-                  
-                  return (
-                    <div>
-                      <h4 className="font-medium text-gray-700 mb-3 flex items-center">
-                        🕐 Anytime
-                      </h4>
-                      <div className="space-y-3">
-                        {anytimePreps.map(prep => {
-                          const priority = priorities.find(p => p.id === prep.priority);
-                          return (
-                            <div key={prep.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
-                              <div className="flex items-center space-x-3">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    togglePrepCompletion(prep.id);
-                                  }}
-                                  className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
-                                    prep.completed 
-                                      ? 'bg-green-500 border-green-500' 
-                                      : 'border-gray-300 hover:border-green-500'
-                                  }`}
-                                >
-                                  {prep.completed && <Check className="w-4 h-4 text-white" />}
-                                </button>
-                                <div className="flex-1">
-                                  <div className={`font-medium flex items-center space-x-2 ${prep.completed ? 'line-through text-gray-500' : 'text-gray-800'}`}>
-                                    <span>{prep.name}</span>
-                                    {prep.hasRecipe && (
-                                      <button
-                                        onClick={() => prep.recipe && showRecipe(prep.recipe, prep.name)}
-                                        className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full hover:bg-green-200 transition-colors"
-                                      >
-                                        📖 Recipe
-                                      </button>
-                                    )}
-                                  </div>
-                                  <div className="text-sm text-gray-600">
-                                    {prep.estimatedTime} • {prep.category}
-                                  </div>
-                                </div>
-                              </div>
-                              <span className={`px-2 py-1 rounded-full text-xs ${priority?.color || 'bg-gray-100 text-gray-700'}`}>
-                                {priority?.name || 'Medium'}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })()}
-                
                 {/* Time Slot Tasks */}
                 {timeSlots.map(timeSlot => {
                   const slotPreps = todayScheduledPreps.filter(prep => prep.timeSlot === timeSlot.id);
@@ -1050,6 +993,63 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
                     </div>
                   );
                 })}
+                
+                {/* Anytime Tasks - Show Last */}
+                {(() => {
+                  const anytimePreps = todayScheduledPreps.filter(prep => prep.timeSlot === '');
+                  if (anytimePreps.length === 0) return null;
+                  
+                  return (
+                    <div>
+                      <h4 className="font-medium text-gray-700 mb-3 flex items-center">
+                        🕐 Anytime
+                      </h4>
+                      <div className="space-y-3">
+                        {anytimePreps.map(prep => {
+                          const priority = priorities.find(p => p.id === prep.priority);
+                          return (
+                            <div key={prep.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
+                              <div className="flex items-center space-x-3">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    togglePrepCompletion(prep.id);
+                                  }}
+                                  className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
+                                    prep.completed 
+                                      ? 'bg-green-500 border-green-500' 
+                                      : 'border-gray-300 hover:border-green-500'
+                                  }`}
+                                >
+                                  {prep.completed && <Check className="w-4 h-4 text-white" />}
+                                </button>
+                                <div className="flex-1">
+                                  <div className={`font-medium flex items-center space-x-2 ${prep.completed ? 'line-through text-gray-500' : 'text-gray-800'}`}>
+                                    <span>{prep.name}</span>
+                                    {prep.hasRecipe && (
+                                      <button
+                                        onClick={() => prep.recipe && showRecipe(prep.recipe, prep.name)}
+                                        className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full hover:bg-green-200 transition-colors"
+                                      >
+                                        📖 Recipe
+                                      </button>
+                                    )}
+                                  </div>
+                                  <div className="text-sm text-gray-600">
+                                    {prep.estimatedTime} • {prep.category}
+                                  </div>
+                                </div>
+                              </div>
+                              <span className={`px-2 py-1 rounded-full text-xs ${priority?.color || 'bg-gray-100 text-gray-700'}`}>
+                                {priority?.name || 'Medium'}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>
@@ -1731,66 +1731,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
                                 
                                 return (
                                   <>
-                                    {/* Anytime tasks */}
-                                    {anytimePreps.length > 0 && (
-                                      <div>
-                                        <h5 className="font-medium text-gray-700 text-sm mb-2 flex items-center">
-                                          🕐 Anytime
-                                        </h5>
-                                        <div className="space-y-2">
-                                          {anytimePreps.map(prep => {
-                                            const priority = priorities.find(p => p.id === prep.priority);
-                                            return (
-                                              <div key={prep.id} className={`p-3 rounded-lg border-l-4 transition-colors ${
-                                                prep.completed ? 'bg-green-50 border-green-500' : 'bg-white border-gray-300 hover:bg-gray-50'
-                                              }`}>
-                                                <div className="flex items-center justify-between">
-                                                  <div className="flex items-center space-x-3">
-                                                    <button
-                                                      onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        togglePrepCompletion(prep.id);
-                                                      }}
-                                                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-                                                        prep.completed 
-                                                          ? 'bg-green-500 border-green-500' 
-                                                          : 'border-gray-300 hover:border-green-500'
-                                                      }`}
-                                                    >
-                                                      {prep.completed && <Check className="w-3 h-3 text-white" />}
-                                                    </button>
-                                                    <div>
-                                                      <div className={`font-medium text-sm flex items-center space-x-2 priority-glow priority-${prep.priority} ${prep.completed ? 'line-through opacity-60' : ''}`}>
-                                                        <span>{prep.name}</span>
-                                                        {prep.hasRecipe && (
-                                                          <button
-                                                            onClick={(e) => {
-                                                              e.stopPropagation();
-                                                              prep.recipe && showRecipe(prep.recipe, prep.name);
-                                                            }}
-                                                            className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full hover:bg-green-200 transition-colors"
-                                                          >
-                                                            📖
-                                                          </button>
-                                                        )}
-                                                      </div>
-                                                      <div className="text-xs text-gray-500">
-                                                        {prep.estimatedTime} • {prep.category}
-                                                      </div>
-                                                    </div>
-                                                  </div>
-                                                  <span className={`px-2 py-1 rounded-full text-xs ${priority?.color || 'bg-gray-100 text-gray-700'}`}>
-                                                    {priority?.name || 'Medium'}
-                                                  </span>
-                                                </div>
-                                              </div>
-                                            );
-                                          })}
-                                        </div>
-                                      </div>
-                                    )}
-                                    
-                                    {/* Time slot tasks */}
+                                    {/* Time slot tasks first */}
                                     {timeSlotGroups.map(({ slot, preps }) => (
                                       <div key={slot.id}>
                                         <h5 className="font-medium text-gray-700 text-sm mb-2 flex items-center">
@@ -1849,6 +1790,65 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
                                         </div>
                                       </div>
                                     ))}
+                                    
+                                    {/* Anytime tasks last */}
+                                    {anytimePreps.length > 0 && (
+                                      <div>
+                                        <h5 className="font-medium text-gray-700 text-sm mb-2 flex items-center">
+                                          🕐 Anytime
+                                        </h5>
+                                        <div className="space-y-2">
+                                          {anytimePreps.map(prep => {
+                                            const priority = priorities.find(p => p.id === prep.priority);
+                                            return (
+                                              <div key={prep.id} className={`p-3 rounded-lg border-l-4 transition-colors ${
+                                                prep.completed ? 'bg-green-50 border-green-500' : 'bg-white border-gray-300 hover:bg-gray-50'
+                                              }`}>
+                                                <div className="flex items-center justify-between">
+                                                  <div className="flex items-center space-x-3">
+                                                    <button
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        togglePrepCompletion(prep.id);
+                                                      }}
+                                                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                                                        prep.completed 
+                                                          ? 'bg-green-500 border-green-500' 
+                                                          : 'border-gray-300 hover:border-green-500'
+                                                      }`}
+                                                    >
+                                                      {prep.completed && <Check className="w-3 h-3 text-white" />}
+                                                    </button>
+                                                    <div>
+                                                      <div className={`font-medium text-sm flex items-center space-x-2 priority-glow priority-${prep.priority} ${prep.completed ? 'line-through opacity-60' : ''}`}>
+                                                        <span>{prep.name}</span>
+                                                        {prep.hasRecipe && (
+                                                          <button
+                                                            onClick={(e) => {
+                                                              e.stopPropagation();
+                                                              prep.recipe && showRecipe(prep.recipe, prep.name);
+                                                            }}
+                                                            className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full hover:bg-green-200 transition-colors"
+                                                          >
+                                                            📖
+                                                          </button>
+                                                        )}
+                                                      </div>
+                                                      <div className="text-xs text-gray-500">
+                                                        {prep.estimatedTime} • {prep.category}
+                                                      </div>
+                                                    </div>
+                                                  </div>
+                                                  <span className={`px-2 py-1 rounded-full text-xs ${priority?.color || 'bg-gray-100 text-gray-700'}`}>
+                                                    {priority?.name || 'Medium'}
+                                                  </span>
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    )}
                                   </>
                                 );
                               })()}
