@@ -1,5 +1,5 @@
-// TaskManager.tsx - Updated to handle point transfers on reassignment
-import React from 'react';
+// TaskManager.tsx - Updated to handle point transfers on reassignment with debugging
+import React, { useEffect } from 'react';
 import { CheckSquare, Check, Users, Star } from 'lucide-react';
 import { getPriorityColor, getFormattedDate } from './utils';
 import { toggleTaskComplete, assignTask, getAssignedEmployee, reassignCompletedTask } from './taskFunctions';
@@ -30,6 +30,15 @@ const TaskManager: React.FC<TaskManagerProps> = ({
   setDailyData,
   setEmployees
 }) => {
+  // Debug logging
+  useEffect(() => {
+    console.log('📋 TaskManager - completedTasks updated:', {
+      size: completedTasks.size,
+      tasks: Array.from(completedTasks),
+      timestamp: new Date().toLocaleTimeString()
+    });
+  }, [completedTasks]);
+
   const handleTaskToggle = (taskId: number, assignToEmployeeId?: number) => {
     toggleTaskComplete(
       taskId,
