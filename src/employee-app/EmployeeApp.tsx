@@ -102,24 +102,36 @@ const EmployeeApp: React.FC = () => {
   useEffect(() => {
     const checkDailyReset = () => {
       const lastNotificationDate = localStorage.getItem('lastDailyResetNotification');
+      const lastResetDate = localStorage.getItem('lastTaskResetDate');
       const today = getFormattedDate(new Date());
       
-      if (lastNotificationDate !== today) {
-        const hasResetOccurred = localStorage.getItem('lastTaskResetDate') === today;
-        if (hasResetOccurred && completedTasks.size === 0) {
-          setShowDailyResetNotification(true);
-          localStorage.setItem('lastDailyResetNotification', today);
-          
-          // Auto-hide notification after 10 seconds
-          setTimeout(() => {
-            setShowDailyResetNotification(false);
-          }, 10000);
-        }
+      console.log('📢 Checking notification:', { 
+        lastNotificationDate, 
+        lastResetDate, 
+        today, 
+        completedTasksSize: completedTasks.size 
+      });
+      
+      // Show notification if:
+      // 1. We haven't shown notification today
+      // 2. Tasks were reset today
+      // 3. Completed tasks is empty (indicating reset worked)
+      if (lastNotificationDate !== today && lastResetDate === today && completedTasks.size === 0) {
+        console.log('🎉 Showing daily reset notification');
+        setShowDailyResetNotification(true);
+        localStorage.setItem('lastDailyResetNotification', today);
+        
+        // Auto-hide notification after 8 seconds
+        setTimeout(() => {
+          setShowDailyResetNotification(false);
+        }, 8000);
       }
     };
 
-    checkDailyReset();
-  }, [completedTasks]);
+    // Small delay to ensure state is settled
+    const timer = setTimeout(checkDailyReset, 1000);
+    return () => clearTimeout(timer);
+  }, [completedTasks.size]); // Only depend on the size, not the full Set
 
   // Update user mood when current user changes
   useEffect(() => {
@@ -392,6 +404,31 @@ const EmployeeApp: React.FC = () => {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Debug Panel (Development Only) */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="fixed bottom-4 left-4 z-40">
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-xs">
+              <div className="font-semibold text-yellow-800 mb-2">🧪 DEBUG MODE</div>
+              <div className="space-y-1 text-yellow-700">
+                <div>Completed Tasks: {completedTasks.size}</div>
+                <div>Last Reset: {localStorage.getItem('lastTaskResetDate') || 'Never'}</div>
+                <div>Connection: {connectionStatus}</div>
+              </div>
+              <button
+                onClick={() => {
+                  console.log('🧪 Manual reset triggered');
+                  if ((window as any).debugResetTasks) {
+                    (window as any).debugResetTasks();
+                  }
+                }}
+                className="mt-2 px-2 py-1 bg-yellow-200 hover:bg-yellow-300 rounded text-yellow-800 text-xs"
+              >
+                Test Reset
+              </button>
             </div>
           </div>
         )}
