@@ -107,12 +107,14 @@ export class MultiDeviceSyncService {
           if (remoteEmp.points > merged[localIndex].points) {
             merged[localIndex] = { ...merged[localIndex], points: remoteEmp.points };
           }
-          // Keep most recent mood update - FIXED: Added proper null checks
-          if (remoteEmp.lastMoodDate && (!merged[localIndex].lastMoodDate || 
-              (merged[localIndex].lastMoodDate !== null && remoteEmp.lastMoodDate > merged[localIndex].lastMoodDate))) {
-            merged[localIndex].mood = remoteEmp.mood;
-            merged[localIndex].lastMoodDate = remoteEmp.lastMoodDate;
-            merged[localIndex].lastUpdated = remoteEmp.lastUpdated;
+          // Keep most recent mood update - FIXED: Proper null handling
+          if (remoteEmp.lastMoodDate) {
+            const localMoodDate = merged[localIndex].lastMoodDate;
+            if (localMoodDate === null || remoteEmp.lastMoodDate > localMoodDate) {
+              merged[localIndex].mood = remoteEmp.mood;
+              merged[localIndex].lastMoodDate = remoteEmp.lastMoodDate;
+              merged[localIndex].lastUpdated = remoteEmp.lastUpdated;
+            }
           }
         } else {
           merged.push(remoteEmp);
