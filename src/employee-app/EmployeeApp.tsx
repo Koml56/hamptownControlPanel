@@ -1,4 +1,4 @@
-// EmployeeApp.tsx - Main application component with fixed daily task reset functionality
+// EmployeeApp.tsx - Updated with multi-device sync functionality
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Users, 
@@ -23,6 +23,7 @@ import Store from './Store';
 import AdminPanel from './AdminPanel';
 import DailyReports from './DailyReports';
 import PrepListPrototype from './PrepListPrototype';
+import SyncStatusIndicator from './SyncStatusIndicator';
 
 // Hooks and Functions
 import { useFirebaseData, useAuth } from './hooks';
@@ -34,7 +35,7 @@ import { getDefaultStoreItems } from './defaultData';
 import type { ActiveTab, Employee, Task, DailyDataMap, TaskAssignments, StoreItem } from './types';
 
 const EmployeeApp: React.FC = () => {
-  // Firebase and Auth hooks
+  // Firebase and Auth hooks with multi-device sync
   const {
     isLoading,
     lastSync,
@@ -49,6 +50,11 @@ const EmployeeApp: React.FC = () => {
     scheduledPreps,
     prepSelections,
     storeItems: firebaseStoreItems,
+    // Multi-device sync properties
+    activeDevices,
+    syncEvents,
+    deviceCount,
+    isMultiDeviceEnabled,
     setEmployees,
     setTasks,
     setDailyData,
@@ -61,7 +67,10 @@ const EmployeeApp: React.FC = () => {
     setStoreItems: setFirebaseStoreItems,
     loadFromFirebase,
     saveToFirebase,
-    quickSave
+    quickSave,
+    // Multi-device sync actions
+    toggleMultiDeviceSync,
+    refreshFromAllDevices
   } = useFirebaseData();
 
   const {
@@ -304,6 +313,13 @@ const EmployeeApp: React.FC = () => {
                 Admin Mode
               </div>
             )}
+            {/* Multi-device sync indicator in header */}
+            {isMultiDeviceEnabled && deviceCount > 1 && (
+              <div className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full flex items-center space-x-1">
+                <Users className="w-3 h-3" />
+                <span>{deviceCount} devices</span>
+              </div>
+            )}
           </div>
           <div className="flex items-center space-x-2">
             {isAdmin && (
@@ -459,6 +475,11 @@ const EmployeeApp: React.FC = () => {
                   <p className="mt-1 text-sm text-blue-600">
                     All cleaning tasks and assignments have been reset for today. Time to start fresh and earn those points!
                   </p>
+                  {isMultiDeviceEnabled && deviceCount > 1 && (
+                    <p className="mt-1 text-xs text-blue-500">
+                      📱 Synced across {deviceCount} devices
+                    </p>
+                  )}
                 </div>
                 <div className="flex-shrink-0 ml-3">
                   <button
@@ -474,10 +495,9 @@ const EmployeeApp: React.FC = () => {
           </div>
         )}
 
-        {/* Floating Status Indicator */}
-        <div className="fixed bottom-20 right-4 z-50 space-y-2">
-          {/* Admin Test Reset Button - FIXED to clear both */}
-          {isAdmin && (
+        {/* Admin Test Reset Button */}
+        {isAdmin && (
+          <div className="fixed bottom-20 right-4 z-50">
             <button
               onClick={handleManualReset}
               className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-full shadow-lg transition-colors text-sm font-medium"
@@ -485,36 +505,22 @@ const EmployeeApp: React.FC = () => {
             >
               🧪 Test Reset
             </button>
-          )}
+          </div>
+        )}
 
-          {/* Status Indicators */}
-          {isLoading && (
-            <div className="bg-white/80 backdrop-blur-sm rounded-full px-4 py-2 shadow-lg flex items-center space-x-2 border border-blue-100">
-              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
-              <span className="text-blue-700 text-xs">Syncing...</span>
-            </div>
-          )}
-
-          {lastSync && connectionStatus === 'connected' && !isLoading && (
-            <div 
-              className="bg-white/80 backdrop-blur-sm rounded-full px-4 py-2 shadow-lg flex items-center space-x-2 border border-green-100 hover:bg-white/90 transition-all cursor-default"
-              title={`Last saved: ${lastSync}`}
-            >
-              <div className="w-2 h-2 rounded-full bg-green-500"></div>
-              <span className="text-green-700 text-xs">Saved</span>
-            </div>
-          )}
-
-          {connectionStatus === 'error' && (
-            <div 
-              onClick={loadFromFirebase}
-              className="bg-white/80 backdrop-blur-sm rounded-full px-4 py-2 shadow-lg flex items-center space-x-2 border border-red-100 hover:bg-white/90 transition-all cursor-pointer"
-            >
-              <div className="w-2 h-2 rounded-full bg-red-500"></div>
-              <span className="text-red-700 text-xs">Reconnect</span>
-            </div>
-          )}
-        </div>
+        {/* Enhanced Sync Status Indicator */}
+        <SyncStatusIndicator
+          isLoading={isLoading}
+          lastSync={lastSync}
+          connectionStatus={connectionStatus}
+          loadFromFirebase={loadFromFirebase}
+          activeDevices={activeDevices}
+          syncEvents={syncEvents}
+          deviceCount={deviceCount}
+          isMultiDeviceEnabled={isMultiDeviceEnabled}
+          toggleMultiDeviceSync={toggleMultiDeviceSync}
+          refreshFromAllDevices={refreshFromAllDevices}
+        />
 
         {/* Tab Content */}
         {activeTab === 'mood' && (
