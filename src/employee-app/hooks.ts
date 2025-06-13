@@ -81,7 +81,9 @@ const setupMidnightReset = (
   setCompletedTasks: (tasks: Set<number>) => void,
   saveToFirebase: () => void
 ): (() => void) => {
-  const scheduleNextReset = () => {
+  let currentTimer: NodeJS.Timeout | null = null;
+  
+  const scheduleNextReset = (): NodeJS.Timeout => {
     const now = new Date();
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -96,17 +98,17 @@ const setupMidnightReset = (
       checkAndResetDailyTasks(completedTasks, setCompletedTasks, saveToFirebase);
       
       // Schedule the next reset
-      const nextTimer = scheduleNextReset();
-      return nextTimer;
+      currentTimer = scheduleNextReset();
     }, timeUntilMidnight);
   };
   
-  const timer = scheduleNextReset();
+  currentTimer = scheduleNextReset();
   
   // Return cleanup function
   return () => {
-    if (timer) {
-      clearTimeout(timer);
+    if (currentTimer) {
+      clearTimeout(currentTimer);
+      currentTimer = null;
     }
   };
 };
