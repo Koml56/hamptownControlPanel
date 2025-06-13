@@ -1,4 +1,4 @@
-/// PrepListPrototype.tsx - Complete implementation with all features
+// PrepListPrototype.tsx - Complete implementation with all features
 import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, Plus, ChefHat, Check, Star, Trash2, Users, Search, X } from 'lucide-react';
 import { getFormattedDate } from './utils';
@@ -279,7 +279,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
     return prepSelections[selectionKey] || { priority: 'medium', timeSlot: '', selected: false };
   };
 
-  // Update prep selection with smart workflow - FIXED to prevent duplicates + AUTO SYNC
+  // Update prep selection with smart workflow - FIXED to prevent duplicates
   const updatePrepSelection = (
     prep: PrepItem, 
     field: 'priority' | 'timeSlot', 
@@ -291,19 +291,14 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
     
     if (field === 'priority') {
       // Step 1: Set priority and immediately move to time slot selection
-      const updatedSelections = {
-        ...prepSelections,
+      setPrepSelections(prev => ({
+        ...prev,
         [selectionKey]: { 
-          ...currentSelection, 
+          ...prev[selectionKey], 
           priority: value as Priority,
           selected: currentSelection.selected // Keep current selection state
         }
-      };
-      
-      setPrepSelections(updatedSelections);
-      
-      // Sync selections immediately
-      quickSave('prepSelections', updatedSelections);
+      }));
       
       // Move to time slot selection step and immediately open time dropdown with context
       setAssignmentStep(prev => ({ ...prev, [prep.id]: 'timeSlot' }));
@@ -321,29 +316,24 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
         selected: true // Auto-select when time is chosen
       };
       
-      const updatedSelections = {
-        ...prepSelections,
+      setPrepSelections(prev => ({
+        ...prev,
         [selectionKey]: updatedSelection
-      };
-      
-      setPrepSelections(updatedSelections);
+      }));
       
       // Check if prep is already scheduled to prevent duplicates
       const existingScheduledPrep = scheduledPreps.find(p => 
         p.prepId === prep.id && p.scheduledDate === getDateString(selectedDate)
       );
       
-      let updatedScheduledPreps;
-      
       if (existingScheduledPrep) {
         // Update existing scheduled prep
         console.log(`🔄 Updating existing prep: ${prep.name} with new priority/time`);
-        updatedScheduledPreps = scheduledPreps.map(p => 
+        setScheduledPreps(prev => prev.map(p => 
           p.prepId === prep.id && p.scheduledDate === getDateString(selectedDate)
             ? { ...p, priority: updatedSelection.priority, timeSlot: value }
             : p
-        );
-        setScheduledPreps(updatedScheduledPreps);
+        ));
       } else {
         // Create new scheduled prep only if it doesn't exist
         console.log(`➕ Creating new scheduled prep: ${prep.name}`);
@@ -363,18 +353,8 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
           assignedTo: null,
           notes: ''
         };
-        updatedScheduledPreps = [...scheduledPreps, newScheduledPrep];
-        setScheduledPreps(updatedScheduledPreps);
+        setScheduledPreps(prev => [...prev, newScheduledPrep]);
       }
-      
-      // Sync both selections and scheduled preps immediately
-      console.log('🔥 Syncing prep changes to Firebase...');
-      Promise.all([
-        quickSave('prepSelections', updatedSelections),
-        quickSave('scheduledPreps', updatedScheduledPreps)
-      ]).then(() => {
-        console.log('✅ Prep changes synced successfully');
-      });
       
       // Complete the workflow - close all dropdowns
       setAssignmentStep(prev => ({ ...prev, [prep.id]: null }));
