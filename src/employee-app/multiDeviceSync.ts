@@ -1,4 +1,4 @@
-export { MultiDeviceSyncService };
+// Exports are handled by the class declaration above
 export type { DeviceInfo, SyncEvent };// multiDeviceSync.ts - Complete multi-device synchronization service
 import { FIREBASE_CONFIG } from './constants';
 import type { Employee, Task, DailyDataMap, TaskAssignments, PrepItem, ScheduledPrep, PrepSelections, StoreItem } from './types';
