@@ -471,7 +471,7 @@ export class MultiDeviceSyncService {
         fetch(`${this.baseUrl}/storeItems.json`)
       ]);
 
-      const data = {
+      const data: Record<string, any> = {
         employees: await employeesRes.json(),
         tasks: await tasksRes.json(),
         dailyData: await dailyDataRes.json(),
