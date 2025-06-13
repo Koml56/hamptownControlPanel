@@ -371,7 +371,7 @@ export const useFirebaseData = () => {
     
     // Only check for daily reset once per day
     if (hasAlreadyCheckedToday !== today && completedTasks.size > 0) {
-      const wasReset = checkAndResetDailyTasks(completedTasks, setCompletedTasks, quickSave);
+      const wasReset = checkAndResetDailyTasks(completedTasks, taskAssignments, setCompletedTasks, setTaskAssignments, quickSave);
       if (wasReset) {
         console.log('🆕 Daily tasks reset on app initialization');
       }
@@ -380,7 +380,7 @@ export const useFirebaseData = () => {
 
     // Setup midnight reset timer only once
     if (!midnightResetCleanupRef.current) {
-      midnightResetCleanupRef.current = setupMidnightReset(completedTasks, setCompletedTasks, quickSave);
+      midnightResetCleanupRef.current = setupMidnightReset(completedTasks, taskAssignments, setCompletedTasks, setTaskAssignments, quickSave);
     }
 
     // Cleanup on unmount
