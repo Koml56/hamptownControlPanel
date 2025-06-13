@@ -98,14 +98,14 @@ const EmployeeApp: React.FC = () => {
     return () => clearInterval(interval);
   }, [connectionStatus, isLoading, saveToFirebase]);
 
-  // Check for daily reset notification
+  // Check for daily reset notification - improved logic
   useEffect(() => {
     const checkDailyReset = () => {
       const lastNotificationDate = localStorage.getItem('lastDailyResetNotification');
       const lastResetDate = localStorage.getItem('lastTaskResetDate');
       const today = getFormattedDate(new Date());
       
-      console.log('🔔 Checking notification:', { 
+      console.log('🔍 Checking notification:', { 
         lastNotificationDate, 
         lastResetDate, 
         today, 
@@ -113,27 +113,53 @@ const EmployeeApp: React.FC = () => {
       });
       
       // Show notification if:
-      // 1. We haven't shown notification today
-      // 2. Tasks were reset today (lastResetDate === today)
-      // 3. There are no completed tasks (confirming reset worked)
-      if (lastNotificationDate !== today && lastResetDate === today && completedTasks.size === 0) {
-        console.log('🎉 Showing daily reset notification');
+      // 1. A reset happened today (lastResetDate === today)
+      // 2. We haven't shown notification today (lastNotificationDate !== today)
+      // 3. Tasks are actually cleared (completedTasks.size === 0)
+      if (lastResetDate === today && 
+          lastNotificationDate !== today && 
+          completedTasks.size === 0) {
+        
+        console.log('📢 Showing daily reset notification');
         setShowDailyResetNotification(true);
         localStorage.setItem('lastDailyResetNotification', today);
         
-        // Auto-hide notification after 10 seconds
+        // Auto-hide notification after 8 seconds
         setTimeout(() => {
           setShowDailyResetNotification(false);
-        }, 10000);
+        }, 8000);
       }
     };
 
-    checkDailyReset();
-  }, [completedTasks]);
+    // Delay the check slightly to allow reset to complete
+    const timer = setTimeout(checkDailyReset, 1500);
+    return () => clearTimeout(timer);
+  }, [completedTasks.size]); // React to changes in task count
 
   // Update user mood when current user changes
   useEffect(() => {
-    const currentEmployee = employees.find(emp => emp.id === currentUser.id);
+    // Manual reset function for testing (admin only)
+  const handleManualReset = useCallback(() => {
+    if (!isAdmin) return;
+    
+    console.log('🧪 Manual reset triggered by admin');
+    setCompletedTasks(new Set());
+    localStorage.setItem('lastTaskResetDate', getFormattedDate(new Date()));
+    localStorage.removeItem('lastDailyResetNotification'); // Allow notification to show again
+    
+    // Show notification
+    setShowDailyResetNotification(true);
+    setTimeout(() => {
+      setShowDailyResetNotification(false);
+    }, 8000);
+    
+    // Save to Firebase
+    setTimeout(() => {
+      quickSave('completedTasks', []);
+    }, 500);
+  }, [isAdmin, setCompletedTasks, quickSave]);
+
+  const currentEmployee = employees.find(emp => emp.id === currentUser.id);
     if (currentEmployee) {
       setUserMood(currentEmployee.mood);
     }
@@ -191,14 +217,6 @@ const EmployeeApp: React.FC = () => {
     handleDataChange();
   }, [storeItems, setFirebaseStoreItems, handleDataChange]);
 
-  // Manual reset function for testing
-  const manualResetTasks = useCallback(() => {
-    console.log('🔄 Manual task reset triggered');
-    setCompletedTasksWithSave(new Set());
-    localStorage.setItem('lastTaskResetDate', getFormattedDate(new Date()));
-    localStorage.removeItem('lastDailyResetNotification'); // Allow notification to show again
-  }, [setCompletedTasksWithSave]);
-
   // Event handlers
   const handleAdminLoginSubmit = () => {
     const success = handleAdminLogin(adminPassword, setIsAdmin, setActiveTab, setAdminPassword);
@@ -246,15 +264,6 @@ const EmployeeApp: React.FC = () => {
             )}
           </div>
           <div className="flex items-center space-x-2">
-            {isAdmin && (
-              <button
-                onClick={manualResetTasks}
-                className="p-2 text-orange-600 hover:text-orange-800 hover:bg-orange-50 rounded-lg"
-                title="Reset Tasks (Debug)"
-              >
-                🔄
-              </button>
-            )}
             {isAdmin && (
               <button
                 onClick={handleAdminLogout}
@@ -424,7 +433,19 @@ const EmployeeApp: React.FC = () => {
         )}
 
         {/* Floating Status Indicator */}
-        <div className="fixed bottom-20 right-4 z-50">
+        <div className="fixed bottom-20 right-4 z-50 space-y-2">
+          {/* Admin Test Reset Button */}
+          {isAdmin && (
+            <button
+              onClick={handleManualReset}
+              className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-full shadow-lg transition-colors text-sm font-medium"
+              title="Test Daily Reset (Admin Only)"
+            >
+              🧪 Test Reset
+            </button>
+          )}
+
+          {/* Status Indicators */}
           {isLoading && (
             <div className="bg-white/80 backdrop-blur-sm rounded-full px-4 py-2 shadow-lg flex items-center space-x-2 border border-blue-100">
               <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
