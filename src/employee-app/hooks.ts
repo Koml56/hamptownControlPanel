@@ -1,5 +1,7 @@
+// hooks.ts - Enhanced with multi-device sync
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { FirebaseService } from './firebaseService';
+import { MultiDeviceSyncService, type DeviceInfo, type SyncEvent } from './multiDeviceSync';
 import { getFormattedDate } from './utils';
 import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData } from './defaultData';
 import type {
@@ -62,10 +64,6 @@ const checkAndResetDailyTasks = (
     needsReset: lastResetDate !== today && (completedTasks.size > 0 || Object.keys(taskAssignments).length > 0)
   });
   
-  // Only reset if:
-  // 1. It's a different day than last reset
-  // 2. There are actually completed tasks OR task assignments to reset
-  // 3. We haven't already processed this reset (prevent multiple resets)
   if (lastResetDate !== today && (completedTasks.size > 0 || Object.keys(taskAssignments).length > 0)) {
     const resetInProgress = localStorage.getItem('resetInProgress');
     if (resetInProgress === today) {
@@ -74,16 +72,9 @@ const checkAndResetDailyTasks = (
     }
     
     console.log('🔄 DAILY RESET: Clearing completed tasks AND task assignments for new day');
-    console.log('📋 Before daily reset:', { 
-      completedTasksCount: completedTasks.size, 
-      assignmentsCount: Object.keys(taskAssignments).length,
-      taskAssignments: taskAssignments
-    });
     
-    // Mark reset as in progress to prevent duplicates
     localStorage.setItem('resetInProgress', today);
     
-    // Clear both completed tasks AND task assignments immediately
     const emptySet = new Set<number>();
     const emptyAssignments = {};
     
@@ -92,9 +83,7 @@ const checkAndResetDailyTasks = (
     localStorage.setItem('lastTaskResetDate', today);
     
     console.log('✅ After daily reset: All tasks unmarked and unassigned');
-    console.log('📋 Task assignments cleared:', emptyAssignments);
     
-    // Save both empty sets directly to Firebase
     setTimeout(async () => {
       try {
         await Promise.all([
@@ -102,8 +91,6 @@ const checkAndResetDailyTasks = (
           quickSave('taskAssignments', {})
         ]);
         console.log('✅ DAILY RESET: Both completedTasks AND taskAssignments saved to Firebase');
-        console.log('📤 Saved to Firebase: completedTasks=[], taskAssignments={}');
-        // Clear the reset in progress flag after successful save
         localStorage.removeItem('resetInProgress');
       } catch (error) {
         console.error('❌ Failed to save reset to Firebase:', error);
@@ -111,62 +98,27 @@ const checkAndResetDailyTasks = (
       }
     }, 500);
     
-    return true; // Tasks were reset
+    return true;
   }
   
-  // Set the reset date if it's not set (first time app is used)
   if (!lastResetDate) {
     localStorage.setItem('lastTaskResetDate', today);
     console.log('📅 Set initial reset date:', today);
   }
   
-  return false; // No reset needed
-};
-
-// Set up midnight reset timer
-const setupMidnightReset = (
-  completedTasks: Set<number>,
-  taskAssignments: TaskAssignments,
-  setCompletedTasks: (tasks: Set<number>) => void,
-  setTaskAssignments: (updater: (prev: TaskAssignments) => TaskAssignments) => void,
-  quickSave: (field: string, data: any) => Promise<void>
-): (() => void) => {
-  let currentTimer: NodeJS.Timeout | null = null;
-  
-  const scheduleNextReset = (): NodeJS.Timeout => {
-    const now = new Date();
-    const tomorrow = new Date(now);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(0, 1, 0, 0); // 12:01 AM
-    
-    const timeUntilMidnight = tomorrow.getTime() - now.getTime();
-    
-    console.log(`⏰ Next task reset scheduled in ${Math.round(timeUntilMidnight / 1000 / 60)} minutes`);
-    
-    return setTimeout(() => {
-      console.log('🌅 Midnight reached - resetting daily tasks and assignments');
-      checkAndResetDailyTasks(completedTasks, taskAssignments, setCompletedTasks, setTaskAssignments, quickSave);
-      
-      // Schedule the next reset
-      currentTimer = scheduleNextReset();
-    }, timeUntilMidnight);
-  };
-  
-  currentTimer = scheduleNextReset();
-  
-  // Return cleanup function
-  return () => {
-    if (currentTimer) {
-      clearTimeout(currentTimer);
-      currentTimer = null;
-    }
-  };
+  return false;
 };
 
 export const useFirebaseData = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
+
+  // Multi-device sync state
+  const [activeDevices, setActiveDevices] = useState<DeviceInfo[]>([]);
+  const [syncEvents, setSyncEvents] = useState<SyncEvent[]>([]);
+  const [deviceCount, setDeviceCount] = useState(1);
+  const [isMultiDeviceEnabled, setIsMultiDeviceEnabled] = useState(true);
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -184,9 +136,107 @@ export const useFirebaseData = () => {
   const [storeItems, setStoreItems] = useState<StoreItem[]>([]);
 
   const firebaseService = new FirebaseService();
+  const multiDeviceSyncRef = useRef<MultiDeviceSyncService | null>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSaveDataRef = useRef<string>('');
-  const midnightResetCleanupRef = useRef<(() => void) | null>(null);
+
+  // Initialize multi-device sync
+  useEffect(() => {
+    if (isMultiDeviceEnabled && !multiDeviceSyncRef.current) {
+      console.log('🔄 Initializing multi-device sync...');
+      
+      multiDeviceSyncRef.current = new MultiDeviceSyncService('Current User');
+      
+      // Setup sync callbacks
+      const syncService = multiDeviceSyncRef.current;
+      
+      // Subscribe to field changes
+      syncService.onFieldChange('employees', (data) => {
+        console.log('📥 Received employees update from another device');
+        if (data && Array.isArray(data)) {
+          setEmployees(migrateEmployeeData(data));
+        }
+      });
+      
+      syncService.onFieldChange('tasks', (data) => {
+        console.log('📥 Received tasks update from another device');
+        if (data && Array.isArray(data)) {
+          setTasks(migrateTaskData(data));
+        }
+      });
+      
+      syncService.onFieldChange('completedTasks', (data) => {
+        console.log('📥 Received completedTasks update from another device');
+        if (data && Array.isArray(data)) {
+          setCompletedTasks(new Set(data));
+        }
+      });
+      
+      syncService.onFieldChange('taskAssignments', (data) => {
+        console.log('📥 Received taskAssignments update from another device');
+        if (data && typeof data === 'object') {
+          setTaskAssignments(data);
+        }
+      });
+      
+      syncService.onFieldChange('dailyData', (data) => {
+        console.log('📥 Received dailyData update from another device');
+        if (data && typeof data === 'object') {
+          setDailyData(data);
+        }
+      });
+      
+      syncService.onFieldChange('prepItems', (data) => {
+        console.log('📥 Received prepItems update from another device');
+        if (data && Array.isArray(data)) {
+          setPrepItems(data);
+        }
+      });
+      
+      syncService.onFieldChange('scheduledPreps', (data) => {
+        console.log('📥 Received scheduledPreps update from another device');
+        if (data && Array.isArray(data)) {
+          setScheduledPreps(data);
+        }
+      });
+      
+      syncService.onFieldChange('storeItems', (data) => {
+        console.log('📥 Received storeItems update from another device');
+        if (data && Array.isArray(data)) {
+          setStoreItems(data);
+        }
+      });
+      
+      // Setup device count callback
+      syncService.onDeviceCountChanged((count) => {
+        console.log(`📱 Device count changed: ${count}`);
+        setDeviceCount(count);
+        // Update active devices list
+        syncService.getActiveDevices().then(setActiveDevices);
+      });
+      
+      // Setup sync event callback
+      syncService.onSyncEventReceived((event) => {
+        console.log('🔄 Sync event received:', event);
+        setSyncEvents(prev => [...prev.slice(-19), event]); // Keep last 20 events
+        
+        // Show sync pulse effect
+        if (event.type === 'data_update') {
+          setLastSync(new Date().toLocaleTimeString());
+        }
+      });
+      
+      // Connect to sync service
+      syncService.connect().catch(console.error);
+    }
+    
+    return () => {
+      if (multiDeviceSyncRef.current) {
+        multiDeviceSyncRef.current.disconnect();
+        multiDeviceSyncRef.current = null;
+      }
+    };
+  }, [isMultiDeviceEnabled]);
 
   // Quick save function for individual fields
   const quickSave = useCallback(async (field: string, data: any) => {
@@ -199,12 +249,18 @@ export const useFirebaseData = () => {
         body: JSON.stringify(data)
       });
       console.log(`✅ Quick saved ${field}`);
+      
+      // Sync to other devices if multi-device is enabled
+      if (isMultiDeviceEnabled && multiDeviceSyncRef.current) {
+        await multiDeviceSyncRef.current.syncData(field, data);
+      }
+      
     } catch (error) {
       console.error(`❌ Quick save failed for ${field}:`, error);
     }
-  }, [connectionStatus]);
+  }, [connectionStatus, isMultiDeviceEnabled]);
 
-  // Функция отложенного сохранения
+  // Enhanced save function with multi-device sync
   const debouncedSave = useCallback(async () => {
     if (connectionStatus !== 'connected' || isLoading) {
       return;
@@ -228,19 +284,7 @@ export const useFirebaseData = () => {
       return;
     }
 
-    console.log('🔄 Saving data to Firebase...');
-    console.log('📦 Data snapshot:', {
-      employees,
-      tasks,
-      dailyData,
-      completedTasks: Array.from(completedTasks),
-      taskAssignments,
-      customRoles,
-      prepItems,
-      scheduledPreps,
-      prepSelections,
-      storeItems
-    });
+    console.log('🔄 Saving data to Firebase with multi-device sync...');
 
     setIsLoading(true);
     try {
@@ -259,6 +303,26 @@ export const useFirebaseData = () => {
 
       setLastSync(new Date().toLocaleTimeString());
       lastSaveDataRef.current = currentDataHash;
+      
+      // Sync all fields to other devices
+      if (isMultiDeviceEnabled && multiDeviceSyncRef.current) {
+        const syncPromises = [
+          multiDeviceSyncRef.current.syncData('employees', employees),
+          multiDeviceSyncRef.current.syncData('tasks', tasks),
+          multiDeviceSyncRef.current.syncData('dailyData', dailyData),
+          multiDeviceSyncRef.current.syncData('completedTasks', Array.from(completedTasks)),
+          multiDeviceSyncRef.current.syncData('taskAssignments', taskAssignments),
+          multiDeviceSyncRef.current.syncData('customRoles', customRoles),
+          multiDeviceSyncRef.current.syncData('prepItems', prepItems),
+          multiDeviceSyncRef.current.syncData('scheduledPreps', scheduledPreps),
+          multiDeviceSyncRef.current.syncData('prepSelections', prepSelections),
+          multiDeviceSyncRef.current.syncData('storeItems', storeItems)
+        ];
+        
+        await Promise.all(syncPromises);
+        console.log('📤 All data synced to other devices');
+      }
+      
     } catch (error) {
       console.error('Save failed:', error);
       setConnectionStatus('error');
@@ -277,10 +341,10 @@ export const useFirebaseData = () => {
     prepSelections,
     storeItems,
     connectionStatus,
-    isLoading
+    isLoading,
+    isMultiDeviceEnabled
   ]);
 
-  // Вызывает debouncedSave с задержкой
   const saveToFirebase = useCallback(() => {
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
@@ -338,7 +402,7 @@ export const useFirebaseData = () => {
       });
       lastSaveDataRef.current = dataHash;
 
-      // IMPORTANT: Check and reset daily tasks after loading data (only once)
+      // Check for daily reset after loading data
       const hasAlreadyCheckedToday = localStorage.getItem('resetCheckedToday');
       const today = getFormattedDate(new Date());
       
@@ -363,7 +427,6 @@ export const useFirebaseData = () => {
       setEmployees(getDefaultEmployees());
       setTasks(getDefaultTasks());
       setDailyData(getEmptyDailyData());
-      // Initialize empty prep list data on error
       setPrepItems([]);
       setScheduledPreps([]);
       setPrepSelections({});
@@ -371,48 +434,32 @@ export const useFirebaseData = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading]);
+  }, [isLoading, quickSave]);
 
-  // Setup daily reset functionality - improved to prevent loops
-  useEffect(() => {
-    const today = getFormattedDate(new Date());
-    const hasAlreadyCheckedToday = localStorage.getItem('resetCheckedToday');
-    
-    // Only check for daily reset once per day
-    if (hasAlreadyCheckedToday !== today && completedTasks.size > 0) {
-      const wasReset = checkAndResetDailyTasks(completedTasks, taskAssignments, setCompletedTasks, setTaskAssignments, quickSave);
-      if (wasReset) {
-        console.log('🆕 Daily tasks reset on app initialization');
-      }
-      localStorage.setItem('resetCheckedToday', today);
+  // Toggle multi-device sync
+  const toggleMultiDeviceSync = useCallback(() => {
+    setIsMultiDeviceEnabled(prev => !prev);
+    console.log(`🔄 Multi-device sync ${!isMultiDeviceEnabled ? 'enabled' : 'disabled'}`);
+  }, [isMultiDeviceEnabled]);
+
+  // Force refresh from all devices
+  const refreshFromAllDevices = useCallback(async () => {
+    if (multiDeviceSyncRef.current) {
+      await multiDeviceSyncRef.current.refreshDataFromAllDevices();
     }
+  }, []);
 
-    // Setup midnight reset timer only once
-    if (!midnightResetCleanupRef.current) {
-      midnightResetCleanupRef.current = setupMidnightReset(completedTasks, taskAssignments, setCompletedTasks, setTaskAssignments, quickSave);
-    }
-
-    // Cleanup on unmount
-    return () => {
-      if (midnightResetCleanupRef.current) {
-        midnightResetCleanupRef.current();
-        midnightResetCleanupRef.current = null;
-      }
-    };
-  }, []); // Only run once on mount - no dependencies to prevent loops
-
-  // Save to Firebase when data changes (but debounce to prevent infinite loops)
+  // Save to Firebase when data changes
   useEffect(() => {
     const saveTimer = setTimeout(() => {
       saveToFirebase();
-    }, 1000); // 1 second debounce
+    }, 1000);
     
     return () => clearTimeout(saveTimer);
-  }, [employees, tasks, dailyData, taskAssignments, customRoles, prepItems, scheduledPreps, prepSelections, storeItems]); // Removed completedTasks to prevent reset loops
+  }, [employees, tasks, dailyData, taskAssignments, customRoles, prepItems, scheduledPreps, prepSelections, storeItems]);
 
-  // Handle completedTasks changes separately with longer debounce
+  // Handle completedTasks changes separately
   useEffect(() => {
-    // Don't save immediately after a reset (check if localStorage was just updated)
     const lastResetDate = localStorage.getItem('lastTaskResetDate');
     const today = getFormattedDate(new Date());
     const isResetDay = lastResetDate === today && completedTasks.size === 0;
@@ -420,20 +467,17 @@ export const useFirebaseData = () => {
     if (!isResetDay) {
       const saveTimer = setTimeout(() => {
         quickSave('completedTasks', Array.from(completedTasks));
-      }, 2000); // 2 second debounce for completed tasks
+      }, 2000);
       
       return () => clearTimeout(saveTimer);
     }
   }, [completedTasks, quickSave]);
 
-  // Очистка таймера при размонтировании
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
-      }
-      if (midnightResetCleanupRef.current) {
-        midnightResetCleanupRef.current();
       }
     };
   }, []);
@@ -454,6 +498,12 @@ export const useFirebaseData = () => {
     prepSelections,
     storeItems,
 
+    // Multi-device sync state
+    activeDevices,
+    syncEvents,
+    deviceCount,
+    isMultiDeviceEnabled,
+
     // Setters
     setEmployees,
     setTasks,
@@ -469,7 +519,11 @@ export const useFirebaseData = () => {
     // Actions
     loadFromFirebase,
     saveToFirebase,
-    quickSave
+    quickSave,
+    
+    // Multi-device sync actions
+    toggleMultiDeviceSync,
+    refreshFromAllDevices
   };
 };
 
@@ -479,6 +533,9 @@ export const useAuth = () => {
 
   const switchUser = useCallback((employee: Employee) => {
     setCurrentUser({ id: employee.id, name: employee.name });
+    
+    // Update multi-device sync user if available
+    // This could be passed down from the main hook if needed
   }, []);
 
   const logoutAdmin = useCallback(() => {
