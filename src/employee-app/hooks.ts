@@ -52,10 +52,28 @@ const checkAndResetDailyTasks = (
   const today = getFormattedDate(new Date());
   const lastResetDate = localStorage.getItem('lastTaskResetDate');
   
-  console.log('🔍 Checking daily task reset:', { today, lastResetDate, currentTasksCount: completedTasks.size });
+  console.log('🔍 Checking daily task reset:', { 
+    today, 
+    lastResetDate, 
+    currentTasksCount: completedTasks.size,
+    needsReset: lastResetDate !== today && completedTasks.size > 0
+  });
   
+  // Only reset if:
+  // 1. It's a different day than last reset
+  // 2. There are actually completed tasks to reset
+  // 3. We haven't already processed this reset (prevent multiple resets)
   if (lastResetDate !== today && completedTasks.size > 0) {
+    const resetInProgress = localStorage.getItem('resetInProgress');
+    if (resetInProgress === today) {
+      console.log('⏸️ Reset already in progress for today, skipping');
+      return false;
+    }
+    
     console.log('🔄 Resetting completed tasks for new day');
+    
+    // Mark reset as in progress to prevent duplicates
+    localStorage.setItem('resetInProgress', today);
     
     // Clear the completed tasks immediately
     const emptySet = new Set<number>();
@@ -67,17 +85,21 @@ const checkAndResetDailyTasks = (
       try {
         await quickSave('completedTasks', []);
         console.log('✅ Reset saved to Firebase');
+        // Clear the reset in progress flag after successful save
+        localStorage.removeItem('resetInProgress');
       } catch (error) {
         console.error('❌ Failed to save reset to Firebase:', error);
+        localStorage.removeItem('resetInProgress');
       }
     }, 500);
     
     return true; // Tasks were reset
   }
   
-  // Set the reset date if it's not set
+  // Set the reset date if it's not set (first time app is used)
   if (!lastResetDate) {
     localStorage.setItem('lastTaskResetDate', today);
+    console.log('📅 Set initial reset date:', today);
   }
   
   return false; // No reset needed
@@ -250,7 +272,10 @@ export const useFirebaseData = () => {
   }, [debouncedSave]);
 
   const loadFromFirebase = useCallback(async () => {
-    if (isLoading) return;
+    if (isLoading) {
+      console.log('⏸️ Load already in progress, skipping');
+      return;
+    }
 
     setIsLoading(true);
     setConnectionStatus('connecting');
@@ -293,10 +318,18 @@ export const useFirebaseData = () => {
       });
       lastSaveDataRef.current = dataHash;
 
-      // IMPORTANT: Check and reset daily tasks after loading data
-      setTimeout(() => {
-        checkAndResetDailyTasks(new Set(data.completedTasks), setCompletedTasks, quickSave);
-      }, 1000);
+      // IMPORTANT: Check and reset daily tasks after loading data (only once)
+      const hasAlreadyCheckedToday = localStorage.getItem('resetCheckedToday');
+      const today = getFormattedDate(new Date());
+      
+      if (hasAlreadyCheckedToday !== today) {
+        setTimeout(() => {
+          const wasReset = checkAndResetDailyTasks(new Set(data.completedTasks), setCompletedTasks, quickSave);
+          if (wasReset || hasAlreadyCheckedToday !== today) {
+            localStorage.setItem('resetCheckedToday', today);
+          }
+        }, 1000);
+      }
 
     } catch (error) {
       setConnectionStatus('error');
@@ -314,34 +347,33 @@ export const useFirebaseData = () => {
     }
   }, [isLoading]);
 
-  // Setup daily reset functionality
+  // Setup daily reset functionality - improved to prevent loops
   useEffect(() => {
-    // Check for daily reset on app initialization
-    if (completedTasks.size > 0) {
+    const today = getFormattedDate(new Date());
+    const hasAlreadyCheckedToday = localStorage.getItem('resetCheckedToday');
+    
+    // Only check for daily reset once per day
+    if (hasAlreadyCheckedToday !== today && completedTasks.size > 0) {
       const wasReset = checkAndResetDailyTasks(completedTasks, setCompletedTasks, quickSave);
       if (wasReset) {
         console.log('🆕 Daily tasks reset on app initialization');
       }
+      localStorage.setItem('resetCheckedToday', today);
     }
 
-    // Setup midnight reset timer
-    midnightResetCleanupRef.current = setupMidnightReset(completedTasks, setCompletedTasks, quickSave);
+    // Setup midnight reset timer only once
+    if (!midnightResetCleanupRef.current) {
+      midnightResetCleanupRef.current = setupMidnightReset(completedTasks, setCompletedTasks, quickSave);
+    }
 
     // Cleanup on unmount
     return () => {
       if (midnightResetCleanupRef.current) {
         midnightResetCleanupRef.current();
+        midnightResetCleanupRef.current = null;
       }
     };
-  }, []); // Only run once on mount
-
-  // Re-setup midnight timer when completedTasks changes
-  useEffect(() => {
-    if (midnightResetCleanupRef.current) {
-      midnightResetCleanupRef.current();
-    }
-    midnightResetCleanupRef.current = setupMidnightReset(completedTasks, setCompletedTasks, quickSave);
-  }, [completedTasks, setCompletedTasks, quickSave]);
+  }, []); // Only run once on mount - no dependencies to prevent loops
 
   // Save to Firebase when data changes (but debounce to prevent infinite loops)
   useEffect(() => {
