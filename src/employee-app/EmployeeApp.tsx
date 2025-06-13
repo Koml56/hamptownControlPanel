@@ -82,10 +82,22 @@ const EmployeeApp: React.FC = () => {
   const [storeItems, setStoreItems] = useState<StoreItem[]>(getDefaultStoreItems());
   const [showDailyResetNotification, setShowDailyResetNotification] = useState(false);
 
-  // Initialize on mount
+  // Initialize on mount - with better control
   useEffect(() => {
-    loadFromFirebase();
-  }, [loadFromFirebase]);
+    let mounted = true;
+    const initializeApp = async () => {
+      if (mounted && employees.length === 0) { // Only load if we don't have data yet
+        console.log('🚀 Initializing app...');
+        await loadFromFirebase();
+      }
+    };
+    
+    initializeApp();
+    
+    return () => {
+      mounted = false;
+    };
+  }, []); // Only run once on mount
 
   // Set up periodic auto-save (every 5 minutes)
   useEffect(() => {
@@ -98,7 +110,7 @@ const EmployeeApp: React.FC = () => {
     return () => clearInterval(interval);
   }, [connectionStatus, isLoading, saveToFirebase]);
 
-  // Check for daily reset notification - improved logic
+  // Check for daily reset notification - improved logic with better debouncing
   useEffect(() => {
     const checkDailyReset = () => {
       const lastNotificationDate = localStorage.getItem('lastDailyResetNotification');
@@ -109,7 +121,8 @@ const EmployeeApp: React.FC = () => {
         lastNotificationDate, 
         lastResetDate, 
         today, 
-        completedTasksSize: completedTasks.size 
+        completedTasksSize: completedTasks.size,
+        shouldShow: lastResetDate === today && lastNotificationDate !== today && completedTasks.size === 0
       });
       
       // Show notification if:
@@ -131,10 +144,12 @@ const EmployeeApp: React.FC = () => {
       }
     };
 
-    // Delay the check slightly to allow reset to complete
-    const timer = setTimeout(checkDailyReset, 1500);
-    return () => clearTimeout(timer);
-  }, [completedTasks.size]); // React to changes in task count
+    // Only check after initial load is complete and we have stable data
+    if (!isLoading && connectionStatus === 'connected') {
+      const timer = setTimeout(checkDailyReset, 2000); // Wait 2 seconds for stability
+      return () => clearTimeout(timer);
+    }
+  }, [completedTasks.size, isLoading, connectionStatus]); // More specific dependencies
 
   // Update user mood when current user changes
   useEffect(() => {
@@ -201,9 +216,16 @@ const EmployeeApp: React.FC = () => {
     if (!isAdmin) return;
     
     console.log('🧪 Manual reset triggered by admin');
+    const today = getFormattedDate(new Date());
+    
+    // Clear all related localStorage flags
+    localStorage.removeItem('resetInProgress');
+    localStorage.removeItem('lastDailyResetNotification');
+    localStorage.removeItem('resetCheckedToday');
+    
+    // Perform the reset
     setCompletedTasks(new Set());
-    localStorage.setItem('lastTaskResetDate', getFormattedDate(new Date()));
-    localStorage.removeItem('lastDailyResetNotification'); // Allow notification to show again
+    localStorage.setItem('lastTaskResetDate', today);
     
     // Show notification
     setShowDailyResetNotification(true);
