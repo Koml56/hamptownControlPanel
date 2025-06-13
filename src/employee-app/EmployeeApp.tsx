@@ -105,7 +105,7 @@ const EmployeeApp: React.FC = () => {
       const lastResetDate = localStorage.getItem('lastTaskResetDate');
       const today = getFormattedDate(new Date());
       
-      console.log('📢 Checking notification:', { 
+      console.log('🔔 Checking notification:', { 
         lastNotificationDate, 
         lastResetDate, 
         today, 
@@ -114,24 +114,22 @@ const EmployeeApp: React.FC = () => {
       
       // Show notification if:
       // 1. We haven't shown notification today
-      // 2. Tasks were reset today
-      // 3. Completed tasks is empty (indicating reset worked)
+      // 2. Tasks were reset today (lastResetDate === today)
+      // 3. There are no completed tasks (confirming reset worked)
       if (lastNotificationDate !== today && lastResetDate === today && completedTasks.size === 0) {
         console.log('🎉 Showing daily reset notification');
         setShowDailyResetNotification(true);
         localStorage.setItem('lastDailyResetNotification', today);
         
-        // Auto-hide notification after 8 seconds
+        // Auto-hide notification after 10 seconds
         setTimeout(() => {
           setShowDailyResetNotification(false);
-        }, 8000);
+        }, 10000);
       }
     };
 
-    // Small delay to ensure state is settled
-    const timer = setTimeout(checkDailyReset, 1000);
-    return () => clearTimeout(timer);
-  }, [completedTasks.size]); // Only depend on the size, not the full Set
+    checkDailyReset();
+  }, [completedTasks]);
 
   // Update user mood when current user changes
   useEffect(() => {
@@ -193,6 +191,14 @@ const EmployeeApp: React.FC = () => {
     handleDataChange();
   }, [storeItems, setFirebaseStoreItems, handleDataChange]);
 
+  // Manual reset function for testing
+  const manualResetTasks = useCallback(() => {
+    console.log('🔄 Manual task reset triggered');
+    setCompletedTasksWithSave(new Set());
+    localStorage.setItem('lastTaskResetDate', getFormattedDate(new Date()));
+    localStorage.removeItem('lastDailyResetNotification'); // Allow notification to show again
+  }, [setCompletedTasksWithSave]);
+
   // Event handlers
   const handleAdminLoginSubmit = () => {
     const success = handleAdminLogin(adminPassword, setIsAdmin, setActiveTab, setAdminPassword);
@@ -240,6 +246,15 @@ const EmployeeApp: React.FC = () => {
             )}
           </div>
           <div className="flex items-center space-x-2">
+            {isAdmin && (
+              <button
+                onClick={manualResetTasks}
+                className="p-2 text-orange-600 hover:text-orange-800 hover:bg-orange-50 rounded-lg"
+                title="Reset Tasks (Debug)"
+              >
+                🔄
+              </button>
+            )}
             {isAdmin && (
               <button
                 onClick={handleAdminLogout}
@@ -404,31 +419,6 @@ const EmployeeApp: React.FC = () => {
                   </button>
                 </div>
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* Debug Panel (Development Only) */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className="fixed bottom-4 left-4 z-40">
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-xs">
-              <div className="font-semibold text-yellow-800 mb-2">🧪 DEBUG MODE</div>
-              <div className="space-y-1 text-yellow-700">
-                <div>Completed Tasks: {completedTasks.size}</div>
-                <div>Last Reset: {localStorage.getItem('lastTaskResetDate') || 'Never'}</div>
-                <div>Connection: {connectionStatus}</div>
-              </div>
-              <button
-                onClick={() => {
-                  console.log('🧪 Manual reset triggered');
-                  if ((window as any).debugResetTasks) {
-                    (window as any).debugResetTasks();
-                  }
-                }}
-                className="mt-2 px-2 py-1 bg-yellow-200 hover:bg-yellow-300 rounded text-yellow-800 text-xs"
-              >
-                Test Reset
-              </button>
             </div>
           </div>
         )}
