@@ -46,7 +46,9 @@ const migrateTaskData = (tasks: any[]): Task[] => {
 // Daily reset functionality
 const checkAndResetDailyTasks = (
   completedTasks: Set<number>,
+  taskAssignments: TaskAssignments,
   setCompletedTasks: (tasks: Set<number>) => void,
+  setTaskAssignments: (updater: (prev: TaskAssignments) => TaskAssignments) => void,
   quickSave: (field: string, data: any) => Promise<void>
 ): boolean => {
   const today = getFormattedDate(new Date());
@@ -56,35 +58,42 @@ const checkAndResetDailyTasks = (
     today, 
     lastResetDate, 
     currentTasksCount: completedTasks.size,
-    needsReset: lastResetDate !== today && completedTasks.size > 0
+    currentAssignmentsCount: Object.keys(taskAssignments).length,
+    needsReset: lastResetDate !== today && (completedTasks.size > 0 || Object.keys(taskAssignments).length > 0)
   });
   
   // Only reset if:
   // 1. It's a different day than last reset
-  // 2. There are actually completed tasks to reset
+  // 2. There are actually completed tasks OR task assignments to reset
   // 3. We haven't already processed this reset (prevent multiple resets)
-  if (lastResetDate !== today && completedTasks.size > 0) {
+  if (lastResetDate !== today && (completedTasks.size > 0 || Object.keys(taskAssignments).length > 0)) {
     const resetInProgress = localStorage.getItem('resetInProgress');
     if (resetInProgress === today) {
       console.log('⏸️ Reset already in progress for today, skipping');
       return false;
     }
     
-    console.log('🔄 Resetting completed tasks for new day');
+    console.log('🔄 Resetting completed tasks AND task assignments for new day');
     
     // Mark reset as in progress to prevent duplicates
     localStorage.setItem('resetInProgress', today);
     
-    // Clear the completed tasks immediately
+    // Clear both completed tasks AND task assignments immediately
     const emptySet = new Set<number>();
+    const emptyAssignments = {};
+    
     setCompletedTasks(emptySet);
+    setTaskAssignments(() => emptyAssignments);
     localStorage.setItem('lastTaskResetDate', today);
     
-    // Save the empty set directly to Firebase
+    // Save both empty sets directly to Firebase
     setTimeout(async () => {
       try {
-        await quickSave('completedTasks', []);
-        console.log('✅ Reset saved to Firebase');
+        await Promise.all([
+          quickSave('completedTasks', []),
+          quickSave('taskAssignments', {})
+        ]);
+        console.log('✅ Reset saved to Firebase (tasks + assignments cleared)');
         // Clear the reset in progress flag after successful save
         localStorage.removeItem('resetInProgress');
       } catch (error) {
@@ -108,7 +117,9 @@ const checkAndResetDailyTasks = (
 // Set up midnight reset timer
 const setupMidnightReset = (
   completedTasks: Set<number>,
+  taskAssignments: TaskAssignments,
   setCompletedTasks: (tasks: Set<number>) => void,
+  setTaskAssignments: (updater: (prev: TaskAssignments) => TaskAssignments) => void,
   quickSave: (field: string, data: any) => Promise<void>
 ): (() => void) => {
   let currentTimer: NodeJS.Timeout | null = null;
@@ -124,8 +135,8 @@ const setupMidnightReset = (
     console.log(`⏰ Next task reset scheduled in ${Math.round(timeUntilMidnight / 1000 / 60)} minutes`);
     
     return setTimeout(() => {
-      console.log('🌅 Midnight reached - resetting daily tasks');
-      checkAndResetDailyTasks(completedTasks, setCompletedTasks, quickSave);
+      console.log('🌅 Midnight reached - resetting daily tasks and assignments');
+      checkAndResetDailyTasks(completedTasks, taskAssignments, setCompletedTasks, setTaskAssignments, quickSave);
       
       // Schedule the next reset
       currentTimer = scheduleNextReset();
@@ -324,7 +335,13 @@ export const useFirebaseData = () => {
       
       if (hasAlreadyCheckedToday !== today) {
         setTimeout(() => {
-          const wasReset = checkAndResetDailyTasks(new Set(data.completedTasks), setCompletedTasks, quickSave);
+          const wasReset = checkAndResetDailyTasks(
+            new Set(data.completedTasks), 
+            data.taskAssignments, 
+            setCompletedTasks, 
+            setTaskAssignments, 
+            quickSave
+          );
           if (wasReset || hasAlreadyCheckedToday !== today) {
             localStorage.setItem('resetCheckedToday', today);
           }
