@@ -199,6 +199,7 @@ export const useFirebaseData = () => {
     storeItems,
     connectionStatus,
     isLoading,
+    quickSave,
     addSyncEvent
   ]);
 
@@ -212,22 +213,6 @@ export const useFirebaseData = () => {
       debouncedSave();
     }, 2000);
   }, [debouncedSave]);
-
-  // 🎯 NEW: Immediate sync animation trigger
-  const triggerImmediateSync = useCallback(() => {
-    // Show sync animation immediately
-    setIsLoading(true);
-    
-    // Still do the debounced save
-    saveToFirebase();
-    
-    // If no actual save happens within 3 seconds, stop animation
-    setTimeout(() => {
-      if (saveTimeoutRef.current) {
-        setIsLoading(false);
-      }
-    }, 3000);
-  }, [saveToFirebase]);
 
   // Load from Firebase
   const loadFromFirebase = useCallback(async () => {
@@ -315,6 +300,15 @@ export const useFirebaseData = () => {
     saveToFirebase();
   }, [prepItems, scheduledPreps, prepSelections, storeItems]);
 
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, []);
+
   // Multi-device sync functions
   const toggleMultiDeviceSync = useCallback(() => {
     setIsMultiDeviceEnabled(prev => !prev);
@@ -343,15 +337,6 @@ export const useFirebaseData = () => {
       setDeviceCount(1);
     }
   }, [isMultiDeviceEnabled]);
-
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-    };
-  }, []);
 
   return {
     // State
@@ -399,7 +384,6 @@ export const useFirebaseData = () => {
     loadFromFirebase,
     saveToFirebase,
     quickSave, // 🎯 NEW: QuickSave with sync animation
-    triggerImmediateSync, // 🎯 NEW: Immediate sync animation
     
     // Multi-device sync actions
     toggleMultiDeviceSync,
