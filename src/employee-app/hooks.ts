@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { FirebaseService } from './firebaseService';
 import { getFormattedDate } from './utils';
-import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData } from './defaultData';
+import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData, getDefaultStoreItems } from './defaultData';
 import type {
   Employee,
   Task,
@@ -11,7 +11,8 @@ import type {
   CurrentUser,
   PrepItem,
   ScheduledPrep,
-  PrepSelections
+  PrepSelections,
+  StoreItem
 } from './types';
 
 // Migration functions
@@ -59,6 +60,9 @@ export const useFirebaseData = () => {
   const [prepItems, setPrepItems] = useState<PrepItem[]>([]);
   const [scheduledPreps, setScheduledPreps] = useState<ScheduledPrep[]>([]);
   const [prepSelections, setPrepSelections] = useState<PrepSelections>({});
+  
+  // Store data
+  const [storeItems, setStoreItems] = useState<StoreItem[]>([]);
 
   const firebaseService = new FirebaseService();
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -118,7 +122,8 @@ export const useFirebaseData = () => {
       customRolesLength: customRoles.length,
       prepItemsLength: prepItems.length,
       scheduledPrepsLength: scheduledPreps.length,
-      prepSelectionsKeys: Object.keys(prepSelections).length
+      prepSelectionsKeys: Object.keys(prepSelections).length,
+      storeItemsLength: storeItems.length
     });
 
     if (currentDataHash === lastSaveDataRef.current) {
@@ -143,7 +148,8 @@ export const useFirebaseData = () => {
       await Promise.all([
         quickSave('prepItems', prepItems),
         quickSave('scheduledPreps', scheduledPreps),
-        quickSave('prepSelections', prepSelections)
+        quickSave('prepSelections', prepSelections),
+        quickSave('storeItems', storeItems)
       ]);
 
       setLastSync(new Date().toLocaleTimeString());
@@ -164,6 +170,7 @@ export const useFirebaseData = () => {
     prepItems,
     scheduledPreps,
     prepSelections,
+    storeItems,
     connectionStatus,
     isLoading,
     quickSave
@@ -204,21 +211,24 @@ export const useFirebaseData = () => {
       // Load PrepList data
       const baseUrl = 'https://hamptown-panel-default-rtdb.firebaseio.com';
       
-      const [prepItemsRes, scheduledPrepsRes, prepSelectionsRes] = await Promise.all([
+      const [prepItemsRes, scheduledPrepsRes, prepSelectionsRes, storeItemsRes] = await Promise.all([
         fetch(`${baseUrl}/prepItems.json`),
         fetch(`${baseUrl}/scheduledPreps.json`),
-        fetch(`${baseUrl}/prepSelections.json`)
+        fetch(`${baseUrl}/prepSelections.json`),
+        fetch(`${baseUrl}/storeItems.json`)
       ]);
 
-      const [prepItemsData, scheduledPrepsData, prepSelectionsData] = await Promise.all([
+      const [prepItemsData, scheduledPrepsData, prepSelectionsData, storeItemsData] = await Promise.all([
         prepItemsRes.json(),
         scheduledPrepsRes.json(),
-        prepSelectionsRes.json()
+        prepSelectionsRes.json(),
+        storeItemsRes.json()
       ]);
 
       setPrepItems(prepItemsData || []);
       setScheduledPreps(scheduledPrepsData || []);
       setPrepSelections(prepSelectionsData || {});
+      setStoreItems(storeItemsData || getDefaultStoreItems());
 
       setConnectionStatus('connected');
       setLastSync(new Date().toLocaleTimeString());
@@ -232,7 +242,8 @@ export const useFirebaseData = () => {
         customRolesLength: data.customRoles.length,
         prepItemsLength: (prepItemsData || []).length,
         scheduledPrepsLength: (scheduledPrepsData || []).length,
-        prepSelectionsKeys: Object.keys(prepSelectionsData || {}).length
+        prepSelectionsKeys: Object.keys(prepSelectionsData || {}).length,
+        storeItemsLength: (storeItemsData || []).length
       });
       lastSaveDataRef.current = dataHash;
 
@@ -246,6 +257,7 @@ export const useFirebaseData = () => {
       setPrepItems([]);
       setScheduledPreps([]);
       setPrepSelections({});
+      setStoreItems(getDefaultStoreItems());
     } finally {
       setIsLoading(false);
     }
@@ -259,7 +271,7 @@ export const useFirebaseData = () => {
   // Auto-save when PrepList data changes (but don't use quickSave here to avoid double animation)
   useEffect(() => {
     saveToFirebase();
-  }, [prepItems, scheduledPreps, prepSelections]);
+  }, [prepItems, scheduledPreps, prepSelections, storeItems]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -286,6 +298,9 @@ export const useFirebaseData = () => {
     prepItems,
     scheduledPreps,
     prepSelections,
+    
+    // Store state
+    storeItems,
 
     // Setters
     setEmployees,
@@ -299,6 +314,9 @@ export const useFirebaseData = () => {
     setPrepItems,
     setScheduledPreps,
     setPrepSelections,
+    
+    // Store setters
+    setStoreItems,
 
     // Actions
     loadFromFirebase,
