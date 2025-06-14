@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { FirebaseService } from './firebaseService';
 import { getFormattedDate } from './utils';
 import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData, getDefaultStoreItems } from './defaultData';
+import type { DeviceInfo, SyncEvent } from './multiDeviceSync';
 import type {
   Employee,
   Task,
@@ -14,20 +15,6 @@ import type {
   PrepSelections,
   StoreItem
 } from './types';
-
-// Multi-device sync types
-interface DeviceInfo {
-  id: string;
-  name: string;
-  lastSeen: number;
-}
-
-interface SyncEvent {
-  id: string;
-  deviceId: string;
-  timestamp: number;
-  action: string;
-}
 
 // Migration functions
 const migrateEmployeeData = (employees: any[]): Employee[] => {
@@ -115,6 +102,9 @@ export const useFirebaseData = () => {
       setLastSync(new Date().toLocaleTimeString());
       setConnectionStatus('connected');
       
+      // Add sync event
+      addSyncEvent(`sync-${field}`);
+      
       console.log('✅ QuickSave completed successfully for:', field);
       
     } catch (error) {
@@ -125,7 +115,7 @@ export const useFirebaseData = () => {
       // STOP SYNC ANIMATION
       setIsLoading(false);
     }
-  }, []);
+  }, [addSyncEvent]);
 
   // Debounced save function for main data
   const debouncedSave = useCallback(async () => {
@@ -174,6 +164,10 @@ export const useFirebaseData = () => {
 
       setLastSync(new Date().toLocaleTimeString());
       lastSaveDataRef.current = currentDataHash;
+      
+      // Add sync event for main save
+      addSyncEvent('full-sync');
+      
     } catch (error) {
       console.error('Save failed:', error);
       setConnectionStatus('error');
@@ -193,7 +187,8 @@ export const useFirebaseData = () => {
     storeItems,
     connectionStatus,
     isLoading,
-    quickSave
+    quickSave,
+    addSyncEvent
   ]);
 
   // Main save function with debouncing
@@ -312,13 +307,29 @@ export const useFirebaseData = () => {
     loadFromFirebase();
   }, [loadFromFirebase]);
 
+  // Add sync event when data changes
+  const addSyncEvent = useCallback((action: string) => {
+    if (isMultiDeviceEnabled) {
+      const event: SyncEvent = {
+        id: 'event-' + Date.now(),
+        deviceId: 'device-' + Date.now(),
+        timestamp: Date.now(),
+        action: action
+      };
+      setSyncEvents(prev => [event, ...prev.slice(0, 9)]); // Keep only last 10 events
+    }
+  }, [isMultiDeviceEnabled]);
+
   // Mock device info (you can enhance this later)
   useEffect(() => {
     if (isMultiDeviceEnabled) {
       const currentDevice: DeviceInfo = {
         id: 'device-' + Date.now(),
         name: navigator.userAgent.includes('Mobile') ? 'Mobile Device' : 'Desktop',
-        lastSeen: Date.now()
+        lastSeen: Date.now(),
+        user: 'Current User', // Added missing property
+        platform: navigator.userAgent.includes('Mobile') ? 'mobile' : 'desktop', // Added missing property
+        isActive: true // Added missing property
       };
       setActiveDevices([currentDevice]);
       setDeviceCount(1);
