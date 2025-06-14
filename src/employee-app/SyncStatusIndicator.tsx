@@ -1,6 +1,6 @@
-// SyncStatusIndicator.tsx - Simple blurry round design
+// SyncStatusIndicator.tsx - Enhanced floating orb with glass-morphism
 import React, { useState, useEffect } from 'react';
-import { Wifi, WifiOff, RefreshCw, Check, Users, Globe, Eye, EyeOff } from 'lucide-react';
+import { Wifi, WifiOff, RefreshCw, Globe, Users, Eye, EyeOff } from 'lucide-react';
 import type { DeviceInfo, SyncEvent } from './multiDeviceSync';
 
 interface SyncStatusIndicatorProps {
@@ -33,6 +33,21 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
   const [showDetails, setShowDetails] = useState(false);
   const [recentSyncCount, setRecentSyncCount] = useState(0);
 
+  // Add custom CSS for animation delays
+  React.useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      .animation-delay-150 {
+        animation-delay: 150ms;
+      }
+      .animation-delay-300 {
+        animation-delay: 300ms;
+      }
+    `;
+    document.head.appendChild(style);
+    return () => document.head.removeChild(style);
+  }, []);
+
   // Show pulse animation when sync occurs
   useEffect(() => {
     if (syncEvents.length > 0) {
@@ -55,7 +70,7 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
   const getStatusInfo = () => {
     if (isLoading) {
       return {
-        icon: <RefreshCw className="w-5 h-5 animate-spin" />,
+        icon: <RefreshCw className="w-6 h-6 animate-spin" />,
         text: 'Syncing',
         bgColor: 'bg-blue-500/80',
         pulseColor: 'bg-blue-400'
@@ -65,17 +80,17 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
     if (connectionStatus === 'connected' && lastSync) {
       return {
         icon: showSyncPulse ? 
-          <RefreshCw className="w-5 h-5 animate-spin" /> : 
-          <Check className="w-5 h-5" />,
-        text: showSyncPulse ? 'Syncing' : 'Synced',
-        bgColor: 'bg-green-500/80',
-        pulseColor: 'bg-green-400'
+          <RefreshCw className="w-6 h-6 animate-spin" /> : 
+          <Globe className="w-6 h-6 animate-pulse" />,
+        text: showSyncPulse ? 'Syncing' : 'Online',
+        bgColor: 'bg-emerald-500/80',
+        pulseColor: 'bg-emerald-400'
       };
     }
 
     if (connectionStatus === 'error') {
       return {
-        icon: <WifiOff className="w-5 h-5" />,
+        icon: <WifiOff className="w-6 h-6" />,
         text: 'Offline',
         bgColor: 'bg-red-500/80',
         pulseColor: 'bg-red-400'
@@ -83,10 +98,10 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
     }
 
     return {
-      icon: <Wifi className="w-5 h-5" />,
+      icon: <Wifi className="w-6 h-6 animate-pulse" />,
       text: 'Connecting',
-      bgColor: 'bg-yellow-500/80',
-      pulseColor: 'bg-yellow-400'
+      bgColor: 'bg-amber-500/80',
+      pulseColor: 'bg-amber-400'
     };
   };
 
@@ -94,15 +109,18 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
 
   return (
     <div className="fixed bottom-6 right-6 z-50">
-      {/* Main floating status indicator - Simple round design */}
+      {/* Main floating status orb - Enhanced glass-morphism design */}
       <div className="relative">
-        {/* Blurred backdrop */}
+        {/* Multiple shadow layers for depth */}
+        <div className="absolute inset-0 rounded-full bg-black/10 blur-xl scale-110" />
+        <div className="absolute inset-0 rounded-full bg-black/5 blur-2xl scale-125" />
+        
+        {/* Main orb container */}
         <div 
           className={`
-            w-14 h-14 rounded-full backdrop-blur-xl shadow-2xl border border-white/20
-            transition-all duration-300 cursor-pointer transform hover:scale-110
-            ${status.bgColor}
-            ${showSyncPulse ? 'animate-pulse' : ''}
+            relative w-16 h-16 rounded-full cursor-pointer transform transition-all duration-500 ease-out
+            hover:scale-105 hover:rotate-12 active:scale-95
+            ${showSyncPulse ? 'animate-pulse scale-105' : ''}
           `}
           onClick={connectionStatus === 'error' ? loadFromFirebase : () => setShowDetails(!showDetails)}
           title={`
@@ -110,100 +128,137 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
             ${connectionStatus === 'error' ? ' - Click to retry' : ' - Click for details'}
           `}
         >
-          {/* Content */}
-          <div className="flex items-center justify-center w-full h-full text-white">
+          {/* Glass orb with multiple layers */}
+          <div className={`
+            absolute inset-0 rounded-full backdrop-blur-2xl ${status.bgColor}
+            border border-white/30 shadow-2xl
+          `} />
+          
+          {/* Inner glass reflection */}
+          <div className="absolute inset-0.5 rounded-full bg-gradient-to-tr from-white/20 to-transparent" />
+          
+          {/* Blurred inner border */}
+          <div className="absolute inset-1 rounded-full border border-white/40 backdrop-blur-sm" />
+          
+          {/* Content container */}
+          <div className="relative flex items-center justify-center w-full h-full text-white">
             {status.icon}
           </div>
           
-          {/* Multi-device indicator */}
+          {/* Multi-device indicator with glass effect */}
           {connectionStatus === 'connected' && isMultiDeviceEnabled && deviceCount > 1 && (
-            <div className="absolute -top-1 -right-1 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-xs font-bold text-white border-2 border-white shadow-lg">
+            <div className="absolute -top-2 -right-2 w-7 h-7 rounded-full backdrop-blur-xl bg-blue-500/90 
+                          border border-white/50 shadow-xl flex items-center justify-center text-xs font-bold text-white
+                          transform hover:scale-110 transition-transform">
               {deviceCount}
             </div>
           )}
           
-          {/* Sync activity pulse */}
+          {/* Animated sync rings */}
           {showSyncPulse && (
-            <div className="absolute inset-0 rounded-full animate-ping">
-              <div className={`w-full h-full rounded-full ${status.pulseColor} opacity-75`} />
-            </div>
+            <>
+              <div className="absolute inset-0 rounded-full animate-ping">
+                <div className={`w-full h-full rounded-full ${status.pulseColor}/60 border-2 border-current`} />
+              </div>
+              <div className="absolute inset-0 rounded-full animate-ping animation-delay-150">
+                <div className={`w-full h-full rounded-full ${status.pulseColor}/40 border border-current scale-110`} />
+              </div>
+            </>
           )}
           
-          {/* Outer glow for connection status */}
-          <div className={`absolute inset-0 rounded-full ${status.pulseColor} opacity-20 blur-xl scale-150`} />
+          {/* Ambient glow effect */}
+          <div className={`absolute inset-0 rounded-full ${status.pulseColor}/30 blur-2xl scale-150 animate-pulse`} />
         </div>
 
-        {/* Compact details popup */}
+        {/* Enhanced glass-morphism details popup */}
         {showDetails && (
-          <div className="absolute bottom-full right-0 mb-4 w-72">
-            <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/30 overflow-hidden">
-              {/* Header */}
-              <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 px-4 py-3 border-b border-gray-200/50">
+          <div className="absolute bottom-full right-0 mb-6 w-80">
+            {/* Multiple backdrop layers for depth */}
+            <div className="absolute inset-0 bg-black/5 rounded-3xl blur-2xl scale-105" />
+            <div className="absolute inset-0 bg-black/10 rounded-2xl blur-xl" />
+            
+            <div className="relative bg-white/90 backdrop-blur-2xl rounded-2xl shadow-2xl border border-white/40 overflow-hidden">
+              {/* Header with gradient */}
+              <div className="bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-indigo-500/10 px-5 py-4 border-b border-white/30">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <Globe className="w-4 h-4 text-gray-600" />
-                    <span className="font-medium text-gray-800">Sync Status</span>
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center">
+                      <Globe className="w-4 h-4 text-white" />
+                    </div>
+                    <span className="font-semibold text-gray-800">Sync Status</span>
                   </div>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       setShowDetails(false);
                     }}
-                    className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100"
+                    className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-sm border border-white/30 
+                             text-gray-600 hover:text-gray-800 hover:bg-white/40 transition-all duration-200
+                             flex items-center justify-center"
                   >
                     ✕
                   </button>
                 </div>
               </div>
 
-              {/* Content */}
-              <div className="p-4 space-y-4">
-                {/* Quick stats */}
-                <div className="grid grid-cols-3 gap-3 text-center">
-                  <div>
-                    <div className="text-lg font-bold text-gray-800">{deviceCount}</div>
-                    <div className="text-xs text-gray-500">Devices</div>
+              {/* Content with enhanced glass effects */}
+              <div className="p-5 space-y-5">
+                {/* Stats grid with glass cards */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-white/40 backdrop-blur-sm rounded-xl p-3 text-center border border-white/30">
+                    <div className="text-xl font-bold bg-gradient-to-br from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                      {deviceCount}
+                    </div>
+                    <div className="text-xs text-gray-600 font-medium">Devices</div>
                   </div>
-                  <div>
-                    <div className="text-lg font-bold text-gray-800">{recentSyncCount}</div>
-                    <div className="text-xs text-gray-500">Recent</div>
+                  <div className="bg-white/40 backdrop-blur-sm rounded-xl p-3 text-center border border-white/30">
+                    <div className="text-xl font-bold bg-gradient-to-br from-emerald-600 to-green-600 bg-clip-text text-transparent">
+                      {recentSyncCount}
+                    </div>
+                    <div className="text-xs text-gray-600 font-medium">Recent</div>
                   </div>
-                  <div>
-                    <div className="text-lg font-bold text-gray-800">{syncEvents.length}</div>
-                    <div className="text-xs text-gray-500">Total</div>
+                  <div className="bg-white/40 backdrop-blur-sm rounded-xl p-3 text-center border border-white/30">
+                    <div className="text-xl font-bold bg-gradient-to-br from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                      {syncEvents.length}
+                    </div>
+                    <div className="text-xs text-gray-600 font-medium">Events</div>
                   </div>
                 </div>
 
-                {/* Multi-device toggle */}
-                <div className="flex items-center justify-between py-2 px-3 bg-gray-50/50 rounded-lg">
-                  <div className="flex items-center space-x-2">
-                    <Users className="w-4 h-4 text-gray-600" />
-                    <span className="text-sm text-gray-700">Multi-device sync</span>
+                {/* Multi-device toggle with glass effect */}
+                <div className="bg-white/30 backdrop-blur-sm rounded-xl p-4 border border-white/30">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
+                        <Users className="w-4 h-4 text-white" />
+                      </div>
+                      <span className="text-sm font-medium text-gray-700">Multi-device sync</span>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleMultiDeviceSync();
+                      }}
+                      className={`w-10 h-10 rounded-full backdrop-blur-sm border transition-all duration-200 flex items-center justify-center ${
+                        isMultiDeviceEnabled 
+                          ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/30' 
+                          : 'bg-gray-500/20 border-gray-500/40 text-gray-500 hover:bg-gray-500/30'
+                      }`}
+                    >
+                      {isMultiDeviceEnabled ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                    </button>
                   </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleMultiDeviceSync();
-                    }}
-                    className={`p-1 rounded-lg transition-colors ${
-                      isMultiDeviceEnabled 
-                        ? 'text-green-600 hover:bg-green-100' 
-                        : 'text-gray-400 hover:bg-gray-100'
-                    }`}
-                  >
-                    {isMultiDeviceEnabled ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                  </button>
                 </div>
 
-                {/* Last sync */}
+                {/* Last sync info */}
                 {lastSync && (
-                  <div className="text-center">
-                    <div className="text-xs text-gray-500">Last sync</div>
-                    <div className="text-sm font-medium text-gray-700">{lastSync}</div>
+                  <div className="text-center bg-white/20 backdrop-blur-sm rounded-xl p-3 border border-white/30">
+                    <div className="text-xs text-gray-500 mb-1">Last synchronization</div>
+                    <div className="text-sm font-semibold text-gray-700">{lastSync}</div>
                   </div>
                 )}
 
-                {/* Action button */}
+                {/* Action button with gradient */}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -213,9 +268,12 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
                       refreshFromAllDevices();
                     }
                   }}
-                  className="w-full py-2 px-4 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg hover:from-blue-600 hover:to-purple-600 transition-colors text-sm font-medium"
+                  className="w-full py-3 px-4 bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-500 
+                           text-white rounded-xl hover:from-blue-600 hover:via-purple-600 hover:to-indigo-600 
+                           transition-all duration-300 text-sm font-semibold shadow-lg transform hover:scale-105
+                           backdrop-blur-sm border border-white/20"
                 >
-                  {connectionStatus === 'error' ? 'Reconnect' : 'Refresh All'}
+                  {connectionStatus === 'error' ? 'Reconnect Now' : 'Refresh All Devices'}
                 </button>
               </div>
             </div>
