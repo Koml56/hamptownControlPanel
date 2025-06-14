@@ -1,6 +1,6 @@
-// SyncStatusIndicator.tsx - Compact draggable floating orb with smart positioning
+// Enhanced SyncStatusIndicator.tsx - With session status
 import React, { useState, useEffect, useRef } from 'react';
-import { Wifi, WifiOff, RefreshCw, Globe, Users, Eye, EyeOff } from 'lucide-react';
+import { Wifi, WifiOff, RefreshCw, Globe, Users, Eye, EyeOff, Clock, AlertTriangle } from 'lucide-react';
 import type { DeviceInfo, SyncEvent } from './multiDeviceSync';
 import type { ConnectionStatus } from './types';
 
@@ -9,6 +9,9 @@ interface SyncStatusIndicatorProps {
   lastSync: string | null;
   connectionStatus: ConnectionStatus;
   loadFromFirebase: () => void;
+  // Session status props
+  isSessionValid?: boolean;
+  refreshSession?: () => void;
   // Multi-device sync props
   activeDevices?: DeviceInfo[];
   syncEvents?: SyncEvent[];
@@ -23,6 +26,8 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
   lastSync,
   connectionStatus,
   loadFromFirebase,
+  isSessionValid = true,
+  refreshSession = () => {},
   activeDevices = [],
   syncEvents = [],
   deviceCount = 1,
@@ -36,28 +41,13 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
   // Start from bottom right corner
   const [position, setPosition] = useState({ 
     x: 'right' as 'left' | 'right', 
-    y: window.innerHeight - 100 // Bottom position
+    y: window.innerHeight - 100
   });
   
   const [isDragging, setIsDragging] = useState(false);
-  const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 }); // Live drag position
+  const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
   const [dragStart, setDragStart] = useState({ x: 0, y: 0, startY: 0, startSide: 'right' as 'left' | 'right' });
   const orbRef = useRef<HTMLDivElement>(null);
-
-  // Add custom CSS for animation delays
-  useEffect(() => {
-    const style = document.createElement('style');
-    style.textContent = `
-      .animation-delay-150 {
-        animation-delay: 150ms;
-      }
-    `;
-    document.head.appendChild(style);
-    
-    return () => {
-      document.head.removeChild(style);
-    };
-  }, []);
 
   // Update position on window resize
   useEffect(() => {
@@ -89,46 +79,35 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
     }
   }, [syncEvents]);
 
-  // Calculate smart popup positioning - anchored to icon
+  // Calculate smart popup positioning
   const getPopupPosition = () => {
-    const popupWidth = 256; // w-64 = 256px
-    const popupHeight = 350; // Estimated popup height
-    const orbSize = 40; // w-10 = 40px
-    const gap = 8; // Gap between icon and popup
+    const popupWidth = 256;
+    const popupHeight = 400; // Increased for session status
+    const orbSize = 40;
+    const gap = 8;
 
     const screenHeight = window.innerHeight;
     const screenWidth = window.innerWidth;
     
-    // Determine if popup should be above or below the icon
     const shouldShowAbove = position.y + popupHeight + gap > screenHeight - 20;
     
-    // Calculate horizontal positioning
     let translateX = '0px';
     if (position.x === 'left') {
-      // Popup to the right of left-side icon
       translateX = `${orbSize + gap}px`;
-      
-      // Check if popup would overflow screen on right side
       if (64 + popupWidth > screenWidth) {
-        translateX = `-${popupWidth - orbSize - gap}px`; // Show on left side instead
+        translateX = `-${popupWidth - orbSize - gap}px`;
       }
     } else {
-      // Popup to the left of right-side icon
       translateX = `-${popupWidth + gap}px`;
-      
-      // Check if popup would overflow screen on left side
       if (popupWidth + gap > screenWidth - 64) {
-        translateX = `${orbSize + gap}px`; // Show on right side instead
+        translateX = `${orbSize + gap}px`;
       }
     }
 
-    // Calculate vertical positioning - anchored to icon
     let translateY = '0px';
     if (shouldShowAbove) {
-      // Anchor popup bottom to icon top
       translateY = `-${popupHeight + gap}px`;
     } else {
-      // Anchor popup top to icon bottom
       translateY = `${orbSize + gap}px`;
     }
 
@@ -174,7 +153,6 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
       const deltaX = e.clientX - dragStart.x;
       const deltaY = e.clientY - dragStart.y;
       
-      // Update live drag position (visible during drag)
       const newX = Math.max(16, Math.min(window.innerWidth - 56, 
         (dragStart.startSide === 'left' ? 16 : window.innerWidth - 56) + deltaX));
       const newY = Math.max(24, Math.min(window.innerHeight - 64, dragStart.startY + deltaY));
@@ -203,10 +181,7 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
       const deltaX = e.clientX - dragStart.x;
       const deltaY = e.clientY - dragStart.y;
       
-      // Determine final side based on screen center
       const finalSide = (dragStart.startSide === 'left' ? 16 : window.innerWidth - 56) + deltaX > window.innerWidth / 2 ? 'right' : 'left';
-      
-      // Final Y position
       const finalY = Math.max(24, Math.min(window.innerHeight - 64, dragStart.startY + deltaY));
       
       setPosition({ x: finalSide, y: finalY });
@@ -216,15 +191,11 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
     const handleTouchEnd = (e: TouchEvent) => {
       if (!isDragging) return;
       
-      // Get the last touch position before it ended
       const touch = e.changedTouches[0];
       const deltaX = touch.clientX - dragStart.x;
       const deltaY = touch.clientY - dragStart.y;
       
-      // Determine final side based on screen center
       const finalSide = (dragStart.startSide === 'left' ? 16 : window.innerWidth - 56) + deltaX > window.innerWidth / 2 ? 'right' : 'left';
-      
-      // Final Y position
       const finalY = Math.max(24, Math.min(window.innerHeight - 64, dragStart.startY + deltaY));
       
       setPosition({ x: finalSide, y: finalY });
@@ -247,6 +218,16 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
   }, [isDragging, dragStart]);
 
   const getStatusInfo = () => {
+    // Session expired takes priority
+    if (!isSessionValid) {
+      return {
+        icon: <AlertTriangle className="w-3 h-3 animate-pulse" />,
+        text: 'Session Expired',
+        bgColor: 'bg-red-500/90',
+        pulseColor: 'bg-red-400'
+      };
+    }
+
     if (isLoading) {
       return {
         icon: <RefreshCw className="w-3 h-3 animate-spin" />,
@@ -321,12 +302,14 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
                 e.stopPropagation();
                 if (connectionStatus === 'error') {
                   loadFromFirebase();
+                } else if (!isSessionValid) {
+                  refreshSession();
                 } else {
                   setShowDetails(!showDetails);
                 }
               }
             }}
-            title={`${status.text}${lastSync ? ` - ${lastSync}` : ''}`}
+            title={`${status.text}${lastSync ? ` - ${lastSync}` : ''}${!isSessionValid ? ' (Click to refresh)' : ''}`}
           >
             {/* Glass background */}
             <div className={`
@@ -347,6 +330,14 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
               <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full backdrop-blur-xl bg-blue-500/95 
                             border border-white/60 shadow-md flex items-center justify-center text-xs font-bold text-white">
                 {deviceCount}
+              </div>
+            )}
+            
+            {/* Session expired warning badge */}
+            {!isSessionValid && (
+              <div className="absolute -top-1 -left-1 w-4 h-4 rounded-full backdrop-blur-xl bg-red-500/95 
+                            border border-white/60 shadow-md flex items-center justify-center">
+                <AlertTriangle className="w-2 h-2 text-white" />
               </div>
             )}
             
@@ -373,18 +364,6 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
               transformOrigin: popupPos.isAbove ? 'bottom center' : 'top center'
             }}
           >
-            {/* Visual connection line */}
-            <div 
-              className={`absolute w-0.5 bg-gradient-to-b from-blue-500/30 to-purple-500/30 ${
-                popupPos.isAbove 
-                  ? 'bottom-0 h-2 translate-y-full' 
-                  : 'top-0 h-2 -translate-y-full'
-              }`}
-              style={{
-                left: position.x === 'left' ? '-9px' : 'calc(100% + 8px)'
-              }}
-            />
-            
             <div className="relative bg-white/95 backdrop-blur-xl rounded-xl shadow-xl border border-white/50 overflow-hidden">
               {/* Compact header */}
               <div className="bg-gradient-to-r from-blue-500/15 to-purple-500/15 px-4 py-3 border-b border-white/30">
@@ -411,6 +390,29 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
 
               {/* Compact content */}
               <div className="p-4 space-y-3">
+                {/* Session status (if expired) */}
+                {!isSessionValid && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <AlertTriangle className="w-4 h-4 text-red-600" />
+                      <span className="text-sm font-semibold text-red-800">Session Expired</span>
+                    </div>
+                    <p className="text-xs text-red-600 mb-2">
+                      Tab was inactive for too long. Data operations are blocked.
+                    </p>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        refreshSession();
+                        window.location.reload();
+                      }}
+                      className="w-full py-1 px-2 bg-red-500 text-white rounded text-xs hover:bg-red-600 transition-colors"
+                    >
+                      Refresh Page
+                    </button>
+                  </div>
+                )}
+
                 {/* Mini stats */}
                 <div className="grid grid-cols-2 gap-2">
                   <div className="bg-white/50 backdrop-blur-sm rounded-lg p-2 text-center border border-white/30">
@@ -424,6 +426,23 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
                       {syncEvents.length}
                     </div>
                     <div className="text-xs text-gray-600">Events</div>
+                  </div>
+                </div>
+
+                {/* Session validity indicator */}
+                <div className="bg-white/40 backdrop-blur-sm rounded-lg p-3 border border-white/30">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <Clock className="w-4 h-4 text-gray-600" />
+                      <span className="text-xs font-medium text-gray-700">Session</span>
+                    </div>
+                    <div className={`w-8 h-8 rounded-full backdrop-blur-sm border transition-all duration-200 flex items-center justify-center ${
+                      isSessionValid 
+                        ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-600' 
+                        : 'bg-red-500/20 border-red-500/40 text-red-600'
+                    }`}>
+                      {isSessionValid ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                    </div>
                   </div>
                 </div>
 
@@ -450,37 +469,6 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
                   </div>
                 </div>
 
-                {/* Active devices list */}
-                {isMultiDeviceEnabled && activeDevices.length > 0 && (
-                  <div className="bg-white/30 backdrop-blur-sm rounded-lg p-3 border border-white/30">
-                    <div className="text-xs font-medium text-gray-700 mb-2">Connected Devices</div>
-                    <div className="space-y-2">
-                      {activeDevices.slice(0, 3).map((device, index) => (
-                        <div key={device.id} className="flex items-center justify-between">
-                          <div className="flex items-center space-x-2">
-                            <div className={`w-2 h-2 rounded-full ${index === 0 ? 'bg-emerald-500' : 'bg-blue-500'}`} />
-                            <span className="text-xs text-gray-600 truncate max-w-[120px]">
-                              {device.name}
-                              {index === 0 && ' (Primary)'}
-                            </span>
-                          </div>
-                          <span className="text-xs text-gray-500">
-                            {new Date(device.lastSeen).toLocaleTimeString('en-US', { 
-                              hour: '2-digit', 
-                              minute: '2-digit' 
-                            })}
-                          </span>
-                        </div>
-                      ))}
-                      {activeDevices.length > 3 && (
-                        <div className="text-xs text-gray-500 text-center pt-1 border-t border-white/20">
-                          +{activeDevices.length - 3} more devices
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
                 {/* Last sync */}
                 {lastSync && (
                   <div className="text-center bg-white/30 backdrop-blur-sm rounded-lg p-2 border border-white/30">
@@ -495,15 +483,24 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
                     e.stopPropagation();
                     if (connectionStatus === 'error') {
                       loadFromFirebase();
+                    } else if (!isSessionValid) {
+                      refreshSession();
+                      window.location.reload();
                     } else {
                       refreshFromAllDevices();
                     }
                   }}
-                  className="w-full py-2 px-3 bg-gradient-to-r from-blue-500 to-purple-500 
-                           text-white rounded-lg hover:from-blue-600 hover:to-purple-600 
-                           transition-all duration-300 text-xs font-semibold shadow-md transform hover:scale-105"
+                  disabled={!isSessionValid && connectionStatus !== 'error'}
+                  className={`w-full py-2 px-3 rounded-lg text-xs font-semibold shadow-md transform hover:scale-105 transition-all duration-300 ${
+                    !isSessionValid 
+                      ? 'bg-gradient-to-r from-red-500 to-orange-500 text-white hover:from-red-600 hover:to-orange-600'
+                      : connectionStatus === 'error'
+                      ? 'bg-gradient-to-r from-red-500 to-orange-500 text-white hover:from-red-600 hover:to-orange-600'
+                      : 'bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600'
+                  }`}
                 >
-                  {connectionStatus === 'error' ? 'Reconnect' : 'Refresh'}
+                  {!isSessionValid ? 'Refresh Session' :
+                   connectionStatus === 'error' ? 'Reconnect' : 'Refresh'}
                 </button>
               </div>
             </div>
