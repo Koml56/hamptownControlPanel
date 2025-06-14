@@ -1,4 +1,4 @@
-// SyncStatusIndicator.tsx - Compact draggable floating orb
+// SyncStatusIndicator.tsx - Compact draggable floating orb with smart positioning
 import React, { useState, useEffect, useRef } from 'react';
 import { Wifi, WifiOff, RefreshCw, Globe, Users, Eye, EyeOff } from 'lucide-react';
 import type { DeviceInfo, SyncEvent } from './multiDeviceSync';
@@ -32,9 +32,16 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
 }) => {
   const [showSyncPulse, setShowSyncPulse] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
-  const [position, setPosition] = useState({ x: 'right', y: 24 }); // 'left' or 'right', y in pixels from top
+  
+  // Start from bottom right corner
+  const [position, setPosition] = useState({ 
+    x: 'right' as 'left' | 'right', 
+    y: window.innerHeight - 100 // Bottom position
+  });
+  
   const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0, startY: 0 });
+  const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 }); // Live drag position
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0, startY: 0, startSide: 'right' as 'left' | 'right' });
   const orbRef = useRef<HTMLDivElement>(null);
 
   // Add custom CSS for animation delays
@@ -50,6 +57,19 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
     return () => {
       document.head.removeChild(style);
     };
+  }, []);
+
+  // Update position on window resize
+  useEffect(() => {
+    const handleResize = () => {
+      setPosition(prev => ({
+        ...prev,
+        y: Math.min(prev.y, window.innerHeight - 100)
+      }));
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   // Show pulse animation when sync occurs
@@ -69,26 +89,64 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
     }
   }, [syncEvents]);
 
+  // Calculate smart popup positioning
+  const getPopupPosition = () => {
+    const popupWidth = 256; // w-64 = 256px
+    const popupHeight = 300; // Estimated popup height
+    const orbSize = 40; // w-10 = 40px
+    const margin = 16; // Margin from screen edges
+
+    let popupX = position.x;
+    let popupY = 'top';
+    let translateX = position.x === 'left' ? '48px' : '-272px'; // Adjust for popup width
+    let translateY = '0px';
+
+    // Check if popup would go below screen bottom
+    if (position.y + popupHeight > window.innerHeight - margin) {
+      popupY = 'bottom';
+      translateY = `-${popupHeight - orbSize}px`;
+    }
+
+    // Check if popup would go outside screen horizontally
+    if (position.x === 'right' && window.innerWidth < popupWidth + 64) {
+      translateX = `-${popupWidth + 12}px`;
+    } else if (position.x === 'left' && window.innerWidth < popupWidth + 64) {
+      translateX = '48px';
+    }
+
+    return { popupX, popupY, translateX, translateY };
+  };
+
   // Mouse/touch handlers for dragging
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     setIsDragging(true);
-    setDragStart({
-      x: e.clientX,
-      y: e.clientY,
-      startY: position.y
-    });
+    const rect = orbRef.current?.getBoundingClientRect();
+    if (rect) {
+      setDragPosition({ x: rect.left, y: rect.top });
+      setDragStart({
+        x: e.clientX,
+        y: e.clientY,
+        startY: position.y,
+        startSide: position.x
+      });
+    }
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
     e.preventDefault();
     setIsDragging(true);
     const touch = e.touches[0];
-    setDragStart({
-      x: touch.clientX,
-      y: touch.clientY,
-      startY: position.y
-    });
+    const rect = orbRef.current?.getBoundingClientRect();
+    if (rect) {
+      setDragPosition({ x: rect.left, y: rect.top });
+      setDragStart({
+        x: touch.clientX,
+        y: touch.clientY,
+        startY: position.y,
+        startSide: position.x
+      });
+    }
   };
 
   useEffect(() => {
@@ -98,13 +156,12 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
       const deltaX = e.clientX - dragStart.x;
       const deltaY = e.clientY - dragStart.y;
       
-      // Determine which side based on horizontal movement
-      const newSide = deltaX > 50 ? 'right' : deltaX < -50 ? 'left' : position.x;
+      // Update live drag position (visible during drag)
+      const newX = Math.max(16, Math.min(window.innerWidth - 56, 
+        (dragStart.startSide === 'left' ? 16 : window.innerWidth - 56) + deltaX));
+      const newY = Math.max(24, Math.min(window.innerHeight - 64, dragStart.startY + deltaY));
       
-      // Update vertical position freely
-      const newY = Math.max(24, Math.min(window.innerHeight - 100, dragStart.startY + deltaY));
-      
-      setPosition({ x: newSide, y: newY });
+      setDragPosition({ x: newX, y: newY });
     };
 
     const handleTouchMove = (e: TouchEvent) => {
@@ -115,13 +172,26 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
       const deltaX = touch.clientX - dragStart.x;
       const deltaY = touch.clientY - dragStart.y;
       
-      const newSide = deltaX > 50 ? 'right' : deltaX < -50 ? 'left' : position.x;
-      const newY = Math.max(24, Math.min(window.innerHeight - 100, dragStart.startY + deltaY));
+      const newX = Math.max(16, Math.min(window.innerWidth - 56, 
+        (dragStart.startSide === 'left' ? 16 : window.innerWidth - 56) + deltaX));
+      const newY = Math.max(24, Math.min(window.innerHeight - 64, dragStart.startY + deltaY));
       
-      setPosition({ x: newSide, y: newY });
+      setDragPosition({ x: newX, y: newY });
     };
 
-    const handleMouseUp = () => {
+    const handleMouseUp = (e: MouseEvent) => {
+      if (!isDragging) return;
+      
+      const deltaX = e.clientX - dragStart.x;
+      const deltaY = e.clientY - dragStart.y;
+      
+      // Determine final side based on screen center
+      const finalSide = (dragStart.startSide === 'left' ? 16 : window.innerWidth - 56) + deltaX > window.innerWidth / 2 ? 'right' : 'left';
+      
+      // Final Y position
+      const finalY = Math.max(24, Math.min(window.innerHeight - 64, dragStart.startY + deltaY));
+      
+      setPosition({ x: finalSide, y: finalY });
       setIsDragging(false);
     };
 
@@ -138,7 +208,7 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
       document.removeEventListener('touchmove', handleTouchMove);
       document.removeEventListener('touchend', handleMouseUp);
     };
-  }, [isDragging, dragStart, position]);
+  }, [isDragging, dragStart]);
 
   const getStatusInfo = () => {
     if (isLoading) {
@@ -179,6 +249,7 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
   };
 
   const status = getStatusInfo();
+  const popupPos = getPopupPosition();
 
   return (
     <>
@@ -187,10 +258,15 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
         ref={orbRef}
         className={`
           fixed z-50 transition-all duration-300 ease-out
-          ${position.x === 'left' ? 'left-4' : 'right-4'}
+          ${isDragging ? 'transition-none' : ''}
           ${isDragging ? 'scale-110 cursor-grabbing' : 'cursor-grab hover:scale-105'}
         `}
-        style={{ top: `${position.y}px` }}
+        style={{ 
+          left: isDragging ? `${dragPosition.x}px` : undefined,
+          right: isDragging ? undefined : (position.x === 'right' ? '16px' : undefined),
+          left: isDragging ? undefined : (position.x === 'left' ? '16px' : undefined),
+          top: isDragging ? `${dragPosition.y}px` : `${position.y}px`
+        }}
         onMouseDown={handleMouseDown}
         onTouchStart={handleTouchStart}
       >
@@ -253,12 +329,15 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
           </div>
         </div>
 
-        {/* Compact details popup */}
-        {showDetails && (
-          <div className={`
-            absolute top-0 z-40 w-64
-            ${position.x === 'left' ? 'left-12' : 'right-12'}
-          `}>
+        {/* Smart positioned details popup */}
+        {showDetails && !isDragging && (
+          <div 
+            className="absolute z-40 w-64"
+            style={{
+              transform: `translate(${popupPos.translateX}, ${popupPos.translateY})`,
+              [popupPos.popupY]: '0px'
+            }}
+          >
             <div className="relative bg-white/95 backdrop-blur-xl rounded-xl shadow-xl border border-white/50 overflow-hidden">
               {/* Compact header */}
               <div className="bg-gradient-to-r from-blue-500/15 to-purple-500/15 px-4 py-3 border-b border-white/30">
@@ -267,7 +346,7 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
                     <div className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center">
                       <Globe className="w-3 h-3 text-white" />
                     </div>
-                    <span className="text-sm font-semibold text-gray-800">Sync</span>
+                    <span className="text-sm font-semibold text-gray-800">Sync Status</span>
                   </div>
                   <button
                     onClick={(e) => {
