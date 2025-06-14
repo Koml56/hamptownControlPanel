@@ -296,18 +296,18 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
                   <div className="bg-white/20 backdrop-blur-sm rounded-xl p-4 border border-white/30">
                     <div className="text-sm font-medium text-gray-700 mb-3">Recent Activity</div>
                     <div className="space-y-2 max-h-32 overflow-y-auto">
-                      {syncEvents.slice(0, 5).map((event) => (
-                        <div key={event.id} className="flex items-center justify-between text-xs">
+                      {syncEvents.slice(0, 5).map((event, index) => (
+                        <div key={index} className="flex items-center justify-between text-xs">
                           <span className="text-gray-600">
-                            {event.action === 'sync' && '🔄'}
-                            {event.action === 'update' && '📝'}
-                            {event.action === 'connect' && '🔗'}
-                            {event.action === 'disconnect' && '🔌'}
+                            {(event as any).action === 'sync' && '🔄'}
+                            {(event as any).action === 'update' && '📝'}
+                            {(event as any).action === 'connect' && '🔗'}
+                            {(event as any).action === 'disconnect' && '🔌'}
                             {' '}
-                            {event.action}
+                            {(event as any).action || 'activity'}
                           </span>
                           <span className="text-gray-500">
-                            {new Date(event.timestamp).toLocaleTimeString()}
+                            {(event as any).timestamp ? new Date((event as any).timestamp).toLocaleTimeString() : 'now'}
                           </span>
                         </div>
                       ))}
