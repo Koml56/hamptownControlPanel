@@ -1,3 +1,4 @@
+// hooks.ts - Enhanced with session expiry protection
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { FirebaseService } from './firebaseService';
 import { getFormattedDate } from './utils';
@@ -44,10 +45,91 @@ const migrateTaskData = (tasks: any[]): Task[] => {
   }));
 };
 
+// Session expiry detection hook
+export const useSessionExpiry = () => {
+  const [lastActivity, setLastActivity] = useState(Date.now());
+  const [isSessionValid, setIsSessionValid] = useState(true);
+  const [tabWasHidden, setTabWasHidden] = useState(false);
+  const hiddenStartTime = useRef<number | null>(null);
+  
+  const SESSION_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+  
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // Tab became hidden
+        hiddenStartTime.current = Date.now();
+        setTabWasHidden(true);
+        console.log('👁️ Tab hidden - tracking inactivity');
+      } else {
+        // Tab became visible
+        if (hiddenStartTime.current) {
+          const hiddenDuration = Date.now() - hiddenStartTime.current;
+          console.log(`👁️ Tab visible after ${Math.round(hiddenDuration / 1000)}s`);
+          
+          if (hiddenDuration > SESSION_TIMEOUT) {
+            console.log('🚨 Session expired due to inactivity');
+            setIsSessionValid(false);
+          } else {
+            setLastActivity(Date.now());
+            setIsSessionValid(true);
+          }
+        }
+        hiddenStartTime.current = null;
+        setTabWasHidden(false);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Also update activity on user interactions
+    const updateActivity = () => {
+      if (!document.hidden) {
+        setLastActivity(Date.now());
+        setIsSessionValid(true);
+      }
+    };
+    
+    // Listen for user activity
+    ['mousedown', 'keydown', 'scroll', 'touchstart'].forEach(event => {
+      document.addEventListener(event, updateActivity, true);
+    });
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      ['mousedown', 'keydown', 'scroll', 'touchstart'].forEach(event => {
+        document.removeEventListener(event, updateActivity, true);
+      });
+    };
+  }, []);
+  
+  const invalidateSession = useCallback(() => {
+    setIsSessionValid(false);
+  }, []);
+  
+  const refreshSession = useCallback(() => {
+    setIsSessionValid(true);
+    setLastActivity(Date.now());
+    hiddenStartTime.current = null;
+    setTabWasHidden(false);
+  }, []);
+  
+  return {
+    isSessionValid,
+    lastActivity,
+    tabWasHidden,
+    invalidateSession,
+    refreshSession
+  };
+};
+
 export const useFirebaseData = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
+
+  // Session expiry protection
+  const { isSessionValid, refreshSession } = useSessionExpiry();
 
   // Main app data
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -75,31 +157,33 @@ export const useFirebaseData = () => {
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSaveDataRef = useRef<string>('');
 
-  // Add sync event when data changes (declare this first)
+  // Add sync event when data changes
   const addSyncEvent = useCallback((action: string) => {
-    // Temporarily disabled until SyncEvent type is resolved
     console.log('Sync event:', action);
-    /*
-    if (isMultiDeviceEnabled) {
-      const event = {
-        deviceId: 'device-' + Date.now(),
-        timestamp: Date.now(),
-        action: action
-      } as SyncEvent;
-      setSyncEvents(prev => [event, ...prev.slice(0, 9)]); // Keep only last 10 events
-    }
-    */
   }, [isMultiDeviceEnabled]);
 
-  // 🎯 NEW: QuickSave function with sync animation
-  const quickSave = useCallback(async (field: string, data: any) => {
-    console.log('🔥 QuickSave triggered for:', field);
-    
-    // START SYNC ANIMATION
-    setIsLoading(true);
+  // Protected save operations - check session validity first
+  const protectedOperation = useCallback(async (operation: () => Promise<void>, operationName: string) => {
+    if (!isSessionValid) {
+      console.warn(`🚨 ${operationName} blocked - session expired. Please refresh the page.`);
+      throw new Error(`Session expired. Please refresh the page to continue.`);
+    }
     
     try {
-      // Firebase save operation
+      await operation();
+    } catch (error) {
+      console.error(`❌ ${operationName} failed:`, error);
+      throw error;
+    }
+  }, [isSessionValid]);
+
+  // Enhanced QuickSave with session protection
+  const quickSave = useCallback(async (field: string, data: any) => {
+    return protectedOperation(async () => {
+      console.log('🔥 QuickSave triggered for:', field);
+      
+      setIsLoading(true);
+      
       const baseUrl = 'https://hamptown-panel-default-rtdb.firebaseio.com';
       
       const response = await fetch(`${baseUrl}/${field}.json`, {
@@ -114,28 +198,25 @@ export const useFirebaseData = () => {
         throw new Error(`Firebase save failed: ${response.status} ${response.statusText}`);
       }
       
-      // UPDATE SYNC STATUS ON SUCCESS
       setLastSync(new Date().toLocaleTimeString());
       setConnectionStatus('connected');
-      
-      // Add sync event
       addSyncEvent(`sync-${field}`);
       
       console.log('✅ QuickSave completed successfully for:', field);
-      
-    } catch (error) {
-      console.error('❌ QuickSave failed:', error);
-      setConnectionStatus('error');
-      throw error; // Re-throw so calling code can handle if needed
-    } finally {
-      // STOP SYNC ANIMATION
+    }, `QuickSave(${field})`).finally(() => {
       setIsLoading(false);
-    }
-  }, [addSyncEvent]);
+    });
+  }, [protectedOperation, addSyncEvent]);
 
-  // Debounced save function for main data
+  // Enhanced debounced save with session protection
   const debouncedSave = useCallback(async () => {
     if (connectionStatus !== 'connected' || isLoading) {
+      return;
+    }
+
+    // Session validity check before saving
+    if (!isSessionValid) {
+      console.warn('🚨 Save operation blocked - session expired');
       return;
     }
 
@@ -157,10 +238,11 @@ export const useFirebaseData = () => {
       return;
     }
 
-    console.log('🔄 Saving data to Firebase...');
-    
-    setIsLoading(true);
-    try {
+    return protectedOperation(async () => {
+      console.log('🔄 Saving data to Firebase...');
+      
+      setIsLoading(true);
+      
       await firebaseService.saveData({
         employees,
         tasks,
@@ -176,16 +258,13 @@ export const useFirebaseData = () => {
 
       setLastSync(new Date().toLocaleTimeString());
       lastSaveDataRef.current = currentDataHash;
-      
-      // Add sync event for main save
       addSyncEvent('full-sync');
-      
-    } catch (error) {
+    }, 'debouncedSave').catch((error) => {
       console.error('Save failed:', error);
       setConnectionStatus('error');
-    } finally {
+    }).finally(() => {
       setIsLoading(false);
-    }
+    });
   }, [
     employees,
     tasks,
@@ -199,12 +278,18 @@ export const useFirebaseData = () => {
     storeItems,
     connectionStatus,
     isLoading,
-    quickSave,
+    isSessionValid,
+    protectedOperation,
     addSyncEvent
   ]);
 
-  // Main save function with debouncing
+  // Main save function with session protection
   const saveToFirebase = useCallback(() => {
+    if (!isSessionValid) {
+      console.warn('🚨 SaveToFirebase blocked - session expired');
+      return;
+    }
+
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
@@ -212,9 +297,9 @@ export const useFirebaseData = () => {
     saveTimeoutRef.current = setTimeout(() => {
       debouncedSave();
     }, 100);
-  }, [debouncedSave]);
+  }, [debouncedSave, isSessionValid]);
 
-  // Load from Firebase
+  // Load from Firebase with fresh session
   const loadFromFirebase = useCallback(async () => {
     if (isLoading) return;
 
@@ -222,7 +307,9 @@ export const useFirebaseData = () => {
     setConnectionStatus('connecting');
 
     try {
-      // Load main data
+      // Refresh session when loading fresh data
+      refreshSession();
+      
       const data = await firebaseService.loadData();
 
       const finalEmployees = migrateEmployeeData(data.employees);
@@ -235,7 +322,7 @@ export const useFirebaseData = () => {
       setTaskAssignments(data.taskAssignments);
       setCustomRoles(data.customRoles);
 
-      // Load PrepList data
+      // Load additional data
       const baseUrl = 'https://hamptown-panel-default-rtdb.firebaseio.com';
       
       const [prepItemsRes, scheduledPrepsRes, prepSelectionsRes, storeItemsRes] = await Promise.all([
@@ -288,17 +375,21 @@ export const useFirebaseData = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading]);
+  }, [isLoading, refreshSession]);
 
-  // Auto-save when main data changes
+  // Auto-save when data changes (with session protection)
   useEffect(() => {
-    saveToFirebase();
-  }, [employees, tasks, dailyData, completedTasks, taskAssignments, customRoles]);
+    if (isSessionValid) {
+      saveToFirebase();
+    }
+  }, [employees, tasks, dailyData, completedTasks, taskAssignments, customRoles, saveToFirebase, isSessionValid]);
 
-  // Auto-save when PrepList data changes (but don't use quickSave here to avoid double animation)
+  // Auto-save when PrepList data changes (with session protection)
   useEffect(() => {
-    saveToFirebase();
-  }, [prepItems, scheduledPreps, prepSelections, storeItems]);
+    if (isSessionValid) {
+      saveToFirebase();
+    }
+  }, [prepItems, scheduledPreps, prepSelections, storeItems, saveToFirebase, isSessionValid]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -315,20 +406,19 @@ export const useFirebaseData = () => {
   }, []);
 
   const refreshFromAllDevices = useCallback(() => {
-    // Force reload from Firebase
     loadFromFirebase();
   }, [loadFromFirebase]);
 
-  // Mock device info (you can enhance this later)
+  // Mock device info
   useEffect(() => {
     if (isMultiDeviceEnabled) {
       const currentDevice: DeviceInfo = {
         id: 'device-' + Date.now(),
         name: navigator.userAgent.includes('Mobile') ? 'Mobile Device' : 'Desktop',
         lastSeen: Date.now(),
-        user: 'Current User', // Added missing property
-        platform: navigator.userAgent.includes('Mobile') ? 'mobile' : 'desktop', // Added missing property
-        isActive: true // Added missing property
+        user: 'Current User',
+        platform: navigator.userAgent.includes('Mobile') ? 'mobile' : 'desktop',
+        isActive: true
       };
       setActiveDevices([currentDevice]);
       setDeviceCount(1);
@@ -363,6 +453,9 @@ export const useFirebaseData = () => {
     syncEvents,
     deviceCount,
     isMultiDeviceEnabled,
+    
+    // Session state
+    isSessionValid,
 
     // Setters
     setEmployees,
@@ -383,7 +476,10 @@ export const useFirebaseData = () => {
     // Actions
     loadFromFirebase,
     saveToFirebase,
-    quickSave, // 🎯 NEW: QuickSave with sync animation
+    quickSave,
+    
+    // Session actions
+    refreshSession,
     
     // Multi-device sync actions
     toggleMultiDeviceSync,
