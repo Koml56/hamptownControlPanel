@@ -260,13 +260,13 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
                   <div className="bg-white/20 backdrop-blur-sm rounded-xl p-4 border border-white/30">
                     <div className="text-sm font-medium text-gray-700 mb-3">Active Devices</div>
                     <div className="space-y-2">
-                      {activeDevices.slice(0, 3).map((device) => (
+                      {activeDevices.slice(0, 3).map((device, index) => (
                         <div key={device.id} className="flex items-center justify-between">
                           <div className="flex items-center space-x-2">
-                            <div className={`w-2 h-2 rounded-full ${device.isCurrentDevice ? 'bg-emerald-500' : 'bg-blue-500'}`} />
+                            <div className={`w-2 h-2 rounded-full ${index === 0 ? 'bg-emerald-500' : 'bg-blue-500'}`} />
                             <span className="text-xs text-gray-600">
                               {device.name}
-                              {device.isCurrentDevice && ' (You)'}
+                              {index === 0 && ' (Primary)'}
                             </span>
                           </div>
                           <span className="text-xs text-gray-500">
