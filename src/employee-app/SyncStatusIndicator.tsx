@@ -280,9 +280,8 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
           ${isDragging ? 'scale-110 cursor-grabbing' : 'cursor-grab hover:scale-105'}
         `}
         style={{ 
-          left: isDragging ? `${dragPosition.x}px` : undefined,
+          left: isDragging ? `${dragPosition.x}px` : (position.x === 'left' ? '16px' : undefined),
           right: isDragging ? undefined : (position.x === 'right' ? '16px' : undefined),
-          left: isDragging ? undefined : (position.x === 'left' ? '16px' : undefined),
           top: isDragging ? `${dragPosition.y}px` : `${position.y}px`
         }}
         onMouseDown={handleMouseDown}
