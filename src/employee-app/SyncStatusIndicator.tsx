@@ -89,32 +89,50 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
     }
   }, [syncEvents]);
 
-  // Calculate smart popup positioning
+  // Calculate smart popup positioning - anchored to icon
   const getPopupPosition = () => {
     const popupWidth = 256; // w-64 = 256px
-    const popupHeight = 300; // Estimated popup height
+    const popupHeight = 350; // Estimated popup height
     const orbSize = 40; // w-10 = 40px
-    const margin = 16; // Margin from screen edges
+    const gap = 8; // Gap between icon and popup
 
-    let popupX = position.x;
-    let popupY = 'top';
-    let translateX = position.x === 'left' ? '48px' : '-272px'; // Adjust for popup width
+    const screenHeight = window.innerHeight;
+    const screenWidth = window.innerWidth;
+    
+    // Determine if popup should be above or below the icon
+    const shouldShowAbove = position.y + popupHeight + gap > screenHeight - 20;
+    
+    // Calculate horizontal positioning
+    let translateX = '0px';
+    if (position.x === 'left') {
+      // Popup to the right of left-side icon
+      translateX = `${orbSize + gap}px`;
+      
+      // Check if popup would overflow screen on right side
+      if (64 + popupWidth > screenWidth) {
+        translateX = `-${popupWidth - orbSize - gap}px`; // Show on left side instead
+      }
+    } else {
+      // Popup to the left of right-side icon
+      translateX = `-${popupWidth + gap}px`;
+      
+      // Check if popup would overflow screen on left side
+      if (popupWidth + gap > screenWidth - 64) {
+        translateX = `${orbSize + gap}px`; // Show on right side instead
+      }
+    }
+
+    // Calculate vertical positioning - anchored to icon
     let translateY = '0px';
-
-    // Check if popup would go below screen bottom
-    if (position.y + popupHeight > window.innerHeight - margin) {
-      popupY = 'bottom';
-      translateY = `-${popupHeight - orbSize}px`;
+    if (shouldShowAbove) {
+      // Anchor popup bottom to icon top
+      translateY = `-${popupHeight + gap}px`;
+    } else {
+      // Anchor popup top to icon bottom
+      translateY = `${orbSize + gap}px`;
     }
 
-    // Check if popup would go outside screen horizontally
-    if (position.x === 'right' && window.innerWidth < popupWidth + 64) {
-      translateX = `-${popupWidth + 12}px`;
-    } else if (position.x === 'left' && window.innerWidth < popupWidth + 64) {
-      translateX = '48px';
-    }
-
-    return { popupX, popupY, translateX, translateY };
+    return { translateX, translateY, isAbove: shouldShowAbove };
   };
 
   // Mouse/touch handlers for dragging
@@ -346,15 +364,27 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
           </div>
         </div>
 
-        {/* Smart positioned details popup */}
+        {/* Anchored details popup */}
         {showDetails && !isDragging && (
           <div 
             className="absolute z-40 w-64"
             style={{
               transform: `translate(${popupPos.translateX}, ${popupPos.translateY})`,
-              [popupPos.popupY]: '0px'
+              transformOrigin: popupPos.isAbove ? 'bottom center' : 'top center'
             }}
           >
+            {/* Visual connection line */}
+            <div 
+              className={`absolute w-0.5 bg-gradient-to-b from-blue-500/30 to-purple-500/30 ${
+                popupPos.isAbove 
+                  ? 'bottom-0 h-2 translate-y-full' 
+                  : 'top-0 h-2 -translate-y-full'
+              }`}
+              style={{
+                left: position.x === 'left' ? '-9px' : 'calc(100% + 8px)'
+              }}
+            />
+            
             <div className="relative bg-white/95 backdrop-blur-xl rounded-xl shadow-xl border border-white/50 overflow-hidden">
               {/* Compact header */}
               <div className="bg-gradient-to-r from-blue-500/15 to-purple-500/15 px-4 py-3 border-b border-white/30">
