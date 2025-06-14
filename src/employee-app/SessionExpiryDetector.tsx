@@ -1,5 +1,5 @@
 // SessionExpiryDetector.tsx - Detects and handles expired sessions
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Clock, RefreshCw, AlertTriangle, Wifi } from 'lucide-react';
 
 interface SessionExpiryDetectorProps {
