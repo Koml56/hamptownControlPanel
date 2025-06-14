@@ -167,16 +167,12 @@ export const useFirebaseData = () => {
         dailyData,
         completedTasks,
         taskAssignments,
-        customRoles
+        customRoles,
+        prepItems,
+        scheduledPreps,
+        prepSelections,
+        storeItems
       });
-
-      // Save PrepList data separately
-      await Promise.all([
-        quickSave('prepItems', prepItems),
-        quickSave('scheduledPreps', scheduledPreps),
-        quickSave('prepSelections', prepSelections),
-        quickSave('storeItems', storeItems)
-      ]);
 
       setLastSync(new Date().toLocaleTimeString());
       lastSaveDataRef.current = currentDataHash;
