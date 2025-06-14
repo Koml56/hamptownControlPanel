@@ -75,6 +75,19 @@ export const useFirebaseData = () => {
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSaveDataRef = useRef<string>('');
 
+  // Add sync event when data changes (declare this first)
+  const addSyncEvent = useCallback((action: string) => {
+    if (isMultiDeviceEnabled) {
+      const event: SyncEvent = {
+        id: 'event-' + Date.now(),
+        deviceId: 'device-' + Date.now(),
+        timestamp: Date.now(),
+        action: action
+      };
+      setSyncEvents(prev => [event, ...prev.slice(0, 9)]); // Keep only last 10 events
+    }
+  }, [isMultiDeviceEnabled]);
+
   // 🎯 NEW: QuickSave function with sync animation
   const quickSave = useCallback(async (field: string, data: any) => {
     console.log('🔥 QuickSave triggered for:', field);
@@ -306,19 +319,6 @@ export const useFirebaseData = () => {
     // Force reload from Firebase
     loadFromFirebase();
   }, [loadFromFirebase]);
-
-  // Add sync event when data changes
-  const addSyncEvent = useCallback((action: string) => {
-    if (isMultiDeviceEnabled) {
-      const event: SyncEvent = {
-        id: 'event-' + Date.now(),
-        deviceId: 'device-' + Date.now(),
-        timestamp: Date.now(),
-        action: action
-      };
-      setSyncEvents(prev => [event, ...prev.slice(0, 9)]); // Keep only last 10 events
-    }
-  }, [isMultiDeviceEnabled]);
 
   // Mock device info (you can enhance this later)
   useEffect(() => {
