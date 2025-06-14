@@ -1,25 +1,8 @@
 // SyncStatusIndicator.tsx - Enhanced floating orb with glass-morphism
 import React, { useState, useEffect } from 'react';
 import { Wifi, WifiOff, RefreshCw, Globe, Users, Eye, EyeOff } from 'lucide-react';
-
-// Types for multi-device sync
-interface DeviceInfo {
-  id: string;
-  name: string;
-  lastSeen: number;
-  userAgent: string;
-  isCurrentDevice: boolean;
-}
-
-interface SyncEvent {
-  id: string;
-  deviceId: string;
-  timestamp: number;
-  action: 'sync' | 'update' | 'connect' | 'disconnect';
-  data?: any;
-}
-
-type ConnectionStatus = 'connecting' | 'connected' | 'error';
+import type { DeviceInfo, SyncEvent } from './multiDeviceSync';
+import type { ConnectionStatus } from './types';
 
 interface SyncStatusIndicatorProps {
   isLoading: boolean;
