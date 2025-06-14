@@ -23,7 +23,8 @@ import type {
   Task, 
   DailyDataMap, 
   TaskAssignments, 
-  StoreItem 
+  StoreItem,
+  PrepItem 
 } from './types';
 
 const EmployeeApp = () => {
@@ -39,6 +40,8 @@ const EmployeeApp = () => {
     taskAssignments,
     customRoles,
     storeItems,
+    prepItems,
+    setPrepItems,
     activeDevices,
     syncEvents,
     deviceCount,
@@ -157,6 +160,11 @@ const EmployeeApp = () => {
     setStoreItems(updater);
     handleDataChange(); // 🎯 Immediate sync animation!
   }, [setStoreItems, handleDataChange]);
+
+  const setPrepItemsWithSave = useCallback((updater: (prev: PrepItem[]) => PrepItem[]) => {
+    setPrepItems(updater);
+    handleDataChange(); // 🎯 Immediate sync animation!
+  }, [setPrepItems, handleDataChange]);
 
   const currentEmployee = employees.find(emp => emp.id === currentUser.id);
 
@@ -355,10 +363,12 @@ const EmployeeApp = () => {
             tasks={tasks}
             customRoles={customRoles}
             storeItems={storeItems}
+            prepItems={prepItems}
             setEmployees={setEmployeesWithSave}
             setTasks={setTasksWithSave}
             setCustomRoles={setCustomRolesWithSave}
             setStoreItems={setStoreItemsWithSave}
+            setPrepItems={setPrepItemsWithSave}
           />
         )}
 
