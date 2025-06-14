@@ -15,6 +15,20 @@ import type {
   StoreItem
 } from './types';
 
+// Multi-device sync types
+interface DeviceInfo {
+  id: string;
+  name: string;
+  lastSeen: number;
+}
+
+interface SyncEvent {
+  id: string;
+  deviceId: string;
+  timestamp: number;
+  action: string;
+}
+
 // Migration functions
 const migrateEmployeeData = (employees: any[]): Employee[] => {
   if (!employees || !Array.isArray(employees)) return getDefaultEmployees();
@@ -63,6 +77,12 @@ export const useFirebaseData = () => {
   
   // Store data
   const [storeItems, setStoreItems] = useState<StoreItem[]>([]);
+  
+  // Multi-device sync data
+  const [activeDevices, setActiveDevices] = useState<DeviceInfo[]>([]);
+  const [syncEvents, setSyncEvents] = useState<SyncEvent[]>([]);
+  const [deviceCount, setDeviceCount] = useState<number>(1);
+  const [isMultiDeviceEnabled, setIsMultiDeviceEnabled] = useState<boolean>(false);
 
   const firebaseService = new FirebaseService();
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -282,6 +302,32 @@ export const useFirebaseData = () => {
     };
   }, []);
 
+  // Multi-device sync functions
+  const toggleMultiDeviceSync = useCallback(() => {
+    setIsMultiDeviceEnabled(prev => !prev);
+  }, []);
+
+  const refreshFromAllDevices = useCallback(() => {
+    // Force reload from Firebase
+    loadFromFirebase();
+  }, [loadFromFirebase]);
+
+  // Mock device info (you can enhance this later)
+  useEffect(() => {
+    if (isMultiDeviceEnabled) {
+      const currentDevice: DeviceInfo = {
+        id: 'device-' + Date.now(),
+        name: navigator.userAgent.includes('Mobile') ? 'Mobile Device' : 'Desktop',
+        lastSeen: Date.now()
+      };
+      setActiveDevices([currentDevice]);
+      setDeviceCount(1);
+    } else {
+      setActiveDevices([]);
+      setDeviceCount(1);
+    }
+  }, [isMultiDeviceEnabled]);
+
   return {
     // State
     isLoading,
@@ -301,6 +347,12 @@ export const useFirebaseData = () => {
     
     // Store state
     storeItems,
+    
+    // Multi-device sync state
+    activeDevices,
+    syncEvents,
+    deviceCount,
+    isMultiDeviceEnabled,
 
     // Setters
     setEmployees,
@@ -321,7 +373,11 @@ export const useFirebaseData = () => {
     // Actions
     loadFromFirebase,
     saveToFirebase,
-    quickSave // 🎯 NEW: QuickSave with sync animation
+    quickSave, // 🎯 NEW: QuickSave with sync animation
+    
+    // Multi-device sync actions
+    toggleMultiDeviceSync,
+    refreshFromAllDevices
   };
 };
 
