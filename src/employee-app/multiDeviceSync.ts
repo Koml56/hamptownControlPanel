@@ -517,6 +517,3 @@ export class MultiDeviceSyncService {
     this.updatePresence(true);
   }
 }
-
-// Exports are handled by the class declaration above
-export type { DeviceInfo, SyncEvent };
