@@ -195,18 +195,36 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
       setIsDragging(false);
     };
 
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (!isDragging) return;
+      
+      // Get the last touch position before it ended
+      const touch = e.changedTouches[0];
+      const deltaX = touch.clientX - dragStart.x;
+      const deltaY = touch.clientY - dragStart.y;
+      
+      // Determine final side based on screen center
+      const finalSide = (dragStart.startSide === 'left' ? 16 : window.innerWidth - 56) + deltaX > window.innerWidth / 2 ? 'right' : 'left';
+      
+      // Final Y position
+      const finalY = Math.max(24, Math.min(window.innerHeight - 64, dragStart.startY + deltaY));
+      
+      setPosition({ x: finalSide, y: finalY });
+      setIsDragging(false);
+    };
+
     if (isDragging) {
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
       document.addEventListener('touchmove', handleTouchMove, { passive: false });
-      document.addEventListener('touchend', handleMouseUp);
+      document.addEventListener('touchend', handleTouchEnd);
     }
 
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
       document.removeEventListener('touchmove', handleTouchMove);
-      document.removeEventListener('touchend', handleMouseUp);
+      document.removeEventListener('touchend', handleTouchEnd);
     };
   }, [isDragging, dragStart]);
 
