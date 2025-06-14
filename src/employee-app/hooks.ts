@@ -211,7 +211,7 @@ export const useFirebaseData = () => {
 
     saveTimeoutRef.current = setTimeout(() => {
       debouncedSave();
-    }, 2000);
+    }, 100);
   }, [debouncedSave]);
 
   // Load from Firebase
