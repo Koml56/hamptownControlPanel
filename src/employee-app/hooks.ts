@@ -77,15 +77,18 @@ export const useFirebaseData = () => {
 
   // Add sync event when data changes (declare this first)
   const addSyncEvent = useCallback((action: string) => {
+    // Temporarily disabled until SyncEvent type is resolved
+    console.log('Sync event:', action);
+    /*
     if (isMultiDeviceEnabled) {
-      const event: SyncEvent = {
-        id: 'event-' + Date.now(),
+      const event = {
         deviceId: 'device-' + Date.now(),
         timestamp: Date.now(),
         action: action
-      };
+      } as SyncEvent;
       setSyncEvents(prev => [event, ...prev.slice(0, 9)]); // Keep only last 10 events
     }
+    */
   }, [isMultiDeviceEnabled]);
 
   // 🎯 NEW: QuickSave function with sync animation
