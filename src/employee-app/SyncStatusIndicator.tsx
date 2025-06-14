@@ -1,20 +1,38 @@
 // SyncStatusIndicator.tsx - Enhanced floating orb with glass-morphism
 import React, { useState, useEffect } from 'react';
 import { Wifi, WifiOff, RefreshCw, Globe, Users, Eye, EyeOff } from 'lucide-react';
-import type { DeviceInfo, SyncEvent } from './multiDeviceSync';
+
+// Types for multi-device sync
+interface DeviceInfo {
+  id: string;
+  name: string;
+  lastSeen: number;
+  userAgent: string;
+  isCurrentDevice: boolean;
+}
+
+interface SyncEvent {
+  id: string;
+  deviceId: string;
+  timestamp: number;
+  action: 'sync' | 'update' | 'connect' | 'disconnect';
+  data?: any;
+}
+
+type ConnectionStatus = 'connecting' | 'connected' | 'error';
 
 interface SyncStatusIndicatorProps {
   isLoading: boolean;
   lastSync: string | null;
-  connectionStatus: 'connecting' | 'connected' | 'error';
+  connectionStatus: ConnectionStatus;
   loadFromFirebase: () => void;
   // Multi-device sync props
-  activeDevices: DeviceInfo[];
-  syncEvents: SyncEvent[];
-  deviceCount: number;
-  isMultiDeviceEnabled: boolean;
-  toggleMultiDeviceSync: () => void;
-  refreshFromAllDevices: () => void;
+  activeDevices?: DeviceInfo[];
+  syncEvents?: SyncEvent[];
+  deviceCount?: number;
+  isMultiDeviceEnabled?: boolean;
+  toggleMultiDeviceSync?: () => void;
+  refreshFromAllDevices?: () => void;
 }
 
 const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
@@ -22,19 +40,19 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
   lastSync,
   connectionStatus,
   loadFromFirebase,
-  activeDevices,
-  syncEvents,
-  deviceCount,
-  isMultiDeviceEnabled,
-  toggleMultiDeviceSync,
-  refreshFromAllDevices
+  activeDevices = [],
+  syncEvents = [],
+  deviceCount = 1,
+  isMultiDeviceEnabled = false,
+  toggleMultiDeviceSync = () => {},
+  refreshFromAllDevices = () => {}
 }) => {
   const [showSyncPulse, setShowSyncPulse] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [recentSyncCount, setRecentSyncCount] = useState(0);
 
-  // Add custom CSS for animation delays
-  React.useEffect(() => {
+  // Add custom CSS for animation delays - FIXED
+  useEffect(() => {
     const style = document.createElement('style');
     style.textContent = `
       .animation-delay-150 {
@@ -45,7 +63,11 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
       }
     `;
     document.head.appendChild(style);
-    return () => document.head.removeChild(style);
+    
+    // Fixed: Return a cleanup function that returns void
+    return () => {
+      document.head.removeChild(style);
+    };
   }, []);
 
   // Show pulse animation when sync occurs
@@ -250,11 +272,63 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
                   </div>
                 </div>
 
+                {/* Active devices list */}
+                {isMultiDeviceEnabled && activeDevices.length > 0 && (
+                  <div className="bg-white/20 backdrop-blur-sm rounded-xl p-4 border border-white/30">
+                    <div className="text-sm font-medium text-gray-700 mb-3">Active Devices</div>
+                    <div className="space-y-2">
+                      {activeDevices.slice(0, 3).map((device) => (
+                        <div key={device.id} className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <div className={`w-2 h-2 rounded-full ${device.isCurrentDevice ? 'bg-emerald-500' : 'bg-blue-500'}`} />
+                            <span className="text-xs text-gray-600">
+                              {device.name}
+                              {device.isCurrentDevice && ' (You)'}
+                            </span>
+                          </div>
+                          <span className="text-xs text-gray-500">
+                            {new Date(device.lastSeen).toLocaleTimeString()}
+                          </span>
+                        </div>
+                      ))}
+                      {activeDevices.length > 3 && (
+                        <div className="text-xs text-gray-500 text-center">
+                          +{activeDevices.length - 3} more devices
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* Last sync info */}
                 {lastSync && (
                   <div className="text-center bg-white/20 backdrop-blur-sm rounded-xl p-3 border border-white/30">
                     <div className="text-xs text-gray-500 mb-1">Last synchronization</div>
                     <div className="text-sm font-semibold text-gray-700">{lastSync}</div>
+                  </div>
+                )}
+
+                {/* Recent sync events */}
+                {syncEvents.length > 0 && (
+                  <div className="bg-white/20 backdrop-blur-sm rounded-xl p-4 border border-white/30">
+                    <div className="text-sm font-medium text-gray-700 mb-3">Recent Activity</div>
+                    <div className="space-y-2 max-h-32 overflow-y-auto">
+                      {syncEvents.slice(0, 5).map((event) => (
+                        <div key={event.id} className="flex items-center justify-between text-xs">
+                          <span className="text-gray-600">
+                            {event.action === 'sync' && '🔄'}
+                            {event.action === 'update' && '📝'}
+                            {event.action === 'connect' && '🔗'}
+                            {event.action === 'disconnect' && '🔌'}
+                            {' '}
+                            {event.action}
+                          </span>
+                          <span className="text-gray-500">
+                            {new Date(event.timestamp).toLocaleTimeString()}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 
