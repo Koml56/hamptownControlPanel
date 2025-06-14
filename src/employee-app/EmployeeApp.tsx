@@ -17,7 +17,17 @@ import { handleAdminLogin } from './adminFunctions';
 // Types and Constants
 import { getFormattedDate } from './utils';
 import { getDefaultStoreItems } from './defaultData';
-import type { ActiveTab, Employee, Task, DailyDataMap, TaskAssignments, StoreItem } from './types';
+import type { 
+  ActiveTab, 
+  Employee, 
+  Task, 
+  DailyDataMap, 
+  TaskAssignments, 
+  StoreItem, 
+  PrepItem, 
+  ScheduledPrep, 
+  PrepSelections 
+} from './types';
 
 const EmployeeApp = () => {
   // Firebase and Auth hooks
@@ -32,6 +42,9 @@ const EmployeeApp = () => {
     taskAssignments,
     customRoles,
     storeItems,
+    prepItems,
+    scheduledPreps,
+    prepSelections,
     activeDevices,
     syncEvents,
     deviceCount,
@@ -43,6 +56,9 @@ const EmployeeApp = () => {
     setTaskAssignments,
     setCustomRoles,
     setStoreItems,
+    setPrepItems,
+    setScheduledPreps,
+    setPrepSelections,
     loadFromFirebase,
     saveToFirebase,
     triggerImmediateSync,  // 🎯 NEW: Immediate sync animation
@@ -150,6 +166,21 @@ const EmployeeApp = () => {
     setStoreItems(updater);
     handleDataChange(); // 🎯 Immediate sync animation!
   }, [setStoreItems, handleDataChange]);
+
+  const setPrepItemsWithSave = useCallback((updater: (prev: PrepItem[]) => PrepItem[]) => {
+    setPrepItems(updater);
+    handleDataChange(); // 🎯 Immediate sync animation!
+  }, [setPrepItems, handleDataChange]);
+
+  const setScheduledPrepsWithSave = useCallback((updater: (prev: ScheduledPrep[]) => ScheduledPrep[]) => {
+    setScheduledPreps(updater);
+    handleDataChange(); // 🎯 Immediate sync animation!
+  }, [setScheduledPreps, handleDataChange]);
+
+  const setPrepSelectionsWithSave = useCallback((updater: (prev: PrepSelections) => PrepSelections) => {
+    setPrepSelections(updater);
+    handleDataChange(); // 🎯 Immediate sync animation!
+  }, [setPrepSelections, handleDataChange]);
 
   const currentEmployee = employees.find(emp => emp.id === currentUser.id);
 
@@ -348,10 +379,16 @@ const EmployeeApp = () => {
             tasks={tasks}
             customRoles={customRoles}
             storeItems={storeItems}
+            prepItems={prepItems}
+            scheduledPreps={scheduledPreps}
+            prepSelections={prepSelections}
             setEmployees={setEmployeesWithSave}
             setTasks={setTasksWithSave}
             setCustomRoles={setCustomRolesWithSave}
             setStoreItems={setStoreItemsWithSave}
+            setPrepItems={setPrepItemsWithSave}
+            setScheduledPreps={setScheduledPrepsWithSave}
+            setPrepSelections={setPrepSelectionsWithSave}
           />
         )}
 
