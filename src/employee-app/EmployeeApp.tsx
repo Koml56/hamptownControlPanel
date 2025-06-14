@@ -1,4 +1,4 @@
-// EmployeeApp.tsx - Updated with multi-device sync functionality
+// EmployeeApp.tsx - Updated with immediate sync animation + multi-device sync functionality
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Users, 
@@ -68,6 +68,7 @@ const EmployeeApp: React.FC = () => {
     loadFromFirebase,
     saveToFirebase,
     quickSave,
+    triggerImmediateSync, // 🎯 NEW: Immediate sync animation
     // Multi-device sync actions
     toggleMultiDeviceSync,
     refreshFromAllDevices
@@ -178,49 +179,49 @@ const EmployeeApp: React.FC = () => {
     }
   }, [firebaseStoreItems]);
 
-  // Optimized data change handler
+  // 🎯 NEW: Immediate sync animation handler  
   const handleDataChange = useCallback(() => {
     if (connectionStatus === 'connected') {
-      saveToFirebase();
+      triggerImmediateSync(); // 🎯 Shows immediate sync animation!
     }
-  }, [connectionStatus, saveToFirebase]);
+  }, [connectionStatus, triggerImmediateSync]);
 
-  // Enhanced setters that trigger save
+  // 🎯 Enhanced setters with immediate sync animation
   const setEmployeesWithSave = useCallback((updater: (prev: Employee[]) => Employee[]) => {
     setEmployees(updater);
-    handleDataChange();
+    handleDataChange(); // 🎯 Immediate sync animation!
   }, [setEmployees, handleDataChange]);
 
   const setTasksWithSave = useCallback((updater: (prev: Task[]) => Task[]) => {
     setTasks(updater);
-    handleDataChange();
+    handleDataChange(); // 🎯 Immediate sync animation!
   }, [setTasks, handleDataChange]);
 
   const setDailyDataWithSave = useCallback((updater: (prev: DailyDataMap) => DailyDataMap) => {
     setDailyData(updater);
-    handleDataChange();
+    handleDataChange(); // 🎯 Immediate sync animation!
   }, [setDailyData, handleDataChange]);
 
   const setCompletedTasksWithSave = useCallback((tasks: Set<number>) => {
     setCompletedTasks(tasks);
-    handleDataChange();
+    handleDataChange(); // 🎯 Immediate sync animation!
   }, [setCompletedTasks, handleDataChange]);
 
   const setTaskAssignmentsWithSave = useCallback((updater: (prev: TaskAssignments) => TaskAssignments) => {
     setTaskAssignments(updater);
-    handleDataChange();
+    handleDataChange(); // 🎯 Immediate sync animation!
   }, [setTaskAssignments, handleDataChange]);
 
   const setCustomRolesWithSave = useCallback((updater: (prev: string[]) => string[]) => {
     setCustomRoles(updater);
-    handleDataChange();
+    handleDataChange(); // 🎯 Immediate sync animation!
   }, [setCustomRoles, handleDataChange]);
 
   const setStoreItemsWithSave = useCallback((updater: (prev: StoreItem[]) => StoreItem[]) => {
     const newItems = typeof updater === 'function' ? updater(storeItems) : updater;
     setStoreItems(newItems);
     setFirebaseStoreItems(() => newItems);
-    handleDataChange();
+    handleDataChange(); // 🎯 Immediate sync animation!
   }, [storeItems, setFirebaseStoreItems, handleDataChange]);
 
   // FIXED: Manual reset function for testing (admin only) - Now clears BOTH completed tasks AND task assignments
