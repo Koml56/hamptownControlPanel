@@ -1,20 +1,6 @@
-// EmployeeApp.tsx - Updated with multi-device sync functionality
+// EmployeeApp.tsx - Optimized with immediate sync animation
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  Users, 
-  CheckSquare, 
-  TrendingUp, 
-  Settings, 
-  Lock, 
-  LogOut, 
-  Calendar, 
-  Database, 
-  ChevronDown, 
-  X, 
-  Check, 
-  ShoppingBag, 
-  ChefHat 
-} from 'lucide-react';
+import { Users, CheckSquare, TrendingUp, Settings, Lock, LogOut, Calendar, Database, ChevronDown, X, Check, ShoppingBag } from 'lucide-react';
 
 // Components
 import MoodTracker from './MoodTracker';
@@ -22,7 +8,6 @@ import TaskManager from './TaskManager';
 import Store from './Store';
 import AdminPanel from './AdminPanel';
 import DailyReports from './DailyReports';
-import PrepListPrototype from './PrepListPrototype';
 import SyncStatusIndicator from './SyncStatusIndicator';
 
 // Hooks and Functions
@@ -34,8 +19,8 @@ import { getFormattedDate } from './utils';
 import { getDefaultStoreItems } from './defaultData';
 import type { ActiveTab, Employee, Task, DailyDataMap, TaskAssignments, StoreItem } from './types';
 
-const EmployeeApp: React.FC = () => {
-  // Firebase and Auth hooks with multi-device sync
+const EmployeeApp = () => {
+  // Firebase and Auth hooks
   const {
     isLoading,
     lastSync,
@@ -46,11 +31,7 @@ const EmployeeApp: React.FC = () => {
     completedTasks,
     taskAssignments,
     customRoles,
-    prepItems,
-    scheduledPreps,
-    prepSelections,
-    storeItems: firebaseStoreItems,
-    // Multi-device sync properties
+    storeItems,
     activeDevices,
     syncEvents,
     deviceCount,
@@ -61,14 +42,10 @@ const EmployeeApp: React.FC = () => {
     setCompletedTasks,
     setTaskAssignments,
     setCustomRoles,
-    setPrepItems,
-    setScheduledPreps,
-    setPrepSelections,
-    setStoreItems: setFirebaseStoreItems,
+    setStoreItems,
     loadFromFirebase,
     saveToFirebase,
-    quickSave,
-    // Multi-device sync actions
+    triggerImmediateSync,  // 🎯 NEW: Immediate sync animation
     toggleMultiDeviceSync,
     refreshFromAllDevices
   } = useFirebaseData();
@@ -88,25 +65,11 @@ const EmployeeApp: React.FC = () => {
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
   const [selectedDate, setSelectedDate] = useState(getFormattedDate(new Date()));
-  const [storeItems, setStoreItems] = useState<StoreItem[]>(getDefaultStoreItems());
-  const [showDailyResetNotification, setShowDailyResetNotification] = useState(false);
 
-  // Initialize on mount - with better control
+  // Load data once on mount
   useEffect(() => {
-    let mounted = true;
-    const initializeApp = async () => {
-      if (mounted && employees.length === 0) { // Only load if we don't have data yet
-        console.log('🚀 Initializing app...');
-        await loadFromFirebase();
-      }
-    };
-    
-    initializeApp();
-    
-    return () => {
-      mounted = false;
-    };
-  }, []); // Only run once on mount
+    loadFromFirebase();
+  }, []); // Empty dependency array - only run once
 
   // Set up periodic auto-save (every 5 minutes)
   useEffect(() => {
@@ -119,49 +82,12 @@ const EmployeeApp: React.FC = () => {
     return () => clearInterval(interval);
   }, [connectionStatus, isLoading, saveToFirebase]);
 
-  // Check for daily reset notification - improved logic with better debouncing
-  useEffect(() => {
-    const checkDailyReset = () => {
-      const lastNotificationDate = localStorage.getItem('lastDailyResetNotification');
-      const lastResetDate = localStorage.getItem('lastTaskResetDate');
-      const today = getFormattedDate(new Date());
-      
-      console.log('🔍 Checking notification:', { 
-        lastNotificationDate, 
-        lastResetDate, 
-        today, 
-        completedTasksSize: completedTasks.size,
-        taskAssignmentsCount: Object.keys(taskAssignments).length,
-        shouldShow: lastResetDate === today && lastNotificationDate !== today && 
-                   (completedTasks.size === 0 && Object.keys(taskAssignments).length === 0)
-      });
-      
-      // Show notification if:
-      // 1. A reset happened today (lastResetDate === today)
-      // 2. We haven't shown notification today (lastNotificationDate !== today)
-      // 3. Tasks are actually cleared (completedTasks.size === 0 AND taskAssignments is empty)
-      if (lastResetDate === today && 
-          lastNotificationDate !== today && 
-          completedTasks.size === 0 &&
-          Object.keys(taskAssignments).length === 0) {
-        
-        console.log('📢 Showing daily reset notification');
-        setShowDailyResetNotification(true);
-        localStorage.setItem('lastDailyResetNotification', today);
-        
-        // Auto-hide notification after 8 seconds
-        setTimeout(() => {
-          setShowDailyResetNotification(false);
-        }, 8000);
-      }
-    };
-
-    // Only check after initial load is complete and we have stable data
-    if (!isLoading && connectionStatus === 'connected') {
-      const timer = setTimeout(checkDailyReset, 2000); // Wait 2 seconds for stability
-      return () => clearTimeout(timer);
+  // 🎯 NEW: Immediate sync animation handler
+  const handleDataChange = useCallback(() => {
+    if (connectionStatus === 'connected') {
+      triggerImmediateSync(); // Shows immediate sync animation!
     }
-  }, [completedTasks.size, taskAssignments, isLoading, connectionStatus]); // More specific dependencies
+  }, [connectionStatus, triggerImmediateSync]);
 
   // Update user mood when current user changes
   useEffect(() => {
@@ -171,104 +97,6 @@ const EmployeeApp: React.FC = () => {
     }
   }, [currentUser.id, employees]);
 
-  // Sync Firebase store items with local state
-  useEffect(() => {
-    if (firebaseStoreItems && firebaseStoreItems.length > 0) {
-      setStoreItems(firebaseStoreItems);
-    }
-  }, [firebaseStoreItems]);
-
-  // Optimized data change handler
-  const handleDataChange = useCallback(() => {
-    if (connectionStatus === 'connected') {
-      saveToFirebase();
-    }
-  }, [connectionStatus, saveToFirebase]);
-
-  // Enhanced setters that trigger save
-  const setEmployeesWithSave = useCallback((updater: (prev: Employee[]) => Employee[]) => {
-    setEmployees(updater);
-    handleDataChange();
-  }, [setEmployees, handleDataChange]);
-
-  const setTasksWithSave = useCallback((updater: (prev: Task[]) => Task[]) => {
-    setTasks(updater);
-    handleDataChange();
-  }, [setTasks, handleDataChange]);
-
-  const setDailyDataWithSave = useCallback((updater: (prev: DailyDataMap) => DailyDataMap) => {
-    setDailyData(updater);
-    handleDataChange();
-  }, [setDailyData, handleDataChange]);
-
-  const setCompletedTasksWithSave = useCallback((tasks: Set<number>) => {
-    setCompletedTasks(tasks);
-    handleDataChange();
-  }, [setCompletedTasks, handleDataChange]);
-
-  const setTaskAssignmentsWithSave = useCallback((updater: (prev: TaskAssignments) => TaskAssignments) => {
-    setTaskAssignments(updater);
-    handleDataChange();
-  }, [setTaskAssignments, handleDataChange]);
-
-  const setCustomRolesWithSave = useCallback((updater: (prev: string[]) => string[]) => {
-    setCustomRoles(updater);
-    handleDataChange();
-  }, [setCustomRoles, handleDataChange]);
-
-  const setStoreItemsWithSave = useCallback((updater: (prev: StoreItem[]) => StoreItem[]) => {
-    const newItems = typeof updater === 'function' ? updater(storeItems) : updater;
-    setStoreItems(newItems);
-    setFirebaseStoreItems(() => newItems);
-    handleDataChange();
-  }, [storeItems, setFirebaseStoreItems, handleDataChange]);
-
-  // FIXED: Manual reset function for testing (admin only) - Now clears BOTH completed tasks AND task assignments
-  const handleManualReset = useCallback(() => {
-    if (!isAdmin) return;
-    
-    console.log('🧪 MANUAL RESET: Triggered by admin');
-    console.log('📋 Before manual reset:', { 
-      completedTasksCount: completedTasks.size, 
-      taskAssignmentsCount: Object.keys(taskAssignments).length,
-      taskAssignments: taskAssignments
-    });
-    
-    const today = getFormattedDate(new Date());
-    
-    // Clear all related localStorage flags
-    localStorage.removeItem('resetInProgress');
-    localStorage.removeItem('lastDailyResetNotification');
-    localStorage.removeItem('resetCheckedToday');
-    
-    // Perform the reset - BOTH completed tasks AND task assignments
-    setCompletedTasks(new Set());
-    setTaskAssignments(() => ({})); // Clear all task assignments
-    localStorage.setItem('lastTaskResetDate', today);
-    
-    console.log('✅ MANUAL RESET: Cleared both completed tasks AND task assignments');
-    console.log('📋 After manual reset: { completedTasks: Set(0), taskAssignments: {} }');
-    
-    // Show notification
-    setShowDailyResetNotification(true);
-    setTimeout(() => {
-      setShowDailyResetNotification(false);
-    }, 8000);
-    
-    // Save BOTH to Firebase
-    setTimeout(() => {
-      Promise.all([
-        quickSave('completedTasks', []),
-        quickSave('taskAssignments', {})
-      ]).then(() => {
-        console.log('✅ MANUAL RESET: Both completedTasks=[] and taskAssignments={} saved to Firebase');
-      }).catch((error) => {
-        console.error('❌ MANUAL RESET: Failed to save to Firebase:', error);
-      });
-    }, 500);
-  }, [isAdmin, setCompletedTasks, setTaskAssignments, quickSave, completedTasks, taskAssignments]);
-
-  // Event handlers
   const handleAdminLoginSubmit = () => {
     const success = handleAdminLogin(adminPassword, setIsAdmin, setActiveTab, setAdminPassword);
     if (success) {
@@ -286,6 +114,42 @@ const EmployeeApp: React.FC = () => {
     logoutAdmin();
     setActiveTab('mood');
   };
+
+  // 🎯 Enhanced setters with immediate sync animation
+  const setEmployeesWithSave = useCallback((updater: (prev: Employee[]) => Employee[]) => {
+    setEmployees(updater);
+    handleDataChange(); // 🎯 Immediate sync animation!
+  }, [setEmployees, handleDataChange]);
+
+  const setTasksWithSave = useCallback((updater: (prev: Task[]) => Task[]) => {
+    setTasks(updater);
+    handleDataChange(); // 🎯 Immediate sync animation!
+  }, [setTasks, handleDataChange]);
+
+  const setDailyDataWithSave = useCallback((updater: (prev: DailyDataMap) => DailyDataMap) => {
+    setDailyData(updater);
+    handleDataChange(); // 🎯 Immediate sync animation!
+  }, [setDailyData, handleDataChange]);
+
+  const setCompletedTasksWithSave = useCallback((tasks: Set<number>) => {
+    setCompletedTasks(tasks);
+    handleDataChange(); // 🎯 Immediate sync animation!
+  }, [setCompletedTasks, handleDataChange]);
+
+  const setTaskAssignmentsWithSave = useCallback((updater: (prev: TaskAssignments) => TaskAssignments) => {
+    setTaskAssignments(updater);
+    handleDataChange(); // 🎯 Immediate sync animation!
+  }, [setTaskAssignments, handleDataChange]);
+
+  const setCustomRolesWithSave = useCallback((updater: (prev: string[]) => string[]) => {
+    setCustomRoles(updater);
+    handleDataChange(); // 🎯 Immediate sync animation!
+  }, [setCustomRoles, handleDataChange]);
+
+  const setStoreItemsWithSave = useCallback((updater: (prev: StoreItem[]) => StoreItem[]) => {
+    setStoreItems(updater);
+    handleDataChange(); // 🎯 Immediate sync animation!
+  }, [setStoreItems, handleDataChange]);
 
   const currentEmployee = employees.find(emp => emp.id === currentUser.id);
 
@@ -311,13 +175,6 @@ const EmployeeApp: React.FC = () => {
             {isAdmin && (
               <div className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full">
                 Admin Mode
-              </div>
-            )}
-            {/* Multi-device sync indicator in header */}
-            {isMultiDeviceEnabled && deviceCount > 1 && (
-              <div className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full flex items-center space-x-1">
-                <Users className="w-3 h-3" />
-                <span>{deviceCount} devices</span>
               </div>
             )}
           </div>
@@ -382,146 +239,70 @@ const EmployeeApp: React.FC = () => {
 
       {/* Tab Navigation */}
       <div className="bg-white border-b">
-        <div className="flex overflow-x-auto">
+        <div className="flex">
           <button
             onClick={() => setActiveTab('mood')}
-            className={`flex-shrink-0 py-3 px-4 text-center ${
+            className={`flex-1 py-3 px-4 text-center ${
               activeTab === 'mood' 
                 ? 'border-b-2 border-blue-500 text-blue-600 bg-blue-50' 
-                : 'text-gray-600 hover:text-gray-800'
+                : 'text-gray-600'
             }`}
           >
             <TrendingUp className="w-5 h-5 mx-auto mb-1" />
-            <span className="text-sm">Mood Tracker</span>
+            Mood Tracker
           </button>
           <button
             onClick={() => setActiveTab('tasks')}
-            className={`flex-shrink-0 py-3 px-4 text-center ${
+            className={`flex-1 py-3 px-4 text-center ${
               activeTab === 'tasks' 
                 ? 'border-b-2 border-blue-500 text-blue-600 bg-blue-50' 
-                : 'text-gray-600 hover:text-gray-800'
+                : 'text-gray-600'
             }`}
           >
             <CheckSquare className="w-5 h-5 mx-auto mb-1" />
-            <span className="text-sm">Cleaning Tasks</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('prep')}
-            className={`flex-shrink-0 py-3 px-4 text-center ${
-              activeTab === 'prep' 
-                ? 'border-b-2 border-green-500 text-green-600 bg-green-50' 
-                : 'text-gray-600 hover:text-gray-800'
-            }`}
-          >
-            <ChefHat className="w-5 h-5 mx-auto mb-1" />
-            <span className="text-sm">Prep List</span>
+            Cleaning Tasks
           </button>
           <button
             onClick={() => setActiveTab('store')}
-            className={`flex-shrink-0 py-3 px-4 text-center ${
+            className={`flex-1 py-3 px-4 text-center ${
               activeTab === 'store' 
                 ? 'border-b-2 border-purple-500 text-purple-600 bg-purple-50' 
-                : 'text-gray-600 hover:text-gray-800'
+                : 'text-gray-600'
             }`}
           >
             <ShoppingBag className="w-5 h-5 mx-auto mb-1" />
-            <span className="text-sm">Store</span>
+            Store
           </button>
           {isAdmin && (
             <button
               onClick={() => setActiveTab('admin')}
-              className={`flex-shrink-0 py-3 px-4 text-center ${
+              className={`flex-1 py-3 px-4 text-center ${
                 activeTab === 'admin' 
                   ? 'border-b-2 border-red-500 text-red-600 bg-red-50' 
-                  : 'text-gray-600 hover:text-gray-800'
+                  : 'text-gray-600'
               }`}
             >
               <Settings className="w-5 h-5 mx-auto mb-1" />
-              <span className="text-sm">Admin Panel</span>
+              Admin Panel
             </button>
           )}
           {isAdmin && (
             <button
               onClick={() => setActiveTab('reports')}
-              className={`flex-shrink-0 py-3 px-4 text-center ${
+              className={`flex-1 py-3 px-4 text-center ${
                 activeTab === 'reports' 
                   ? 'border-b-2 border-orange-500 text-orange-600 bg-orange-50' 
-                  : 'text-gray-600 hover:text-gray-800'
+                  : 'text-gray-600'
               }`}
             >
               <Database className="w-5 h-5 mx-auto mb-1" />
-              <span className="text-sm">Daily Reports</span>
+              Daily Reports
             </button>
           )}
         </div>
       </div>
 
-      {/* Main Content Area */}
       <div className="p-4 space-y-6">
-        {/* Daily Reset Notification */}
-        {showDailyResetNotification && (
-          <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 max-w-md w-full mx-4">
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 shadow-lg backdrop-blur-sm">
-              <div className="flex items-start">
-                <div className="flex-shrink-0">
-                  <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <div className="ml-3 flex-1">
-                  <h3 className="text-sm font-medium text-blue-800">
-                    🌅 New Day, Fresh Start!
-                  </h3>
-                  <p className="mt-1 text-sm text-blue-600">
-                    All cleaning tasks and assignments have been reset for today. Time to start fresh and earn those points!
-                  </p>
-                  {isMultiDeviceEnabled && deviceCount > 1 && (
-                    <p className="mt-1 text-xs text-blue-500">
-                      📱 Synced across {deviceCount} devices
-                    </p>
-                  )}
-                </div>
-                <div className="flex-shrink-0 ml-3">
-                  <button
-                    onClick={() => setShowDailyResetNotification(false)}
-                    className="text-blue-400 hover:text-blue-600"
-                  >
-                    <span className="sr-only">Close</span>
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Admin Test Reset Button */}
-        {isAdmin && (
-          <div className="fixed bottom-20 right-4 z-50">
-            <button
-              onClick={handleManualReset}
-              className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-full shadow-lg transition-colors text-sm font-medium"
-              title="Test Daily Reset - Clears both tasks AND assignments (Admin Only)"
-            >
-              🧪 Test Reset
-            </button>
-          </div>
-        )}
-
-        {/* Enhanced Sync Status Indicator */}
-        <SyncStatusIndicator
-          isLoading={isLoading}
-          lastSync={lastSync}
-          connectionStatus={connectionStatus}
-          loadFromFirebase={loadFromFirebase}
-          activeDevices={activeDevices}
-          syncEvents={syncEvents}
-          deviceCount={deviceCount}
-          isMultiDeviceEnabled={isMultiDeviceEnabled}
-          toggleMultiDeviceSync={toggleMultiDeviceSync}
-          refreshFromAllDevices={refreshFromAllDevices}
-        />
-
         {/* Tab Content */}
         {activeTab === 'mood' && (
           <MoodTracker
@@ -549,20 +330,6 @@ const EmployeeApp: React.FC = () => {
           />
         )}
 
-        {activeTab === 'prep' && (
-          <PrepListPrototype
-            currentUser={currentUser}
-            connectionStatus={connectionStatus}
-            prepItems={prepItems}
-            scheduledPreps={scheduledPreps}
-            prepSelections={prepSelections}
-            setPrepItems={setPrepItems}
-            setScheduledPreps={setScheduledPreps}
-            setPrepSelections={setPrepSelections}
-            quickSave={quickSave}
-          />
-        )}
-
         {activeTab === 'store' && (
           <Store
             currentUser={currentUser}
@@ -581,12 +348,10 @@ const EmployeeApp: React.FC = () => {
             tasks={tasks}
             customRoles={customRoles}
             storeItems={storeItems}
-            prepItems={prepItems}
             setEmployees={setEmployeesWithSave}
             setTasks={setTasksWithSave}
             setCustomRoles={setCustomRolesWithSave}
             setStoreItems={setStoreItemsWithSave}
-            setPrepItems={setPrepItems}
           />
         )}
 
@@ -600,6 +365,20 @@ const EmployeeApp: React.FC = () => {
           />
         )}
       </div>
+
+      {/* 🎯 NEW: Enhanced Sync Status Indicator */}
+      <SyncStatusIndicator
+        isLoading={isLoading}
+        lastSync={lastSync}
+        connectionStatus={connectionStatus}
+        loadFromFirebase={loadFromFirebase}
+        activeDevices={activeDevices}
+        syncEvents={syncEvents}
+        deviceCount={deviceCount}
+        isMultiDeviceEnabled={isMultiDeviceEnabled}
+        toggleMultiDeviceSync={toggleMultiDeviceSync}
+        refreshFromAllDevices={refreshFromAllDevices}
+      />
 
       {/* Admin Login Modal */}
       {showAdminLogin && (
@@ -628,7 +407,6 @@ const EmployeeApp: React.FC = () => {
                 onChange={(e) => setAdminPassword(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleAdminLoginSubmit()}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                autoFocus
               />
               <button
                 onClick={handleAdminLoginSubmit}
@@ -641,7 +419,7 @@ const EmployeeApp: React.FC = () => {
         </div>
       )}
 
-      {/* Click outside handlers */}
+      {/* Click outside to close dropdowns */}
       {(showUserSwitcher || showAdminLogin) && (
         <div 
           className="fixed inset-0 z-30" 
