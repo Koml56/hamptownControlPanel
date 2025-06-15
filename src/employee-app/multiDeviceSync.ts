@@ -1,4 +1,4 @@
-// multiDeviceSync.ts - Complete multi-device synchronization service
+// multiDeviceSync.ts - Complete multi-device synchronization service with real-time updates
 import { FIREBASE_CONFIG } from './constants';
 import type { Employee, Task, DailyDataMap, TaskAssignments, PrepItem, ScheduledPrep, PrepSelections, StoreItem } from './types';
 
@@ -9,45 +9,61 @@ export interface DeviceInfo {
   user: string;
   platform: string;
   isActive: boolean;
+  browserInfo: string;
+  ipAddress?: string;
 }
 
 export interface SyncEvent {
-  type: 'data_update' | 'device_join' | 'device_leave' | 'conflict_resolution';
+  type: 'data_update' | 'device_join' | 'device_leave' | 'conflict_resolution' | 'full_sync';
   timestamp: number;
   deviceId: string;
+  deviceName: string;
   data?: any;
   field?: string;
+  description?: string;
+}
+
+export interface SyncData {
+  employees?: Employee[];
+  tasks?: Task[];
+  dailyData?: DailyDataMap;
+  completedTasks?: number[];
+  taskAssignments?: TaskAssignments;
+  customRoles?: string[];
+  prepItems?: PrepItem[];
+  scheduledPreps?: ScheduledPrep[];
+  prepSelections?: PrepSelections;
+  storeItems?: StoreItem[];
 }
 
 export class MultiDeviceSyncService {
   private baseUrl = FIREBASE_CONFIG.databaseURL;
   private deviceId: string;
-  private deviceName: string;
-  private currentUser: string;
+  private deviceInfo: DeviceInfo;
   private presenceRef: string;
   private syncCallbacks: Map<string, (data: any) => void> = new Map();
-  private conflictResolvers: Map<string, (local: any, remote: any) => any> = new Map();
   private isListening = false;
-  private eventSource: EventSource | null = null;
   private heartbeatInterval: NodeJS.Timeout | null = null;
-  private onDeviceCountChange?: (count: number) => void;
+  private onDeviceCountChange?: (count: number, devices: DeviceInfo[]) => void;
   private onSyncEvent?: (event: SyncEvent) => void;
+  private lastDataTimestamp: Map<string, number> = new Map();
+  private conflictThrottleMap: Map<string, number> = new Map();
+  
+  // Real-time listeners for each data field
+  private dataListeners: Map<string, () => void> = new Map();
 
   constructor(userName: string = 'Unknown User') {
     this.deviceId = this.generateDeviceId();
-    this.deviceName = this.getDeviceName();
-    this.currentUser = userName;
+    this.deviceInfo = this.createDeviceInfo(userName);
     this.presenceRef = `presence/${this.deviceId}`;
     
     console.log('🔄 MultiDeviceSyncService initialized:', {
       deviceId: this.deviceId,
-      deviceName: this.deviceName,
-      user: this.currentUser
+      deviceName: this.deviceInfo.name,
+      user: this.deviceInfo.user,
+      platform: this.deviceInfo.platform
     });
 
-    // Setup conflict resolvers
-    this.setupConflictResolvers();
-    
     // Cleanup on page unload
     window.addEventListener('beforeunload', () => {
       this.disconnect();
@@ -59,8 +75,23 @@ export class MultiDeviceSyncService {
         this.updatePresence(false);
       } else {
         this.updatePresence(true);
-        this.refreshDataFromAllDevices();
+        // Small delay to ensure we're back online
+        setTimeout(() => {
+          this.refreshDataFromAllDevices();
+        }, 1000);
       }
+    });
+
+    // Handle online/offline events
+    window.addEventListener('online', () => {
+      console.log('🌐 Back online - reconnecting sync...');
+      this.updatePresence(true);
+      this.startListening();
+    });
+
+    window.addEventListener('offline', () => {
+      console.log('📵 Gone offline - pausing sync...');
+      this.updatePresence(false);
     });
   }
 
@@ -68,97 +99,50 @@ export class MultiDeviceSyncService {
     // Try to get existing device ID from localStorage
     let deviceId = localStorage.getItem('workVibe_deviceId');
     if (!deviceId) {
-      // Generate new device ID
-      deviceId = `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      // Generate new device ID with more randomness
+      const timestamp = Date.now().toString(36);
+      const random = Math.random().toString(36).substr(2, 9);
+      const userAgent = navigator.userAgent.substring(0, 10).replace(/\W/g, '');
+      deviceId = `device_${timestamp}_${random}_${userAgent}`;
       localStorage.setItem('workVibe_deviceId', deviceId);
     }
     return deviceId;
   }
 
-  private getDeviceName(): string {
-    const platform = navigator.platform || 'Unknown';
+  private createDeviceInfo(userName: string): DeviceInfo {
     const userAgent = navigator.userAgent;
+    const platform = navigator.platform || 'Unknown Platform';
     
+    // Enhanced device detection
     let deviceType = 'Desktop';
-    if (/Mobile|Android|iPhone|iPad/.test(userAgent)) {
+    let browserName = 'Unknown Browser';
+    
+    // Detect device type
+    if (/Mobile|Android|iPhone|iPod/.test(userAgent)) {
       deviceType = 'Mobile';
-    } else if (/Tablet|iPad/.test(userAgent)) {
+    } else if (/iPad|Tablet/.test(userAgent)) {
       deviceType = 'Tablet';
     }
     
-    return `${deviceType} (${platform})`;
-  }
-
-  private setupConflictResolvers(): void {
-    // Task completion conflicts - last action wins
-    this.conflictResolvers.set('completedTasks', (local: Set<number>, remote: number[]) => {
-      console.log('🔄 Resolving task completion conflict');
-      return new Set([...Array.from(local), ...remote]);
-    });
-
-    // Employee points conflicts - sum them up (optimistic)
-    this.conflictResolvers.set('employees', (local: Employee[], remote: Employee[]) => {
-      console.log('🔄 Resolving employee points conflict');
-      const merged = [...local];
-      remote.forEach(remoteEmp => {
-        const localIndex = merged.findIndex(emp => emp.id === remoteEmp.id);
-        if (localIndex >= 0) {
-          // Keep higher points value (optimistic approach)
-          if (remoteEmp.points > merged[localIndex].points) {
-            merged[localIndex] = { ...merged[localIndex], points: remoteEmp.points };
-          }
-          // Keep most recent mood update - FIXED: Proper null handling
-          if (remoteEmp.lastMoodDate) {
-            const localMoodDate = merged[localIndex].lastMoodDate;
-            if (localMoodDate === null || remoteEmp.lastMoodDate > localMoodDate) {
-              merged[localIndex].mood = remoteEmp.mood;
-              merged[localIndex].lastMoodDate = remoteEmp.lastMoodDate;
-              merged[localIndex].lastUpdated = remoteEmp.lastUpdated;
-            }
-          }
-        } else {
-          merged.push(remoteEmp);
-        }
-      });
-      return merged;
-    });
-
-    // Daily data conflicts - merge arrays
-    this.conflictResolvers.set('dailyData', (local: DailyDataMap, remote: DailyDataMap) => {
-      console.log('🔄 Resolving daily data conflict');
-      const merged = { ...local };
-      Object.keys(remote).forEach(date => {
-        if (!merged[date]) {
-          merged[date] = remote[date];
-        } else {
-          // Merge completed tasks (avoid duplicates)
-          const existingTaskIds = new Set(merged[date].completedTasks.map(t => t.taskId));
-          const newCompletions = remote[date].completedTasks.filter(t => !existingTaskIds.has(t.taskId));
-          merged[date].completedTasks = [...merged[date].completedTasks, ...newCompletions];
-          
-          // Merge mood updates (keep latest per employee)
-          const moodMap = new Map();
-          [...merged[date].employeeMoods, ...remote[date].employeeMoods].forEach(mood => {
-            const existing = moodMap.get(mood.employeeId);
-            if (!existing || mood.updatedAt > existing.updatedAt) {
-              moodMap.set(mood.employeeId, mood);
-            }
-          });
-          merged[date].employeeMoods = Array.from(moodMap.values());
-          
-          // Merge purchases (avoid duplicates)
-          const existingPurchaseIds = new Set(merged[date].purchases.map(p => p.id));
-          const newPurchases = remote[date].purchases.filter(p => !existingPurchaseIds.has(p.id));
-          merged[date].purchases = [...merged[date].purchases, ...newPurchases];
-          
-          // Recalculate totals
-          merged[date].totalPointsEarned = merged[date].completedTasks.reduce((sum, t) => sum + (t.pointsEarned || 0), 0);
-          merged[date].totalPointsSpent = merged[date].purchases.reduce((sum, p) => sum + p.cost, 0);
-          merged[date].completionRate = Math.round((merged[date].completedTasks.length / merged[date].totalTasks) * 100);
-        }
-      });
-      return merged;
-    });
+    // Detect browser
+    if (userAgent.includes('Chrome')) browserName = 'Chrome';
+    else if (userAgent.includes('Firefox')) browserName = 'Firefox';
+    else if (userAgent.includes('Safari')) browserName = 'Safari';
+    else if (userAgent.includes('Edge')) browserName = 'Edge';
+    
+    // Create device name with better formatting
+    const deviceName = `${deviceType} • ${browserName}`;
+    const browserInfo = `${browserName} on ${platform}`;
+    
+    return {
+      id: this.deviceId,
+      name: deviceName,
+      lastSeen: Date.now(),
+      user: userName,
+      platform: deviceType.toLowerCase(),
+      isActive: true,
+      browserInfo: browserInfo
+    };
   }
 
   // Connect to multi-device sync
@@ -175,14 +159,17 @@ export class MultiDeviceSyncService {
       // Start heartbeat
       this.startHeartbeat();
       
-      console.log('✅ Multi-device sync connected');
-      
+      // Emit connection event
       this.emitSyncEvent({
         type: 'device_join',
         timestamp: Date.now(),
         deviceId: this.deviceId,
-        data: { deviceName: this.deviceName, user: this.currentUser }
+        deviceName: this.deviceInfo.name,
+        description: `${this.deviceInfo.name} connected`,
+        data: { deviceInfo: this.deviceInfo }
       });
+      
+      console.log('✅ Multi-device sync connected');
       
     } catch (error) {
       console.error('❌ Failed to connect multi-device sync:', error);
@@ -195,6 +182,15 @@ export class MultiDeviceSyncService {
     try {
       console.log('🔌 Disconnecting multi-device sync...');
       
+      // Emit disconnection event
+      this.emitSyncEvent({
+        type: 'device_leave',
+        timestamp: Date.now(),
+        deviceId: this.deviceId,
+        deviceName: this.deviceInfo.name,
+        description: `${this.deviceInfo.name} disconnected`
+      });
+      
       // Stop listening
       this.stopListening();
       
@@ -202,14 +198,7 @@ export class MultiDeviceSyncService {
       this.stopHeartbeat();
       
       // Remove presence
-      await this.updatePresence(false);
       await this.removePresence();
-      
-      this.emitSyncEvent({
-        type: 'device_leave',
-        timestamp: Date.now(),
-        deviceId: this.deviceId
-      });
       
       console.log('✅ Multi-device sync disconnected');
       
@@ -220,20 +209,31 @@ export class MultiDeviceSyncService {
 
   // Update device presence
   private async updatePresence(isActive: boolean): Promise<void> {
-    const deviceInfo: DeviceInfo = {
-      id: this.deviceId,
-      name: this.deviceName,
+    this.deviceInfo = {
+      ...this.deviceInfo,
       lastSeen: Date.now(),
-      user: this.currentUser,
-      platform: navigator.platform || 'Unknown',
       isActive
     };
 
     try {
-      await fetch(`${this.baseUrl}/${this.presenceRef}.json`, {
+      const response = await fetch(`${this.baseUrl}/${this.presenceRef}.json`, {
         method: 'PUT',
-        body: JSON.stringify(deviceInfo)
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(this.deviceInfo)
       });
+
+      if (!response.ok) {
+        throw new Error(`Failed to update presence: ${response.status}`);
+      }
+
+      // Update device count
+      const devices = await this.getActiveDevices();
+      if (this.onDeviceCountChange) {
+        this.onDeviceCountChange(devices.length, devices);
+      }
+
     } catch (error) {
       console.error('❌ Failed to update presence:', error);
     }
@@ -250,7 +250,7 @@ export class MultiDeviceSyncService {
     }
   }
 
-  // Get active devices
+  // Get active devices with better filtering
   async getActiveDevices(): Promise<DeviceInfo[]> {
     try {
       const response = await fetch(`${this.baseUrl}/presence.json`);
@@ -261,10 +261,13 @@ export class MultiDeviceSyncService {
       const now = Date.now();
       const devices = Object.values(presenceData) as DeviceInfo[];
       
-      // Filter out stale devices (inactive for more than 2 minutes)
-      return devices.filter(device => 
-        device.isActive && (now - device.lastSeen) < 120000
+      // Filter out stale devices (inactive for more than 3 minutes)
+      const activeDevices = devices.filter(device => 
+        device.isActive && (now - device.lastSeen) < 180000
       );
+
+      // Sort by last seen (most recent first)
+      return activeDevices.sort((a, b) => b.lastSeen - a.lastSeen);
       
     } catch (error) {
       console.error('❌ Failed to get active devices:', error);
@@ -277,105 +280,127 @@ export class MultiDeviceSyncService {
     if (this.isListening) return;
     
     this.isListening = true;
+    console.log('👂 Starting real-time listeners for all data fields...');
     
-    // Listen for data changes using Server-Sent Events
-    const eventSourceUrl = `${this.baseUrl}/.json?ns=${FIREBASE_CONFIG.projectId}`;
-    this.eventSource = new EventSource(eventSourceUrl);
+    // Listen to each data field separately for better performance
+    const fields = [
+      'employees', 'tasks', 'dailyData', 'completedTasks', 
+      'taskAssignments', 'customRoles', 'prepItems', 
+      'scheduledPreps', 'prepSelections', 'storeItems'
+    ];
+
+    fields.forEach(field => {
+      this.setupFieldListener(field);
+    });
     
-    this.eventSource.onmessage = (event) => {
+    // Also listen for presence changes
+    this.setupPresenceListener();
+  }
+
+  // Setup listener for a specific data field
+  private setupFieldListener(field: string): void {
+    const eventSourceUrl = `${this.baseUrl}/${field}.json`;
+    
+    const eventSource = new EventSource(eventSourceUrl);
+    
+    eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        this.handleRemoteDataChange(data);
+        
+        // Skip if data is null or if it's from this device recently
+        if (data === null) return;
+        
+        const now = Date.now();
+        const lastTimestamp = this.lastDataTimestamp.get(field) || 0;
+        
+        // Throttle updates to prevent infinite loops
+        if (now - lastTimestamp < 1000) {
+          console.log(`⏱️ Throttling ${field} update to prevent loop`);
+          return;
+        }
+        
+        this.lastDataTimestamp.set(field, now);
+        
+        console.log(`📥 Received real-time update for ${field}`);
+        
+        // Apply data update
+        if (this.syncCallbacks.has(field)) {
+          const callback = this.syncCallbacks.get(field)!;
+          
+          // Handle different data types appropriately
+          let processedData = data;
+          if (field === 'completedTasks' && Array.isArray(data)) {
+            processedData = new Set(data);
+          }
+          
+          callback(processedData);
+          
+          // Emit sync event
+          this.emitSyncEvent({
+            type: 'data_update',
+            timestamp: now,
+            deviceId: 'remote',
+            deviceName: 'Remote Device',
+            field,
+            description: `${field} updated from remote device`,
+            data: processedData
+          });
+        }
+        
       } catch (error) {
-        console.error('❌ Error parsing sync event:', error);
+        console.error(`❌ Error processing ${field} update:`, error);
       }
     };
     
-    this.eventSource.onerror = (error) => {
-      console.error('❌ EventSource error:', error);
-      // Reconnect after delay
+    eventSource.onerror = (error) => {
+      console.error(`❌ EventSource error for ${field}:`, error);
+      // Store cleanup function
+      this.dataListeners.set(field, () => eventSource.close());
+      
+      // Reconnect after delay if still listening
       setTimeout(() => {
         if (this.isListening) {
-          this.stopListening();
-          this.startListening();
+          console.log(`🔄 Reconnecting ${field} listener...`);
+          this.setupFieldListener(field);
         }
       }, 5000);
     };
     
-    // Also listen for presence changes
-    this.pollPresenceChanges();
+    // Store cleanup function
+    this.dataListeners.set(field, () => eventSource.close());
+  }
+
+  // Setup presence listener for device count updates
+  private setupPresenceListener(): void {
+    const eventSourceUrl = `${this.baseUrl}/presence.json`;
+    const eventSource = new EventSource(eventSourceUrl);
+    
+    eventSource.onmessage = async (event) => {
+      try {
+        // Update device count when presence changes
+        const devices = await this.getActiveDevices();
+        if (this.onDeviceCountChange) {
+          this.onDeviceCountChange(devices.length, devices);
+        }
+      } catch (error) {
+        console.error('❌ Error processing presence update:', error);
+      }
+    };
+    
+    this.dataListeners.set('presence', () => eventSource.close());
   }
 
   // Stop listening for changes
   private stopListening(): void {
     this.isListening = false;
     
-    if (this.eventSource) {
-      this.eventSource.close();
-      this.eventSource = null;
-    }
-  }
-
-  // Handle remote data changes
-  private handleRemoteDataChange(data: any): void {
-    // Ignore changes from this device
-    if (data.deviceId === this.deviceId) return;
-    
-    console.log('📥 Received remote data change:', data);
-    
-    // Apply conflict resolution if needed
-    Object.keys(data).forEach(field => {
-      if (this.syncCallbacks.has(field)) {
-        const callback = this.syncCallbacks.get(field)!;
-        const resolver = this.conflictResolvers.get(field);
-        
-        if (resolver) {
-          // Apply conflict resolution
-          const resolvedData = resolver(data[field], data[field]);
-          callback(resolvedData);
-          
-          this.emitSyncEvent({
-            type: 'conflict_resolution',
-            timestamp: Date.now(),
-            deviceId: this.deviceId,
-            field,
-            data: resolvedData
-          });
-        } else {
-          // No conflict resolution needed
-          callback(data[field]);
-        }
-        
-        this.emitSyncEvent({
-          type: 'data_update',
-          timestamp: Date.now(),
-          deviceId: data.deviceId || 'unknown',
-          field,
-          data: data[field]
-        });
-      }
+    // Close all event sources
+    this.dataListeners.forEach((cleanup, field) => {
+      console.log(`🔇 Stopping listener for ${field}`);
+      cleanup();
     });
-  }
-
-  // Poll for presence changes
-  private async pollPresenceChanges(): Promise<void> {
-    if (!this.isListening) return;
     
-    try {
-      const devices = await this.getActiveDevices();
-      
-      if (this.onDeviceCountChange) {
-        this.onDeviceCountChange(devices.length);
-      }
-      
-    } catch (error) {
-      console.error('❌ Error polling presence:', error);
-    }
-    
-    // Poll every 30 seconds
-    setTimeout(() => {
-      this.pollPresenceChanges();
-    }, 30000);
+    this.dataListeners.clear();
   }
 
   // Start heartbeat to maintain presence
@@ -393,25 +418,46 @@ export class MultiDeviceSyncService {
     }
   }
 
-  // Sync data field to other devices
+  // Sync data field to other devices with conflict prevention
   async syncData(field: string, data: any): Promise<void> {
     try {
-      const syncData = {
-        [field]: data,
-        deviceId: this.deviceId,
-        timestamp: Date.now(),
-        user: this.currentUser
-      };
+      // Set timestamp to prevent immediate echo
+      this.lastDataTimestamp.set(field, Date.now());
       
-      await fetch(`${this.baseUrl}/sync/${field}.json`, {
+      // Convert Set to Array for JSON serialization
+      let processedData = data;
+      if (data instanceof Set) {
+        processedData = Array.from(data);
+      }
+      
+      const response = await fetch(`${this.baseUrl}/${field}.json`, {
         method: 'PUT',
-        body: JSON.stringify(syncData)
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(processedData)
       });
+
+      if (!response.ok) {
+        throw new Error(`Failed to sync ${field}: ${response.status}`);
+      }
       
       console.log(`📤 Synced ${field} to other devices`);
       
+      // Emit sync event
+      this.emitSyncEvent({
+        type: 'data_update',
+        timestamp: Date.now(),
+        deviceId: this.deviceId,
+        deviceName: this.deviceInfo.name,
+        field,
+        description: `${field} synced to all devices`,
+        data: processedData
+      });
+      
     } catch (error) {
       console.error(`❌ Failed to sync ${field}:`, error);
+      throw error;
     }
   }
 
@@ -426,7 +472,7 @@ export class MultiDeviceSyncService {
   }
 
   // Set device count change callback
-  onDeviceCountChanged(callback: (count: number) => void): void {
+  onDeviceCountChanged(callback: (count: number, devices: DeviceInfo[]) => void): void {
     this.onDeviceCountChange = callback;
   }
 
@@ -443,7 +489,7 @@ export class MultiDeviceSyncService {
   }
 
   // Force refresh data from all devices
-  async refreshDataFromAllDevices(): Promise<void> {
+  async refreshDataFromAllDevices(): Promise<SyncData> {
     try {
       console.log('🔄 Refreshing data from all devices...');
       
@@ -471,7 +517,7 @@ export class MultiDeviceSyncService {
         fetch(`${this.baseUrl}/storeItems.json`)
       ]);
 
-      const data: Record<string, any> = {
+      const data: SyncData = {
         employees: await employeesRes.json(),
         tasks: await tasksRes.json(),
         dailyData: await dailyDataRes.json(),
@@ -484,36 +530,63 @@ export class MultiDeviceSyncService {
         storeItems: await storeItemsRes.json()
       };
 
-      // Trigger callbacks for all fields
-      Object.keys(data).forEach(field => {
-        if (this.syncCallbacks.has(field) && data[field] !== null) {
+      // Trigger callbacks for all fields that have data
+      Object.entries(data).forEach(([field, fieldData]) => {
+        if (this.syncCallbacks.has(field) && fieldData !== null) {
           const callback = this.syncCallbacks.get(field)!;
-          callback(data[field]);
+          
+          // Handle Set conversion
+          let processedData = fieldData;
+          if (field === 'completedTasks' && Array.isArray(fieldData)) {
+            processedData = new Set(fieldData);
+          }
+          
+          callback(processedData);
         }
       });
 
+      // Emit full sync event
+      this.emitSyncEvent({
+        type: 'full_sync',
+        timestamp: Date.now(),
+        deviceId: this.deviceId,
+        deviceName: this.deviceInfo.name,
+        description: 'Full data refresh completed',
+        data: data
+      });
+
       console.log('✅ Data refreshed from all devices');
+      return data;
       
     } catch (error) {
       console.error('❌ Failed to refresh data:', error);
+      throw error;
     }
   }
 
   // Get current device info
   getDeviceInfo(): DeviceInfo {
-    return {
-      id: this.deviceId,
-      name: this.deviceName,
-      lastSeen: Date.now(),
-      user: this.currentUser,
-      platform: navigator.platform || 'Unknown',
-      isActive: true
-    };
+    return { ...this.deviceInfo, lastSeen: Date.now() };
   }
 
   // Update current user
   updateCurrentUser(userName: string): void {
-    this.currentUser = userName;
+    this.deviceInfo.user = userName;
     this.updatePresence(true);
+  }
+
+  // Get sync statistics
+  getSyncStats(): { 
+    isConnected: boolean; 
+    deviceCount: number; 
+    lastSync: number; 
+    isListening: boolean;
+  } {
+    return {
+      isConnected: this.isListening,
+      deviceCount: 0, // Will be updated by presence listener
+      lastSync: Math.max(...Array.from(this.lastDataTimestamp.values())),
+      isListening: this.isListening
+    };
   }
 }
