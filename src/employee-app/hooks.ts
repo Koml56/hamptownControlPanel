@@ -173,6 +173,23 @@ export const useFirebaseData = () => {
       const baseUrl = 'https://hamptown-panel-default-rtdb.firebaseio.com';
       let saveData = data instanceof Set ? Array.from(data) : data;
       
+      // DEBUG: Log what we're about to save for scheduledPreps
+      if (field === 'scheduledPreps') {
+        const todayStr = getFormattedDate(new Date());
+        const todayPreps = saveData.filter((prep: any) => prep.scheduledDate === todayStr);
+        console.log('🔍 Saving scheduledPreps to Firebase:', {
+          totalCount: saveData.length,
+          todayCount: todayPreps.length,
+          todayCompletedCount: todayPreps.filter((prep: any) => prep.completed).length,
+          sampleTodayPreps: todayPreps.slice(0, 3).map((prep: any) => ({
+            id: prep.id,
+            name: prep.name,
+            completed: prep.completed,
+            scheduledDate: prep.scheduledDate
+          }))
+        });
+      }
+      
       // Critical fields that need reliable saving (wait for response)
       const criticalFields = ['scheduledPreps', 'completedTasks', 'taskAssignments', 'dailyData'];
       const isCritical = criticalFields.includes(field);
@@ -191,6 +208,25 @@ export const useFirebaseData = () => {
           setLastSync(new Date().toLocaleTimeString());
           setConnectionStatus('connected');
           console.log('✅ Critical QuickSave completed:', field);
+          
+          // DEBUG: Verify the save by reading back the data
+          if (field === 'scheduledPreps') {
+            setTimeout(async () => {
+              try {
+                const verifyResponse = await fetch(`${baseUrl}/${field}.json`);
+                const verifyData = await verifyResponse.json();
+                const todayStr = getFormattedDate(new Date());
+                const todayPreps = (verifyData || []).filter((prep: any) => prep.scheduledDate === todayStr);
+                console.log('🔍 Verified data in Firebase after save:', {
+                  totalCount: (verifyData || []).length,
+                  todayCount: todayPreps.length,
+                  todayCompletedCount: todayPreps.filter((prep: any) => prep.completed).length
+                });
+              } catch (error) {
+                console.warn('⚠️ Failed to verify save:', error);
+              }
+            }, 500);
+          }
         } else {
           throw new Error(`Critical save failed: ${response.status}`);
         }
@@ -337,6 +373,15 @@ export const useFirebaseData = () => {
       const finalEmployees = migrateEmployeeData(data.employees);
       const finalTasks = migrateTaskData(data.tasks);
 
+      // DEBUG: Log loaded scheduledPreps data
+      console.log('🔍 Loading scheduledPreps from Firebase:', {
+        count: data.scheduledPreps?.length || 0,
+        todayPreps: data.scheduledPreps?.filter((prep: any) => 
+          prep.scheduledDate === getFormattedDate(new Date())
+        ).length || 0,
+        sampleData: data.scheduledPreps?.slice(0, 3) || []
+      });
+
       // Set data immediately
       setEmployees(finalEmployees);
       setTasks(finalTasks);
@@ -348,6 +393,14 @@ export const useFirebaseData = () => {
       setScheduledPreps(data.scheduledPreps || []);
       setPrepSelections(data.prepSelections || {});
       setStoreItems(data.storeItems || getDefaultStoreItems());
+
+      // DEBUG: Log what we actually set for scheduledPreps
+      console.log('✅ Set scheduledPreps state:', {
+        count: (data.scheduledPreps || []).length,
+        todayCount: (data.scheduledPreps || []).filter((prep: any) => 
+          prep.scheduledDate === getFormattedDate(new Date())
+        ).length
+      });
 
       setConnectionStatus('connected');
       setLastSync(new Date().toLocaleTimeString());
