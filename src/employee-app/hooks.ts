@@ -1,7 +1,7 @@
-// hooks.ts - Fixed multi-device sync implementation
+// hooks.ts - Complete implementation with fixed multi-device sync
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { FirebaseService } from './firebaseService';
-import { MultiDeviceSyncService } from './multiDeviceSync'; // Import the proper sync service
+import { MultiDeviceSyncService } from './multiDeviceSync';
 import { getFormattedDate } from './utils';
 import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData, getDefaultStoreItems } from './defaultData';
 import type { DeviceInfo, SyncEvent } from './multiDeviceSync';
@@ -77,6 +77,7 @@ export const useFirebaseData = () => {
   const multiDeviceSyncRef = useRef<MultiDeviceSyncService | null>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSaveDataRef = useRef<string>('');
+  const devicePollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Initialize multi-device sync service
   useEffect(() => {
@@ -94,41 +95,68 @@ export const useFirebaseData = () => {
         setSyncEvents(prev => [event, ...prev.slice(0, 9)]); // Keep last 10 events
       });
 
-      // Setup field change listeners
+      // Setup field change listeners for real-time sync
       multiDeviceSyncRef.current.onFieldChange('employees', (data) => {
-        if (data) setEmployees(migrateEmployeeData(data));
+        if (data) {
+          console.log('📥 Received employees update from another device');
+          setEmployees(migrateEmployeeData(data));
+        }
       });
 
       multiDeviceSyncRef.current.onFieldChange('tasks', (data) => {
-        if (data) setTasks(migrateTaskData(data));
+        if (data) {
+          console.log('📥 Received tasks update from another device');
+          setTasks(migrateTaskData(data));
+        }
       });
 
       multiDeviceSyncRef.current.onFieldChange('completedTasks', (data) => {
-        if (data) setCompletedTasks(new Set(data));
+        if (data) {
+          console.log('📥 Received completed tasks update from another device');
+          setCompletedTasks(new Set(data));
+        }
       });
 
       multiDeviceSyncRef.current.onFieldChange('taskAssignments', (data) => {
-        if (data) setTaskAssignments(data);
+        if (data) {
+          console.log('📥 Received task assignments update from another device');
+          setTaskAssignments(data);
+        }
       });
 
       multiDeviceSyncRef.current.onFieldChange('dailyData', (data) => {
-        if (data) setDailyData(data);
+        if (data) {
+          console.log('📥 Received daily data update from another device');
+          setDailyData(data);
+        }
       });
 
       multiDeviceSyncRef.current.onFieldChange('prepItems', (data) => {
-        if (data) setPrepItems(data);
+        if (data) {
+          console.log('📥 Received prep items update from another device');
+          setPrepItems(data);
+        }
       });
 
       multiDeviceSyncRef.current.onFieldChange('scheduledPreps', (data) => {
-        if (data) setScheduledPreps(data);
+        if (data) {
+          console.log('📥 Received scheduled preps update from another device');
+          setScheduledPreps(data);
+        }
       });
 
       multiDeviceSyncRef.current.onFieldChange('prepSelections', (data) => {
-        if (data) setPrepSelections(data);
+        if (data) {
+          console.log('📥 Received prep selections update from another device');
+          setPrepSelections(data);
+        }
       });
 
       multiDeviceSyncRef.current.onFieldChange('storeItems', (data) => {
-        if (data) setStoreItems(data);
+        if (data) {
+          console.log('📥 Received store items update from another device');
+          setStoreItems(data);
+        }
       });
     }
   }, []);
@@ -355,6 +383,9 @@ export const useFirebaseData = () => {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
       }
+      if (devicePollIntervalRef.current) {
+        clearInterval(devicePollIntervalRef.current);
+      }
       // Disconnect multi-device sync
       if (multiDeviceSyncRef.current) {
         multiDeviceSyncRef.current.disconnect();
@@ -362,7 +393,21 @@ export const useFirebaseData = () => {
     };
   }, []);
 
-  // FIXED: Multi-device sync functions using the proper service
+  // Poll active devices when multi-device sync is enabled
+  const pollActiveDevices = useCallback(async () => {
+    if (!isMultiDeviceEnabled || !multiDeviceSyncRef.current) return;
+    
+    try {
+      const devices = await multiDeviceSyncRef.current.getActiveDevices();
+      console.log('📱 Polling devices - found:', devices.length);
+      setActiveDevices(devices);
+      setDeviceCount(devices.length);
+    } catch (error) {
+      console.error('❌ Error polling devices:', error);
+    }
+  }, [isMultiDeviceEnabled]);
+
+  // Multi-device sync functions
   const toggleMultiDeviceSync = useCallback(async () => {
     const newEnabled = !isMultiDeviceEnabled;
     console.log('🔄 Toggling multi-device sync:', newEnabled);
@@ -372,28 +417,19 @@ export const useFirebaseData = () => {
       try {
         // Connect to multi-device sync
         await multiDeviceSyncRef.current.connect();
+        console.log('✅ Multi-device sync connected');
         
         // Get initial device list
         const devices = await multiDeviceSyncRef.current.getActiveDevices();
-        console.log('📱 Active devices found:', devices);
+        console.log('📱 Initial active devices found:', devices);
         setActiveDevices(devices);
         setDeviceCount(devices.length);
         
-        // Poll for device updates every 30 seconds
-        const pollDevices = async () => {
-          if (isMultiDeviceEnabled && multiDeviceSyncRef.current) {
-            const updatedDevices = await multiDeviceSyncRef.current.getActiveDevices();
-            setActiveDevices(updatedDevices);
-            setDeviceCount(updatedDevices.length);
-            console.log('📱 Device list updated:', updatedDevices.length, 'devices');
-          }
-        };
+        // Start polling for device updates every 30 seconds
+        devicePollIntervalRef.current = setInterval(pollActiveDevices, 30000);
         
-        // Start polling
-        const pollInterval = setInterval(pollDevices, 30000);
-        
-        // Store interval for cleanup
-        (multiDeviceSyncRef.current as any).pollInterval = pollInterval;
+        // Also poll immediately
+        pollActiveDevices();
         
       } catch (error) {
         console.error('❌ Failed to enable multi-device sync:', error);
@@ -402,31 +438,32 @@ export const useFirebaseData = () => {
     } else if (multiDeviceSyncRef.current) {
       try {
         // Clear polling interval
-        const pollInterval = (multiDeviceSyncRef.current as any).pollInterval;
-        if (pollInterval) {
-          clearInterval(pollInterval);
-          (multiDeviceSyncRef.current as any).pollInterval = null;
+        if (devicePollIntervalRef.current) {
+          clearInterval(devicePollIntervalRef.current);
+          devicePollIntervalRef.current = null;
         }
         
         // Disconnect from multi-device sync
         await multiDeviceSyncRef.current.disconnect();
-        console.log('📱 Clearing devices');
+        console.log('📱 Multi-device sync disconnected');
         setActiveDevices([]);
         setDeviceCount(1);
       } catch (error) {
         console.error('❌ Failed to disable multi-device sync:', error);
       }
     }
-  }, [isMultiDeviceEnabled]);
+  }, [isMultiDeviceEnabled, pollActiveDevices]);
 
   const refreshFromAllDevices = useCallback(async () => {
-    if (multiDeviceSyncRef.current) {
+    if (multiDeviceSyncRef.current && isMultiDeviceEnabled) {
+      console.log('🔄 Refreshing data from all devices...');
       await multiDeviceSyncRef.current.refreshDataFromAllDevices();
     } else {
       // Fallback to regular Firebase load
+      console.log('🔄 Refreshing data from Firebase...');
       loadFromFirebase();
     }
-  }, [loadFromFirebase]);
+  }, [loadFromFirebase, isMultiDeviceEnabled]);
 
   return {
     // State
