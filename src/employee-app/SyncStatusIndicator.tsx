@@ -451,33 +451,52 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
                 </div>
 
                 {/* Active devices list */}
-                {isMultiDeviceEnabled && activeDevices.length > 0 && (
+                {isMultiDeviceEnabled && (
                   <div className="bg-white/30 backdrop-blur-sm rounded-lg p-3 border border-white/30">
-                    <div className="text-xs font-medium text-gray-700 mb-2">Connected Devices</div>
-                    <div className="space-y-2">
-                      {activeDevices.slice(0, 3).map((device, index) => (
-                        <div key={device.id} className="flex items-center justify-between">
-                          <div className="flex items-center space-x-2">
-                            <div className={`w-2 h-2 rounded-full ${index === 0 ? 'bg-emerald-500' : 'bg-blue-500'}`} />
-                            <span className="text-xs text-gray-600 truncate max-w-[120px]">
-                              {device.name}
-                              {index === 0 && ' (Primary)'}
-                            </span>
-                          </div>
-                          <span className="text-xs text-gray-500">
-                            {new Date(device.lastSeen).toLocaleTimeString('en-US', { 
-                              hour: '2-digit', 
-                              minute: '2-digit' 
-                            })}
-                          </span>
-                        </div>
-                      ))}
-                      {activeDevices.length > 3 && (
-                        <div className="text-xs text-gray-500 text-center pt-1 border-t border-white/20">
-                          +{activeDevices.length - 3} more devices
-                        </div>
-                      )}
+                    <div className="text-xs font-medium text-gray-700 mb-2 flex items-center justify-between">
+                      <span>Connected Devices</span>
+                      <span className="text-emerald-600 font-bold">{activeDevices.length}</span>
                     </div>
+                    {activeDevices.length > 0 ? (
+                      <div className="space-y-2">
+                        {activeDevices.slice(0, 3).map((device, index) => {
+                          const timeDiff = Date.now() - device.lastSeen;
+                          const isRecent = timeDiff < 30000; // Within 30 seconds
+                          
+                          return (
+                            <div key={device.id} className="flex items-center justify-between">
+                              <div className="flex items-center space-x-2">
+                                <div className={`w-2 h-2 rounded-full ${
+                                  isRecent ? 'bg-emerald-500' : 'bg-orange-400'
+                                }`} />
+                                <span className="text-xs text-gray-600 truncate max-w-[100px]" title={device.name}>
+                                  {device.name}
+                                </span>
+                                {device.user && device.user !== 'Current User' && (
+                                  <span className="text-xs text-gray-500">({device.user})</span>
+                                )}
+                              </div>
+                              <span className="text-xs text-gray-500">
+                                {timeDiff < 60000 ? 'now' : 
+                                 new Date(device.lastSeen).toLocaleTimeString('en-US', { 
+                                   hour: '2-digit', 
+                                   minute: '2-digit' 
+                                 })}
+                              </span>
+                            </div>
+                          );
+                        })}
+                        {activeDevices.length > 3 && (
+                          <div className="text-xs text-gray-500 text-center pt-1 border-t border-white/20">
+                            +{activeDevices.length - 3} more devices
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-gray-500 italic text-center py-2">
+                        Only this device is connected
+                      </div>
+                    )}
                   </div>
                 )}
 
