@@ -82,6 +82,9 @@ export const useFirebaseData = () => {
     if (!syncServiceRef.current) {
       syncServiceRef.current = new MultiDeviceSyncService('Current User');
       
+      // Store current device ID in window for SyncStatusIndicator
+      (window as any).currentDeviceId = syncServiceRef.current.getDeviceInfo().id;
+      
       // Set up sync event callback
       syncServiceRef.current.onSyncEventReceived((event: SyncEvent) => {
         console.log('📡 Sync event received:', event);
