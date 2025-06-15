@@ -311,8 +311,49 @@ export const useFirebaseData = () => {
 
   // Multi-device sync functions
   const toggleMultiDeviceSync = useCallback(() => {
-    setIsMultiDeviceEnabled(prev => !prev);
-  }, []);
+    const newEnabled = !isMultiDeviceEnabled;
+    console.log('🔄 Toggling multi-device sync:', newEnabled);
+    setIsMultiDeviceEnabled(newEnabled);
+    
+    if (newEnabled) {
+      // Immediately create and set device when enabling
+      const userAgent = navigator.userAgent;
+      let deviceType = 'Desktop';
+      let browserName = 'Unknown';
+      
+      // Detect device type
+      if (/Mobile|Android|iPhone/.test(userAgent)) {
+        deviceType = 'Mobile';
+      } else if (/iPad|Tablet/.test(userAgent)) {
+        deviceType = 'Tablet';
+      }
+      
+      // Detect browser
+      if (userAgent.includes('Chrome')) browserName = 'Chrome';
+      else if (userAgent.includes('Firefox')) browserName = 'Firefox';
+      else if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) browserName = 'Safari';
+      else if (userAgent.includes('Edge')) browserName = 'Edge';
+      
+      const deviceName = `${deviceType} • ${browserName}`;
+      
+      const currentDevice: DeviceInfo = {
+        id: 'device-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
+        name: deviceName,
+        lastSeen: Date.now(),
+        user: 'Current User',
+        platform: navigator.platform || 'Unknown',
+        isActive: true
+      };
+      
+      console.log('📱 Creating device:', currentDevice);
+      setActiveDevices([currentDevice]);
+      setDeviceCount(1);
+    } else {
+      console.log('📱 Clearing devices');
+      setActiveDevices([]);
+      setDeviceCount(1);
+    }
+  }, [isMultiDeviceEnabled]);
 
   const refreshFromAllDevices = useCallback(() => {
     // Force reload from Firebase
