@@ -1,4 +1,4 @@
-// hooks.ts - Optimized for fast loading and reliable sync
+// hooks.ts - Optimized for fast loading and reliable sync - FIXED prep completions save
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { FirebaseService } from './firebaseService';
 import { MultiDeviceSyncService, type DeviceInfo, type SyncEvent } from './multiDeviceSync';
@@ -264,6 +264,7 @@ export const useFirebaseData = () => {
         pendingSyncData.current.add('dailyData');
         pendingSyncData.current.add('completedTasks');
         pendingSyncData.current.add('taskAssignments');
+        pendingSyncData.current.add('scheduledPreps');
         
         setTimeout(() => {
           debouncedBatchSync();
@@ -360,14 +361,14 @@ export const useFirebaseData = () => {
     }
   }, [isLoading, isMultiDeviceEnabled, initializeSyncService]);
 
-  // PERFORMANCE: Only auto-save main data changes with longer debounce
+  // CRITICAL FIX: Auto-save critical data immediately (includes scheduledPreps for prep completions)
   useEffect(() => {
     if (isInitializedRef.current) {
       saveToFirebase();
     }
-  }, [employees, tasks, dailyData, completedTasks, taskAssignments, customRoles]);
+  }, [employees, tasks, dailyData, completedTasks, taskAssignments, customRoles, scheduledPreps]);
 
-  // PERFORMANCE: Separate effect for additional data with even longer debounce
+  // PERFORMANCE: Separate effect for less critical data with longer debounce
   useEffect(() => {
     if (isInitializedRef.current) {
       const timer = setTimeout(() => {
@@ -376,7 +377,7 @@ export const useFirebaseData = () => {
       
       return () => clearTimeout(timer);
     }
-  }, [prepItems, scheduledPreps, prepSelections, storeItems]);
+  }, [prepItems, prepSelections, storeItems]);
 
   // Save multi-device sync preference
   useEffect(() => {
@@ -441,6 +442,7 @@ export const useFirebaseData = () => {
       if (syncData.dailyData) setDailyData(syncData.dailyData);
       if (syncData.completedTasks) setCompletedTasks(new Set(syncData.completedTasks));
       if (syncData.taskAssignments) setTaskAssignments(syncData.taskAssignments);
+      if (syncData.scheduledPreps) setScheduledPreps(syncData.scheduledPreps);
       
       setLastSync(new Date().toLocaleTimeString());
       console.log('✅ Quick refresh completed');
