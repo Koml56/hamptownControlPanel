@@ -315,8 +315,8 @@ export const useFirebaseData = () => {
       lastSaveDataRef.current = currentDataHash;
       setConnectionStatus('connected');
       
-      // Schedule batch sync (non-blocking)
-      if (isMultiDeviceEnabled) {
+      // Schedule batch sync (non-blocking) - only if we have real data
+      if (isMultiDeviceEnabled && isInitializedRef.current) {
         pendingSyncData.current.add('employees');
         pendingSyncData.current.add('tasks');
         pendingSyncData.current.add('dailyData');
@@ -420,8 +420,9 @@ export const useFirebaseData = () => {
       console.error('❌ Load failed:', error);
       setConnectionStatus('error');
 
-      // Set defaults on error
+      // Set defaults on error - but don't mark as initialized to prevent sync overwrite
       if (!isInitializedRef.current) {
+        console.log('⚠️ Setting defaults due to load failure - sync disabled until manual load succeeds');
         setEmployees(getDefaultEmployees());
         setTasks(getDefaultTasks());
         setDailyData(getEmptyDailyData());
@@ -429,7 +430,7 @@ export const useFirebaseData = () => {
         setScheduledPreps([]);
         setPrepSelections({});
         setStoreItems(getDefaultStoreItems());
-        isInitializedRef.current = true;
+        // DON'T set isInitializedRef.current = true here to prevent sync overwrite
       }
     } finally {
       setIsLoading(false);
@@ -493,7 +494,7 @@ export const useFirebaseData = () => {
     }
   }, [isMultiDeviceEnabled, initializeSyncService]);
 
-  // PERFORMANCE: Fast refresh function
+  // PERFORMANCE: Fast refresh function with retry logic
   const refreshFromAllDevices = useCallback(async () => {
     if (!isMultiDeviceEnabled || !syncServiceRef.current) {
       await loadFromFirebase();
@@ -527,6 +528,20 @@ export const useFirebaseData = () => {
       await loadFromFirebase();
     }
   }, [isMultiDeviceEnabled, loadFromFirebase]);
+
+  // Manual retry function for when initial load fails
+  const retryLoadFromFirebase = useCallback(async () => {
+    console.log('🔄 Manual retry of Firebase load...');
+    try {
+      await loadFromFirebase();
+      if (connectionStatus === 'connected') {
+        console.log('✅ Manual retry succeeded - enabling sync');
+        isInitializedRef.current = true; // Now we can safely sync
+      }
+    } catch (error) {
+      console.error('❌ Manual retry failed:', error);
+    }
+  }, [loadFromFirebase, connectionStatus]);
 
   return {
     // State
@@ -567,7 +582,8 @@ export const useFirebaseData = () => {
     saveToFirebase,
     quickSave,
     toggleMultiDeviceSync,
-    refreshFromAllDevices
+    refreshFromAllDevices,
+    retryLoadFromFirebase
   };
 };
 
