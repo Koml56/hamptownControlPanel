@@ -1,21 +1,20 @@
-// SyncStatusIndicator.tsx - Compact draggable floating orb with smart positioning
-import React, { useState, useEffect, useRef } from 'react';
+// SyncStatusIndicator.tsx - Enhanced floating orb with glass-morphism
+import React, { useState, useEffect } from 'react';
 import { Wifi, WifiOff, RefreshCw, Globe, Users, Eye, EyeOff } from 'lucide-react';
 import type { DeviceInfo, SyncEvent } from './multiDeviceSync';
-import type { ConnectionStatus } from './types';
 
 interface SyncStatusIndicatorProps {
   isLoading: boolean;
   lastSync: string | null;
-  connectionStatus: ConnectionStatus;
+  connectionStatus: 'connecting' | 'connected' | 'error';
   loadFromFirebase: () => void;
   // Multi-device sync props
-  activeDevices?: DeviceInfo[];
-  syncEvents?: SyncEvent[];
-  deviceCount?: number;
-  isMultiDeviceEnabled?: boolean;
-  toggleMultiDeviceSync?: () => void;
-  refreshFromAllDevices?: () => void;
+  activeDevices: DeviceInfo[];
+  syncEvents: SyncEvent[];
+  deviceCount: number;
+  isMultiDeviceEnabled: boolean;
+  toggleMultiDeviceSync: () => void;
+  refreshFromAllDevices: () => void;
 }
 
 const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
@@ -23,61 +22,40 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
   lastSync,
   connectionStatus,
   loadFromFirebase,
-  activeDevices = [],
-  syncEvents = [],
-  deviceCount = 1,
-  isMultiDeviceEnabled = false,
-  toggleMultiDeviceSync = () => {},
-  refreshFromAllDevices = () => {}
+  activeDevices,
+  syncEvents,
+  deviceCount,
+  isMultiDeviceEnabled,
+  toggleMultiDeviceSync,
+  refreshFromAllDevices
 }) => {
   const [showSyncPulse, setShowSyncPulse] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
-  
-  // Start from bottom right corner
-  const [position, setPosition] = useState({ 
-    x: 'right' as 'left' | 'right', 
-    y: window.innerHeight - 100 // Bottom position
-  });
-  
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 }); // Live drag position
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0, startY: 0, startSide: 'right' as 'left' | 'right' });
-  const orbRef = useRef<HTMLDivElement>(null);
+  const [recentSyncCount, setRecentSyncCount] = useState(0);
 
   // Add custom CSS for animation delays
-  useEffect(() => {
+  React.useEffect(() => {
     const style = document.createElement('style');
     style.textContent = `
       .animation-delay-150 {
         animation-delay: 150ms;
       }
+      .animation-delay-300 {
+        animation-delay: 300ms;
+      }
     `;
     document.head.appendChild(style);
-    
-    return () => {
-      document.head.removeChild(style);
-    };
-  }, []);
-
-  // Update position on window resize
-  useEffect(() => {
-    const handleResize = () => {
-      setPosition(prev => ({
-        ...prev,
-        y: Math.min(prev.y, window.innerHeight - 100)
-      }));
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    return () => document.head.removeChild(style);
   }, []);
 
   // Show pulse animation when sync occurs
   useEffect(() => {
     if (syncEvents.length > 0) {
       const recentEvents = syncEvents.filter(event => 
-        Date.now() - (event as any).timestamp < 3000
+        Date.now() - event.timestamp < 3000 // Last 3 seconds
       );
+      
+      setRecentSyncCount(recentEvents.length);
       
       if (recentEvents.length > 0) {
         setShowSyncPulse(true);
@@ -89,169 +67,12 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
     }
   }, [syncEvents]);
 
-  // Calculate smart popup positioning - anchored to icon
-  const getPopupPosition = () => {
-    const popupWidth = 256; // w-64 = 256px
-    const popupHeight = 350; // Estimated popup height
-    const orbSize = 40; // w-10 = 40px
-    const gap = 8; // Gap between icon and popup
-
-    const screenHeight = window.innerHeight;
-    const screenWidth = window.innerWidth;
-    
-    // Determine if popup should be above or below the icon
-    const shouldShowAbove = position.y + popupHeight + gap > screenHeight - 20;
-    
-    // Calculate horizontal positioning
-    let translateX = '0px';
-    if (position.x === 'left') {
-      // Popup to the right of left-side icon
-      translateX = `${orbSize + gap}px`;
-      
-      // Check if popup would overflow screen on right side
-      if (64 + popupWidth > screenWidth) {
-        translateX = `-${popupWidth - orbSize - gap}px`; // Show on left side instead
-      }
-    } else {
-      // Popup to the left of right-side icon
-      translateX = `-${popupWidth + gap}px`;
-      
-      // Check if popup would overflow screen on left side
-      if (popupWidth + gap > screenWidth - 64) {
-        translateX = `${orbSize + gap}px`; // Show on right side instead
-      }
-    }
-
-    // Calculate vertical positioning - anchored to icon
-    let translateY = '0px';
-    if (shouldShowAbove) {
-      // Anchor popup bottom to icon top
-      translateY = `-${popupHeight + gap}px`;
-    } else {
-      // Anchor popup top to icon bottom
-      translateY = `${orbSize + gap}px`;
-    }
-
-    return { translateX, translateY, isAbove: shouldShowAbove };
-  };
-
-  // Mouse/touch handlers for dragging
-  const handleMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-    const rect = orbRef.current?.getBoundingClientRect();
-    if (rect) {
-      setDragPosition({ x: rect.left, y: rect.top });
-      setDragStart({
-        x: e.clientX,
-        y: e.clientY,
-        startY: position.y,
-        startSide: position.x
-      });
-    }
-  };
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-    const touch = e.touches[0];
-    const rect = orbRef.current?.getBoundingClientRect();
-    if (rect) {
-      setDragPosition({ x: rect.left, y: rect.top });
-      setDragStart({
-        x: touch.clientX,
-        y: touch.clientY,
-        startY: position.y,
-        startSide: position.x
-      });
-    }
-  };
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging) return;
-      
-      const deltaX = e.clientX - dragStart.x;
-      const deltaY = e.clientY - dragStart.y;
-      
-      // Update live drag position (visible during drag)
-      const newX = Math.max(16, Math.min(window.innerWidth - 56, 
-        (dragStart.startSide === 'left' ? 16 : window.innerWidth - 56) + deltaX));
-      const newY = Math.max(24, Math.min(window.innerHeight - 64, dragStart.startY + deltaY));
-      
-      setDragPosition({ x: newX, y: newY });
-    };
-
-    const handleTouchMove = (e: TouchEvent) => {
-      if (!isDragging) return;
-      e.preventDefault();
-      
-      const touch = e.touches[0];
-      const deltaX = touch.clientX - dragStart.x;
-      const deltaY = touch.clientY - dragStart.y;
-      
-      const newX = Math.max(16, Math.min(window.innerWidth - 56, 
-        (dragStart.startSide === 'left' ? 16 : window.innerWidth - 56) + deltaX));
-      const newY = Math.max(24, Math.min(window.innerHeight - 64, dragStart.startY + deltaY));
-      
-      setDragPosition({ x: newX, y: newY });
-    };
-
-    const handleMouseUp = (e: MouseEvent) => {
-      if (!isDragging) return;
-      
-      const deltaX = e.clientX - dragStart.x;
-      const deltaY = e.clientY - dragStart.y;
-      
-      // Determine final side based on screen center
-      const finalSide = (dragStart.startSide === 'left' ? 16 : window.innerWidth - 56) + deltaX > window.innerWidth / 2 ? 'right' : 'left';
-      
-      // Final Y position
-      const finalY = Math.max(24, Math.min(window.innerHeight - 64, dragStart.startY + deltaY));
-      
-      setPosition({ x: finalSide, y: finalY });
-      setIsDragging(false);
-    };
-
-    const handleTouchEnd = (e: TouchEvent) => {
-      if (!isDragging) return;
-      
-      // Get the last touch position before it ended
-      const touch = e.changedTouches[0];
-      const deltaX = touch.clientX - dragStart.x;
-      const deltaY = touch.clientY - dragStart.y;
-      
-      // Determine final side based on screen center
-      const finalSide = (dragStart.startSide === 'left' ? 16 : window.innerWidth - 56) + deltaX > window.innerWidth / 2 ? 'right' : 'left';
-      
-      // Final Y position
-      const finalY = Math.max(24, Math.min(window.innerHeight - 64, dragStart.startY + deltaY));
-      
-      setPosition({ x: finalSide, y: finalY });
-      setIsDragging(false);
-    };
-
-    if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      document.addEventListener('touchmove', handleTouchMove, { passive: false });
-      document.addEventListener('touchend', handleTouchEnd);
-    }
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.removeEventListener('touchmove', handleTouchMove);
-      document.removeEventListener('touchend', handleTouchEnd);
-    };
-  }, [isDragging, dragStart]);
-
   const getStatusInfo = () => {
     if (isLoading) {
       return {
-        icon: <RefreshCw className="w-3 h-3 animate-spin" />,
+        icon: <RefreshCw className="w-6 h-6 animate-spin" />,
         text: 'Syncing',
-        bgColor: 'bg-blue-500/90',
+        bgColor: 'bg-blue-500/80',
         pulseColor: 'bg-blue-400'
       };
     }
@@ -259,261 +80,185 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
     if (connectionStatus === 'connected' && lastSync) {
       return {
         icon: showSyncPulse ? 
-          <RefreshCw className="w-3 h-3 animate-spin" /> : 
-          <Globe className="w-3 h-3" />,
+          <RefreshCw className="w-6 h-6 animate-spin" /> : 
+          <Globe className="w-6 h-6 animate-pulse" />,
         text: showSyncPulse ? 'Syncing' : 'Online',
-        bgColor: 'bg-emerald-500/90',
+        bgColor: 'bg-emerald-500/80',
         pulseColor: 'bg-emerald-400'
       };
     }
 
     if (connectionStatus === 'error') {
       return {
-        icon: <WifiOff className="w-3 h-3" />,
+        icon: <WifiOff className="w-6 h-6" />,
         text: 'Offline',
-        bgColor: 'bg-red-500/90',
+        bgColor: 'bg-red-500/80',
         pulseColor: 'bg-red-400'
       };
     }
 
     return {
-      icon: <Wifi className="w-3 h-3" />,
+      icon: <Wifi className="w-6 h-6 animate-pulse" />,
       text: 'Connecting',
-      bgColor: 'bg-amber-500/90',
+      bgColor: 'bg-amber-500/80',
       pulseColor: 'bg-amber-400'
     };
   };
 
   const status = getStatusInfo();
-  const popupPos = getPopupPosition();
 
   return (
-    <>
-      {/* Compact draggable floating orb */}
-      <div 
-        ref={orbRef}
-        className={`
-          fixed z-50 transition-all duration-300 ease-out
-          ${isDragging ? 'transition-none' : ''}
-          ${isDragging ? 'scale-110 cursor-grabbing' : 'cursor-grab hover:scale-105'}
-        `}
-        style={{ 
-          left: isDragging ? `${dragPosition.x}px` : (position.x === 'left' ? '16px' : undefined),
-          right: isDragging ? undefined : (position.x === 'right' ? '16px' : undefined),
-          top: isDragging ? `${dragPosition.y}px` : `${position.y}px`
-        }}
-        onMouseDown={handleMouseDown}
-        onTouchStart={handleTouchStart}
-      >
-        {/* Compact orb container */}
-        <div className="relative">
-          {/* Shadow layers */}
-          <div className="absolute inset-0 rounded-full bg-black/10 blur-md scale-110" />
+    <div className="fixed bottom-6 right-6 z-50">
+      {/* Main floating status orb - Enhanced glass-morphism design */}
+      <div className="relative">
+        {/* Multiple shadow layers for depth */}
+        <div className="absolute inset-0 rounded-full bg-black/10 blur-xl scale-110" />
+        <div className="absolute inset-0 rounded-full bg-black/5 blur-2xl scale-125" />
+        
+        {/* Main orb container */}
+        <div 
+          className={`
+            relative w-16 h-16 rounded-full cursor-pointer transform transition-all duration-500 ease-out
+            hover:scale-105 hover:rotate-12 active:scale-95
+            ${showSyncPulse ? 'animate-pulse scale-105' : ''}
+          `}
+          onClick={connectionStatus === 'error' ? loadFromFirebase : () => setShowDetails(!showDetails)}
+          title={`
+            ${status.text}${lastSync ? ` - Last: ${lastSync}` : ''}
+            ${connectionStatus === 'error' ? ' - Click to retry' : ' - Click for details'}
+          `}
+        >
+          {/* Glass orb with multiple layers */}
+          <div className={`
+            absolute inset-0 rounded-full backdrop-blur-2xl ${status.bgColor}
+            border border-white/30 shadow-2xl
+          `} />
           
-          {/* Main compact orb */}
-          <div 
-            className={`
-              relative w-10 h-10 rounded-full transform transition-all duration-300
-              ${showSyncPulse ? 'animate-pulse' : ''}
-            `}
-            onClick={(e) => {
-              if (!isDragging) {
-                e.stopPropagation();
-                if (connectionStatus === 'error') {
-                  loadFromFirebase();
-                } else {
-                  setShowDetails(!showDetails);
-                }
-              }
-            }}
-            title={`${status.text}${lastSync ? ` - ${lastSync}` : ''}`}
-          >
-            {/* Glass background */}
-            <div className={`
-              absolute inset-0 rounded-full backdrop-blur-xl ${status.bgColor}
-              border border-white/40 shadow-lg
-            `} />
-            
-            {/* Inner reflection */}
-            <div className="absolute inset-0.5 rounded-full bg-gradient-to-tr from-white/25 to-transparent" />
-            
-            {/* Icon container */}
-            <div className="relative flex items-center justify-center w-full h-full text-white">
-              {status.icon}
-            </div>
-            
-            {/* Device count badge */}
-            {connectionStatus === 'connected' && isMultiDeviceEnabled && deviceCount > 1 && (
-              <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full backdrop-blur-xl bg-blue-500/95 
-                            border border-white/60 shadow-md flex items-center justify-center text-xs font-bold text-white">
-                {deviceCount}
-              </div>
-            )}
-            
-            {/* Pulse rings when syncing */}
-            {showSyncPulse && (
-              <>
-                <div className="absolute inset-0 rounded-full animate-ping">
-                  <div className={`w-full h-full rounded-full ${status.pulseColor}/50 border border-current`} />
-                </div>
-                <div className="absolute inset-0 rounded-full animate-ping animation-delay-150">
-                  <div className={`w-full h-full rounded-full ${status.pulseColor}/30 border border-current scale-125`} />
-                </div>
-              </>
-            )}
+          {/* Inner glass reflection */}
+          <div className="absolute inset-0.5 rounded-full bg-gradient-to-tr from-white/20 to-transparent" />
+          
+          {/* Blurred inner border */}
+          <div className="absolute inset-1 rounded-full border border-white/40 backdrop-blur-sm" />
+          
+          {/* Content container */}
+          <div className="relative flex items-center justify-center w-full h-full text-white">
+            {status.icon}
           </div>
+          
+          {/* Multi-device indicator with glass effect */}
+          {connectionStatus === 'connected' && isMultiDeviceEnabled && deviceCount > 1 && (
+            <div className="absolute -top-2 -right-2 w-7 h-7 rounded-full backdrop-blur-xl bg-blue-500/90 
+                          border border-white/50 shadow-xl flex items-center justify-center text-xs font-bold text-white
+                          transform hover:scale-110 transition-transform">
+              {deviceCount}
+            </div>
+          )}
+          
+          {/* Animated sync rings */}
+          {showSyncPulse && (
+            <>
+              <div className="absolute inset-0 rounded-full animate-ping">
+                <div className={`w-full h-full rounded-full ${status.pulseColor}/60 border-2 border-current`} />
+              </div>
+              <div className="absolute inset-0 rounded-full animate-ping animation-delay-150">
+                <div className={`w-full h-full rounded-full ${status.pulseColor}/40 border border-current scale-110`} />
+              </div>
+            </>
+          )}
+          
+          {/* Ambient glow effect */}
+          <div className={`absolute inset-0 rounded-full ${status.pulseColor}/30 blur-2xl scale-150 animate-pulse`} />
         </div>
 
-        {/* Anchored details popup */}
-        {showDetails && !isDragging && (
-          <div 
-            className="absolute z-40 w-64"
-            style={{
-              transform: `translate(${popupPos.translateX}, ${popupPos.translateY})`,
-              transformOrigin: popupPos.isAbove ? 'bottom center' : 'top center'
-            }}
-          >
-            {/* Visual connection line */}
-            <div 
-              className={`absolute w-0.5 bg-gradient-to-b from-blue-500/30 to-purple-500/30 ${
-                popupPos.isAbove 
-                  ? 'bottom-0 h-2 translate-y-full' 
-                  : 'top-0 h-2 -translate-y-full'
-              }`}
-              style={{
-                left: position.x === 'left' ? '-9px' : 'calc(100% + 8px)'
-              }}
-            />
+        {/* Enhanced glass-morphism details popup */}
+        {showDetails && (
+          <div className="absolute bottom-full right-0 mb-6 w-80">
+            {/* Multiple backdrop layers for depth */}
+            <div className="absolute inset-0 bg-black/5 rounded-3xl blur-2xl scale-105" />
+            <div className="absolute inset-0 bg-black/10 rounded-2xl blur-xl" />
             
-            <div className="relative bg-white/95 backdrop-blur-xl rounded-xl shadow-xl border border-white/50 overflow-hidden">
-              {/* Compact header */}
-              <div className="bg-gradient-to-r from-blue-500/15 to-purple-500/15 px-4 py-3 border-b border-white/30">
+            <div className="relative bg-white/90 backdrop-blur-2xl rounded-2xl shadow-2xl border border-white/40 overflow-hidden">
+              {/* Header with gradient */}
+              <div className="bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-indigo-500/10 px-5 py-4 border-b border-white/30">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <div className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center">
-                      <Globe className="w-3 h-3 text-white" />
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center">
+                      <Globe className="w-4 h-4 text-white" />
                     </div>
-                    <span className="text-sm font-semibold text-gray-800">Sync Status</span>
+                    <span className="font-semibold text-gray-800">Sync Status</span>
                   </div>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       setShowDetails(false);
                     }}
-                    className="w-6 h-6 rounded-full bg-white/30 backdrop-blur-sm border border-white/40 
-                             text-gray-600 hover:text-gray-800 hover:bg-white/50 transition-all duration-200
-                             flex items-center justify-center text-xs"
+                    className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-sm border border-white/30 
+                             text-gray-600 hover:text-gray-800 hover:bg-white/40 transition-all duration-200
+                             flex items-center justify-center"
                   >
                     ✕
                   </button>
                 </div>
               </div>
 
-              {/* Compact content */}
-              <div className="p-4 space-y-3">
-                {/* Mini stats */}
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="bg-white/50 backdrop-blur-sm rounded-lg p-2 text-center border border-white/30">
-                    <div className="text-lg font-bold bg-gradient-to-br from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              {/* Content with enhanced glass effects */}
+              <div className="p-5 space-y-5">
+                {/* Stats grid with glass cards */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-white/40 backdrop-blur-sm rounded-xl p-3 text-center border border-white/30">
+                    <div className="text-xl font-bold bg-gradient-to-br from-blue-600 to-purple-600 bg-clip-text text-transparent">
                       {deviceCount}
                     </div>
-                    <div className="text-xs text-gray-600">Devices</div>
+                    <div className="text-xs text-gray-600 font-medium">Devices</div>
                   </div>
-                  <div className="bg-white/50 backdrop-blur-sm rounded-lg p-2 text-center border border-white/30">
-                    <div className="text-lg font-bold bg-gradient-to-br from-emerald-600 to-green-600 bg-clip-text text-transparent">
+                  <div className="bg-white/40 backdrop-blur-sm rounded-xl p-3 text-center border border-white/30">
+                    <div className="text-xl font-bold bg-gradient-to-br from-emerald-600 to-green-600 bg-clip-text text-transparent">
+                      {recentSyncCount}
+                    </div>
+                    <div className="text-xs text-gray-600 font-medium">Recent</div>
+                  </div>
+                  <div className="bg-white/40 backdrop-blur-sm rounded-xl p-3 text-center border border-white/30">
+                    <div className="text-xl font-bold bg-gradient-to-br from-purple-600 to-pink-600 bg-clip-text text-transparent">
                       {syncEvents.length}
                     </div>
-                    <div className="text-xs text-gray-600">Events</div>
+                    <div className="text-xs text-gray-600 font-medium">Events</div>
                   </div>
                 </div>
 
-                {/* Multi-device toggle */}
-                <div className="bg-white/40 backdrop-blur-sm rounded-lg p-3 border border-white/30">
+                {/* Multi-device toggle with glass effect */}
+                <div className="bg-white/30 backdrop-blur-sm rounded-xl p-4 border border-white/30">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <Users className="w-4 h-4 text-gray-600" />
-                      <span className="text-xs font-medium text-gray-700">Multi-sync</span>
+                    <div className="flex items-center space-x-3">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
+                        <Users className="w-4 h-4 text-white" />
+                      </div>
+                      <span className="text-sm font-medium text-gray-700">Multi-device sync</span>
                     </div>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         toggleMultiDeviceSync();
                       }}
-                      className={`w-8 h-8 rounded-full backdrop-blur-sm border transition-all duration-200 flex items-center justify-center ${
+                      className={`w-10 h-10 rounded-full backdrop-blur-sm border transition-all duration-200 flex items-center justify-center ${
                         isMultiDeviceEnabled 
                           ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/30' 
                           : 'bg-gray-500/20 border-gray-500/40 text-gray-500 hover:bg-gray-500/30'
                       }`}
                     >
-                      {isMultiDeviceEnabled ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                      {isMultiDeviceEnabled ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
 
-                {/* Active devices list */}
-                {isMultiDeviceEnabled && (
-                  <div className="bg-white/30 backdrop-blur-sm rounded-lg p-3 border border-white/30">
-                    <div className="text-xs font-medium text-gray-700 mb-2 flex items-center justify-between">
-                      <span>Connected Devices</span>
-                      <span className="text-emerald-600 font-bold">{activeDevices.length}</span>
-                    </div>
-                    {/* Debug info */}
-                    <div className="text-xs text-gray-500 mb-2">
-                      Debug: {activeDevices.length} devices, enabled: {isMultiDeviceEnabled.toString()}
-                    </div>
-                    {activeDevices.length > 0 ? (
-                      <div className="space-y-2">
-                        {activeDevices.slice(0, 3).map((device, index) => {
-                          console.log('🖥️ Rendering device:', device);
-                          const timeDiff = Date.now() - device.lastSeen;
-                          const isRecent = timeDiff < 30000; // Within 30 seconds
-                          
-                          return (
-                            <div key={device.id} className="flex items-center justify-between">
-                              <div className="flex items-center space-x-2">
-                                <div className={`w-2 h-2 rounded-full ${
-                                  isRecent ? 'bg-emerald-500' : 'bg-orange-400'
-                                }`} />
-                                <span className="text-xs text-gray-600 truncate max-w-[100px]" title={device.name}>
-                                  {device.name || 'Unknown Device'}
-                                </span>
-                                {device.user && device.user !== 'Current User' && (
-                                  <span className="text-xs text-gray-500">({device.user})</span>
-                                )}
-                              </div>
-                              <span className="text-xs text-gray-500">
-                                {timeDiff < 60000 ? 'now' : 
-                                 new Date(device.lastSeen).toLocaleTimeString('en-US', { 
-                                   hour: '2-digit', 
-                                   minute: '2-digit' 
-                                 })}
-                              </span>
-                            </div>
-                          );
-                        })}
-                        {activeDevices.length > 3 && (
-                          <div className="text-xs text-gray-500 text-center pt-1 border-t border-white/20">
-                            +{activeDevices.length - 3} more devices
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="text-xs text-gray-500 italic text-center py-2">
-                        No active devices found (this shouldn't happen when enabled)
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Last sync */}
+                {/* Last sync info */}
                 {lastSync && (
-                  <div className="text-center bg-white/30 backdrop-blur-sm rounded-lg p-2 border border-white/30">
-                    <div className="text-xs text-gray-500">Last sync</div>
-                    <div className="text-xs font-semibold text-gray-700">{lastSync}</div>
+                  <div className="text-center bg-white/20 backdrop-blur-sm rounded-xl p-3 border border-white/30">
+                    <div className="text-xs text-gray-500 mb-1">Last synchronization</div>
+                    <div className="text-sm font-semibold text-gray-700">{lastSync}</div>
                   </div>
                 )}
 
-                {/* Compact action button */}
+                {/* Action button with gradient */}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -523,26 +268,27 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
                       refreshFromAllDevices();
                     }
                   }}
-                  className="w-full py-2 px-3 bg-gradient-to-r from-blue-500 to-purple-500 
-                           text-white rounded-lg hover:from-blue-600 hover:to-purple-600 
-                           transition-all duration-300 text-xs font-semibold shadow-md transform hover:scale-105"
+                  className="w-full py-3 px-4 bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-500 
+                           text-white rounded-xl hover:from-blue-600 hover:via-purple-600 hover:to-indigo-600 
+                           transition-all duration-300 text-sm font-semibold shadow-lg transform hover:scale-105
+                           backdrop-blur-sm border border-white/20"
                 >
-                  {connectionStatus === 'error' ? 'Reconnect' : 'Refresh'}
+                  {connectionStatus === 'error' ? 'Reconnect Now' : 'Refresh All Devices'}
                 </button>
               </div>
             </div>
           </div>
         )}
-      </div>
 
-      {/* Click outside to close details */}
-      {showDetails && (
-        <div 
-          className="fixed inset-0 z-30" 
-          onClick={() => setShowDetails(false)}
-        />
-      )}
-    </>
+        {/* Click outside to close */}
+        {showDetails && (
+          <div 
+            className="fixed inset-0 z-40" 
+            onClick={() => setShowDetails(false)}
+          />
+        )}
+      </div>
+    </div>
   );
 };
 
