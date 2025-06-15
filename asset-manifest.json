@@ -1,0 +1,10 @@
+{
+  "files": {
+    "main.js": "/hamptownControlPanel/static/js/main.d3418beb.js",
+    "index.html": "/hamptownControlPanel/index.html",
+    "main.d3418beb.js.map": "/hamptownControlPanel/static/js/main.d3418beb.js.map"
+  },
+  "entrypoints": [
+    "static/js/main.d3418beb.js"
+  ]
+}
