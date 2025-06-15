@@ -1,4 +1,4 @@
-// SyncStatusIndicator.tsx - Enhanced floating orb with glass-morphism
+// SyncStatusIndicator.tsx - Fixed TypeScript errors
 import React, { useState, useEffect } from 'react';
 import { Wifi, WifiOff, RefreshCw, Globe, Users, Eye, EyeOff } from 'lucide-react';
 import type { DeviceInfo, SyncEvent } from './multiDeviceSync';
@@ -33,7 +33,7 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
   const [showDetails, setShowDetails] = useState(false);
   const [recentSyncCount, setRecentSyncCount] = useState(0);
 
-  // Add custom CSS for animation delays
+  // Add custom CSS for animation delays - Fixed TypeScript error
   React.useEffect(() => {
     const style = document.createElement('style');
     style.textContent = `
@@ -45,7 +45,9 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
       }
     `;
     document.head.appendChild(style);
-    return () => document.head.removeChild(style);
+    return () => {
+      document.head.removeChild(style);
+    };
   }, []);
 
   // Show pulse animation when sync occurs
@@ -224,6 +226,29 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
                     <div className="text-xs text-gray-600 font-medium">Events</div>
                   </div>
                 </div>
+
+                {/* Device list */}
+                {isMultiDeviceEnabled && activeDevices.length > 0 && (
+                  <div className="bg-white/30 backdrop-blur-sm rounded-xl p-4 border border-white/30">
+                    <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center">
+                      <Users className="w-4 h-4 mr-2" />
+                      Active Devices ({activeDevices.length})
+                    </h4>
+                    <div className="space-y-2 max-h-32 overflow-y-auto">
+                      {activeDevices.map((device) => (
+                        <div key={device.id} className="flex items-center justify-between text-xs">
+                          <div className="flex items-center space-x-2">
+                            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                            <span className="font-medium text-gray-700">{device.name}</span>
+                          </div>
+                          <span className="text-gray-500">
+                            {Math.round((Date.now() - device.lastSeen) / 60000)}m ago
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Multi-device toggle with glass effect */}
                 <div className="bg-white/30 backdrop-blur-sm rounded-xl p-4 border border-white/30">
