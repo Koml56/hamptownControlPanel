@@ -165,32 +165,54 @@ export const useFirebaseData = () => {
   }, [employees, tasks, dailyData, completedTasks, taskAssignments, customRoles, 
       prepItems, scheduledPreps, prepSelections, storeItems, isMultiDeviceEnabled]);
 
-  // PERFORMANCE: Quick save with minimal blocking
+  // PERFORMANCE: Quick save with reliability for critical data
   const quickSave = useCallback(async (field: string, data: any) => {
-    console.log('🔥 QuickSave (non-blocking):', field);
+    console.log('🔥 QuickSave:', field);
     
-    // Don't block UI with loading state for quick saves
     try {
       const baseUrl = 'https://hamptown-panel-default-rtdb.firebaseio.com';
       let saveData = data instanceof Set ? Array.from(data) : data;
       
-      // Fire and forget - don't wait for response
-      fetch(`${baseUrl}/${field}.json`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(saveData)
-      }).then(response => {
+      // Critical fields that need reliable saving (wait for response)
+      const criticalFields = ['scheduledPreps', 'completedTasks', 'taskAssignments', 'dailyData'];
+      const isCritical = criticalFields.includes(field);
+      
+      if (isCritical) {
+        // For critical data, wait for the response to ensure it's saved
+        console.log('🔒 Critical save - waiting for confirmation:', field);
+        
+        const response = await fetch(`${baseUrl}/${field}.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(saveData)
+        });
+        
         if (response.ok) {
           setLastSync(new Date().toLocaleTimeString());
           setConnectionStatus('connected');
-          console.log('✅ QuickSave completed:', field);
+          console.log('✅ Critical QuickSave completed:', field);
         } else {
-          throw new Error(`Save failed: ${response.status}`);
+          throw new Error(`Critical save failed: ${response.status}`);
         }
-      }).catch(error => {
-        console.warn('⚠️ QuickSave failed (non-blocking):', error);
-        setConnectionStatus('error');
-      });
+      } else {
+        // Non-critical data can still be fire-and-forget
+        fetch(`${baseUrl}/${field}.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(saveData)
+        }).then(response => {
+          if (response.ok) {
+            setLastSync(new Date().toLocaleTimeString());
+            setConnectionStatus('connected');
+            console.log('✅ QuickSave completed:', field);
+          } else {
+            throw new Error(`Save failed: ${response.status}`);
+          }
+        }).catch(error => {
+          console.warn('⚠️ QuickSave failed (non-blocking):', error);
+          setConnectionStatus('error');
+        });
+      }
 
       // Schedule sync (non-blocking)
       if (isMultiDeviceEnabled) {
