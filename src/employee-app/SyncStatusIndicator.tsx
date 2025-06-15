@@ -457,9 +457,14 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
                       <span>Connected Devices</span>
                       <span className="text-emerald-600 font-bold">{activeDevices.length}</span>
                     </div>
+                    {/* Debug info */}
+                    <div className="text-xs text-gray-500 mb-2">
+                      Debug: {activeDevices.length} devices, enabled: {isMultiDeviceEnabled.toString()}
+                    </div>
                     {activeDevices.length > 0 ? (
                       <div className="space-y-2">
                         {activeDevices.slice(0, 3).map((device, index) => {
+                          console.log('🖥️ Rendering device:', device);
                           const timeDiff = Date.now() - device.lastSeen;
                           const isRecent = timeDiff < 30000; // Within 30 seconds
                           
@@ -470,7 +475,7 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
                                   isRecent ? 'bg-emerald-500' : 'bg-orange-400'
                                 }`} />
                                 <span className="text-xs text-gray-600 truncate max-w-[100px]" title={device.name}>
-                                  {device.name}
+                                  {device.name || 'Unknown Device'}
                                 </span>
                                 {device.user && device.user !== 'Current User' && (
                                   <span className="text-xs text-gray-500">({device.user})</span>
@@ -494,7 +499,7 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
                       </div>
                     ) : (
                       <div className="text-xs text-gray-500 italic text-center py-2">
-                        Only this device is connected
+                        No active devices found (this shouldn't happen when enabled)
                       </div>
                     )}
                   </div>
