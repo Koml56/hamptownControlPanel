@@ -319,16 +319,36 @@ export const useFirebaseData = () => {
     loadFromFirebase();
   }, [loadFromFirebase]);
 
-  // Mock device info (you can enhance this later)
+  // Mock device info with better names
   useEffect(() => {
     if (isMultiDeviceEnabled) {
+      // Generate better device name
+      const userAgent = navigator.userAgent;
+      let deviceType = 'Desktop';
+      let browserName = 'Unknown';
+      
+      // Detect device type
+      if (/Mobile|Android|iPhone/.test(userAgent)) {
+        deviceType = 'Mobile';
+      } else if (/iPad|Tablet/.test(userAgent)) {
+        deviceType = 'Tablet';
+      }
+      
+      // Detect browser
+      if (userAgent.includes('Chrome')) browserName = 'Chrome';
+      else if (userAgent.includes('Firefox')) browserName = 'Firefox';
+      else if (userAgent.includes('Safari')) browserName = 'Safari';
+      else if (userAgent.includes('Edge')) browserName = 'Edge';
+      
+      const deviceName = `${deviceType} • ${browserName}`;
+      
       const currentDevice: DeviceInfo = {
-        id: 'device-' + Date.now(),
-        name: navigator.userAgent.includes('Mobile') ? 'Mobile Device' : 'Desktop',
+        id: 'device-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
+        name: deviceName,
         lastSeen: Date.now(),
-        user: 'Current User', // Added missing property
-        platform: navigator.userAgent.includes('Mobile') ? 'mobile' : 'desktop', // Added missing property
-        isActive: true // Added missing property
+        user: 'Current User',
+        platform: navigator.platform || 'Unknown',
+        isActive: true
       };
       setActiveDevices([currentDevice]);
       setDeviceCount(1);
