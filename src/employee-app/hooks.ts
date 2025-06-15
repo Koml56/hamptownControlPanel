@@ -1,4 +1,4 @@
-// hooks.ts - Updated with proper multi-device sync integration
+// hooks.ts - Updated with multi-device sync enabled by default
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { FirebaseService } from './firebaseService';
 import { MultiDeviceSyncService, type DeviceInfo, type SyncEvent } from './multiDeviceSync';
@@ -45,6 +45,19 @@ const migrateTaskData = (tasks: any[]): Task[] => {
   }));
 };
 
+// Helper function to get initial multi-device sync state
+const getInitialSyncState = (): boolean => {
+  // Check localStorage for user preference
+  const savedPreference = localStorage.getItem('workVibe_multiDeviceSyncEnabled');
+  
+  if (savedPreference !== null) {
+    return savedPreference === 'true';
+  }
+  
+  // Default to enabled for new users
+  return true;
+};
+
 export const useFirebaseData = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
@@ -66,11 +79,11 @@ export const useFirebaseData = () => {
   // Store data
   const [storeItems, setStoreItems] = useState<StoreItem[]>([]);
   
-  // Multi-device sync data
+  // Multi-device sync data - NOW ENABLED BY DEFAULT
   const [activeDevices, setActiveDevices] = useState<DeviceInfo[]>([]);
   const [syncEvents, setSyncEvents] = useState<SyncEvent[]>([]);
   const [deviceCount, setDeviceCount] = useState<number>(1);
-  const [isMultiDeviceEnabled, setIsMultiDeviceEnabled] = useState<boolean>(false);
+  const [isMultiDeviceEnabled, setIsMultiDeviceEnabled] = useState<boolean>(getInitialSyncState());
 
   const firebaseService = new FirebaseService();
   const syncServiceRef = useRef<MultiDeviceSyncService | null>(null);
@@ -78,11 +91,16 @@ export const useFirebaseData = () => {
   const lastSaveDataRef = useRef<string>('');
   const isInitializedRef = useRef<boolean>(false);
 
-  // Initialize multi-device sync service
+  // Initialize multi-device sync service immediately
   useEffect(() => {
     if (!syncServiceRef.current) {
       const userName = localStorage.getItem('currentUserName') || 'Unknown User';
       syncServiceRef.current = new MultiDeviceSyncService(userName);
+      
+      console.log('🔄 Multi-device sync service initialized', {
+        enabled: isMultiDeviceEnabled,
+        user: userName
+      });
       
       // Setup sync event listener
       syncServiceRef.current.onSyncEventReceived((event: SyncEvent) => {
@@ -102,8 +120,16 @@ export const useFirebaseData = () => {
         setDeviceCount(count);
         setActiveDevices(devices);
       });
+
+      // Auto-connect if multi-device sync is enabled
+      if (isMultiDeviceEnabled) {
+        console.log('🚀 Auto-connecting multi-device sync...');
+        syncServiceRef.current.connect().catch(error => {
+          console.error('❌ Failed to auto-connect sync service:', error);
+        });
+      }
     }
-  }, []);
+  }, []); // Empty dependency - only run once on mount
 
   // Setup real-time sync listeners when multi-device is enabled
   useEffect(() => {
@@ -183,10 +209,12 @@ export const useFirebaseData = () => {
       }
     });
 
-    // Connect to sync service
-    syncService.connect().catch(error => {
-      console.error('❌ Failed to connect sync service:', error);
-    });
+    // Connect to sync service if not already connected
+    if (!syncService.getSyncStats().isConnected) {
+      syncService.connect().catch(error => {
+        console.error('❌ Failed to connect sync service:', error);
+      });
+    }
 
     // Cleanup on disable
     return () => {
@@ -195,6 +223,12 @@ export const useFirebaseData = () => {
         console.error('❌ Error disconnecting sync:', error);
       });
     };
+  }, [isMultiDeviceEnabled]);
+
+  // Save multi-device sync preference to localStorage
+  useEffect(() => {
+    localStorage.setItem('workVibe_multiDeviceSyncEnabled', isMultiDeviceEnabled.toString());
+    console.log('💾 Saved multi-device sync preference:', isMultiDeviceEnabled);
   }, [isMultiDeviceEnabled]);
 
   // Quick save function with sync
@@ -388,6 +422,24 @@ export const useFirebaseData = () => {
       lastSaveDataRef.current = dataHash;
       isInitializedRef.current = true;
 
+      // Auto-sync initial data if multi-device is enabled
+      if (isMultiDeviceEnabled && syncServiceRef.current) {
+        console.log('🔄 Auto-syncing initial data to other devices...');
+        try {
+          await Promise.all([
+            syncServiceRef.current.syncData('employees', finalEmployees),
+            syncServiceRef.current.syncData('tasks', finalTasks),
+            syncServiceRef.current.syncData('dailyData', data.dailyData),
+            syncServiceRef.current.syncData('completedTasks', Array.from(data.completedTasks)),
+            syncServiceRef.current.syncData('taskAssignments', data.taskAssignments),
+            syncServiceRef.current.syncData('customRoles', data.customRoles)
+          ]);
+          console.log('✅ Initial data synced to other devices');
+        } catch (syncError) {
+          console.error('⚠️ Failed to sync initial data to other devices:', syncError);
+        }
+      }
+
     } catch (error) {
       setConnectionStatus('error');
 
@@ -405,7 +457,7 @@ export const useFirebaseData = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading]);
+  }, [isLoading, isMultiDeviceEnabled]);
 
   // Auto-save when main data changes (but only after initialization)
   useEffect(() => {
