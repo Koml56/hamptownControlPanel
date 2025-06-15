@@ -480,3 +480,25 @@ export const useFirebaseData = () => {
     refreshFromAllDevices
   };
 };
+
+export const useAuth = () => {
+  const [currentUser, setCurrentUser] = useState<CurrentUser>({ id: 1, name: 'Luka' });
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  const switchUser = useCallback((employee: Employee) => {
+    setCurrentUser({ id: employee.id, name: employee.name });
+  }, []);
+
+  const logoutAdmin = useCallback(() => {
+    setIsAdmin(false);
+  }, []);
+
+  return {
+    currentUser,
+    isAdmin,
+    setCurrentUser,
+    setIsAdmin,
+    switchUser,
+    logoutAdmin
+  };
+};
