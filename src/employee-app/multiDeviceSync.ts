@@ -1,4 +1,4 @@
-// multiDeviceSync.ts - Complete multi-device synchronization service with real-time updates
+// multiDeviceSync.ts - Optimized for performance and reliability
 import { FIREBASE_CONFIG } from './constants';
 import type { Employee, Task, DailyDataMap, TaskAssignments, PrepItem, ScheduledPrep, PrepSelections, StoreItem } from './types';
 
@@ -42,26 +42,31 @@ export class MultiDeviceSyncService {
   private deviceInfo: DeviceInfo;
   private presenceRef: string;
   private syncCallbacks: Map<string, (data: any) => void> = new Map();
-  private isListening = false;
+  private isConnected = false;
   private heartbeatInterval: NodeJS.Timeout | null = null;
   private onDeviceCountChange?: (count: number, devices: DeviceInfo[]) => void;
   private onSyncEvent?: (event: SyncEvent) => void;
   private lastDataTimestamp: Map<string, number> = new Map();
-  private conflictThrottleMap: Map<string, number> = new Map();
   
-  // Real-time listeners for each data field
-  private dataListeners: Map<string, () => void> = new Map();
+  // PERFORMANCE: Single EventSource for all data instead of multiple
+  private eventSource: EventSource | null = null;
+  private connectionRetryCount = 0;
+  private maxRetries = 3;
+  private retryTimeout: NodeJS.Timeout | null = null;
+  
+  // PERFORMANCE: Throttle sync operations
+  private syncQueue: Map<string, any> = new Map();
+  private syncTimer: NodeJS.Timeout | null = null;
+  private isSyncing = false;
 
   constructor(userName: string = 'Unknown User') {
     this.deviceId = this.generateDeviceId();
     this.deviceInfo = this.createDeviceInfo(userName);
     this.presenceRef = `presence/${this.deviceId}`;
     
-    console.log('🔄 MultiDeviceSyncService initialized:', {
-      deviceId: this.deviceId,
-      deviceName: this.deviceInfo.name,
-      user: this.deviceInfo.user,
-      platform: this.deviceInfo.platform
+    console.log('🔄 Sync service initialized:', {
+      deviceId: this.deviceId.substring(0, 8) + '...',
+      user: userName
     });
 
     // Cleanup on page unload
@@ -69,41 +74,22 @@ export class MultiDeviceSyncService {
       this.disconnect();
     });
 
-    // Handle visibility changes (tab switching, etc.)
+    // Handle visibility changes efficiently
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
         this.updatePresence(false);
       } else {
         this.updatePresence(true);
-        // Small delay to ensure we're back online
-        setTimeout(() => {
-          this.refreshDataFromAllDevices();
-        }, 1000);
       }
-    });
-
-    // Handle online/offline events
-    window.addEventListener('online', () => {
-      console.log('🌐 Back online - reconnecting sync...');
-      this.updatePresence(true);
-      this.startListening();
-    });
-
-    window.addEventListener('offline', () => {
-      console.log('📵 Gone offline - pausing sync...');
-      this.updatePresence(false);
     });
   }
 
   private generateDeviceId(): string {
-    // Try to get existing device ID from localStorage
     let deviceId = localStorage.getItem('workVibe_deviceId');
     if (!deviceId) {
-      // Generate new device ID with more randomness
       const timestamp = Date.now().toString(36);
-      const random = Math.random().toString(36).substr(2, 9);
-      const userAgent = navigator.userAgent.substring(0, 10).replace(/\W/g, '');
-      deviceId = `device_${timestamp}_${random}_${userAgent}`;
+      const random = Math.random().toString(36).substr(2, 6); // Shorter for performance
+      deviceId = `device_${timestamp}_${random}`;
       localStorage.setItem('workVibe_deviceId', deviceId);
     }
     return deviceId;
@@ -111,103 +97,104 @@ export class MultiDeviceSyncService {
 
   private createDeviceInfo(userName: string): DeviceInfo {
     const userAgent = navigator.userAgent;
-    const platform = navigator.platform || 'Unknown Platform';
     
-    // Enhanced device detection
+    // Simplified device detection for performance
     let deviceType = 'Desktop';
-    let browserName = 'Unknown Browser';
+    let browserName = 'Browser';
     
-    // Detect device type
     if (/Mobile|Android|iPhone|iPod/.test(userAgent)) {
       deviceType = 'Mobile';
     } else if (/iPad|Tablet/.test(userAgent)) {
       deviceType = 'Tablet';
     }
     
-    // Detect browser
     if (userAgent.includes('Chrome')) browserName = 'Chrome';
     else if (userAgent.includes('Firefox')) browserName = 'Firefox';
     else if (userAgent.includes('Safari')) browserName = 'Safari';
-    else if (userAgent.includes('Edge')) browserName = 'Edge';
-    
-    // Create device name with better formatting
-    const deviceName = `${deviceType} • ${browserName}`;
-    const browserInfo = `${browserName} on ${platform}`;
     
     return {
       id: this.deviceId,
-      name: deviceName,
+      name: `${deviceType} • ${browserName}`,
       lastSeen: Date.now(),
       user: userName,
       platform: deviceType.toLowerCase(),
       isActive: true,
-      browserInfo: browserInfo
+      browserInfo: `${browserName} on ${navigator.platform || 'Unknown'}`
     };
   }
 
-  // Connect to multi-device sync
+  // PERFORMANCE: Fast, non-blocking connect
   async connect(): Promise<void> {
+    if (this.isConnected) {
+      console.log('✅ Already connected');
+      return;
+    }
+
     try {
-      console.log('🔗 Connecting to multi-device sync...');
+      console.log('🔗 Connecting sync service...');
       
-      // Update presence
-      await this.updatePresence(true);
+      // Update presence (fire and forget)
+      this.updatePresence(true).catch(console.warn);
       
-      // Start listening for changes
+      // Start listening (non-blocking)
       this.startListening();
       
-      // Start heartbeat
+      // Start heartbeat (lightweight)
       this.startHeartbeat();
       
-      // Emit connection event
+      this.isConnected = true;
+      this.connectionRetryCount = 0;
+      
+      // Emit connection event (non-blocking)
       this.emitSyncEvent({
         type: 'device_join',
         timestamp: Date.now(),
         deviceId: this.deviceId,
         deviceName: this.deviceInfo.name,
-        description: `${this.deviceInfo.name} connected`,
-        data: { deviceInfo: this.deviceInfo }
+        description: `${this.deviceInfo.name} connected`
       });
       
-      console.log('✅ Multi-device sync connected');
+      console.log('✅ Sync service connected');
       
     } catch (error) {
-      console.error('❌ Failed to connect multi-device sync:', error);
-      throw error;
+      console.error('❌ Connection failed:', error);
+      this.scheduleReconnect();
     }
   }
 
-  // Disconnect from multi-device sync
+  // PERFORMANCE: Fast disconnect
   async disconnect(): Promise<void> {
+    if (!this.isConnected) return;
+
     try {
-      console.log('🔌 Disconnecting multi-device sync...');
+      console.log('🔌 Disconnecting...');
       
-      // Emit disconnection event
-      this.emitSyncEvent({
-        type: 'device_leave',
-        timestamp: Date.now(),
-        deviceId: this.deviceId,
-        deviceName: this.deviceInfo.name,
-        description: `${this.deviceInfo.name} disconnected`
-      });
-      
-      // Stop listening
+      this.isConnected = false;
       this.stopListening();
-      
-      // Stop heartbeat
       this.stopHeartbeat();
       
-      // Remove presence
-      await this.removePresence();
+      // Clean up timers
+      if (this.retryTimeout) {
+        clearTimeout(this.retryTimeout);
+        this.retryTimeout = null;
+      }
       
-      console.log('✅ Multi-device sync disconnected');
+      if (this.syncTimer) {
+        clearTimeout(this.syncTimer);
+        this.syncTimer = null;
+      }
+      
+      // Remove presence (fire and forget)
+      this.removePresence().catch(console.warn);
+      
+      console.log('✅ Disconnected');
       
     } catch (error) {
-      console.error('❌ Error disconnecting sync:', error);
+      console.error('❌ Disconnect error:', error);
     }
   }
 
-  // Update device presence
+  // PERFORMANCE: Non-blocking presence update
   private async updatePresence(isActive: boolean): Promise<void> {
     this.deviceInfo = {
       ...this.deviceInfo,
@@ -216,121 +203,130 @@ export class MultiDeviceSyncService {
     };
 
     try {
-      const response = await fetch(`${this.baseUrl}/${this.presenceRef}.json`, {
+      // Fire and forget - don't wait for response
+      fetch(`${this.baseUrl}/${this.presenceRef}.json`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(this.deviceInfo)
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to update presence: ${response.status}`);
-      }
-
-      // Update device count
-      const devices = await this.getActiveDevices();
-      if (this.onDeviceCountChange) {
-        this.onDeviceCountChange(devices.length, devices);
-      }
+      }).then(response => {
+        if (response.ok) {
+          // Update device count asynchronously
+          this.getActiveDevices().then(devices => {
+            if (this.onDeviceCountChange) {
+              this.onDeviceCountChange(devices.length, devices);
+            }
+          }).catch(console.warn);
+        }
+      }).catch(console.warn);
 
     } catch (error) {
-      console.error('❌ Failed to update presence:', error);
+      console.warn('⚠️ Presence update failed:', error);
     }
   }
 
-  // Remove device presence
   private async removePresence(): Promise<void> {
     try {
       await fetch(`${this.baseUrl}/${this.presenceRef}.json`, {
         method: 'DELETE'
       });
     } catch (error) {
-      console.error('❌ Failed to remove presence:', error);
+      console.warn('⚠️ Failed to remove presence:', error);
     }
   }
 
-  // Get active devices with better filtering
+  // PERFORMANCE: Cached device list with filtering
+  private deviceCache: { devices: DeviceInfo[], timestamp: number } | null = null;
+  private readonly DEVICE_CACHE_TTL = 30000; // 30 seconds
+
   async getActiveDevices(): Promise<DeviceInfo[]> {
     try {
+      // Use cache if available and fresh
+      const now = Date.now();
+      if (this.deviceCache && (now - this.deviceCache.timestamp) < this.DEVICE_CACHE_TTL) {
+        return this.deviceCache.devices;
+      }
+
       const response = await fetch(`${this.baseUrl}/presence.json`);
       const presenceData = await response.json();
       
-      if (!presenceData) return [];
+      if (!presenceData) {
+        this.deviceCache = { devices: [], timestamp: now };
+        return [];
+      }
       
-      const now = Date.now();
       const devices = Object.values(presenceData) as DeviceInfo[];
       
-      // Filter out stale devices (inactive for more than 3 minutes)
+      // Filter stale devices (inactive for more than 5 minutes)
       const activeDevices = devices.filter(device => 
-        device.isActive && (now - device.lastSeen) < 180000
-      );
+        device.isActive && (now - device.lastSeen) < 300000
+      ).slice(0, 10); // Limit to 10 devices for performance
 
-      // Sort by last seen (most recent first)
-      return activeDevices.sort((a, b) => b.lastSeen - a.lastSeen);
+      // Cache the result
+      this.deviceCache = { devices: activeDevices, timestamp: now };
+      
+      return activeDevices;
       
     } catch (error) {
-      console.error('❌ Failed to get active devices:', error);
+      console.warn('⚠️ Failed to get devices:', error);
       return [];
     }
   }
 
-  // Start listening for real-time changes
+  // PERFORMANCE: Single EventSource instead of multiple
   private startListening(): void {
-    if (this.isListening) return;
+    if (this.eventSource) {
+      console.log('👂 Already listening');
+      return;
+    }
     
-    this.isListening = true;
-    console.log('👂 Starting real-time listeners for all data fields...');
+    console.log('👂 Starting single EventSource listener...');
     
-    // Listen to each data field separately for better performance
-    const fields = [
-      'employees', 'tasks', 'dailyData', 'completedTasks', 
-      'taskAssignments', 'customRoles', 'prepItems', 
-      'scheduledPreps', 'prepSelections', 'storeItems'
-    ];
-
-    fields.forEach(field => {
-      this.setupFieldListener(field);
-    });
+    // Listen to root path for all changes
+    const eventSourceUrl = `${this.baseUrl}/.json`;
+    this.eventSource = new EventSource(eventSourceUrl);
     
-    // Also listen for presence changes
-    this.setupPresenceListener();
-  }
-
-  // Setup listener for a specific data field
-  private setupFieldListener(field: string): void {
-    const eventSourceUrl = `${this.baseUrl}/${field}.json`;
-    
-    const eventSource = new EventSource(eventSourceUrl);
-    
-    eventSource.onmessage = (event) => {
+    this.eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        
-        // Skip if data is null or if it's from this device recently
         if (data === null) return;
         
+        console.log('📥 Received data update');
+        
+        // Process the data and trigger callbacks
+        this.processDataUpdate(data);
+        
+      } catch (error) {
+        console.warn('⚠️ Error processing data update:', error);
+      }
+    };
+    
+    this.eventSource.onerror = (error) => {
+      console.warn('⚠️ EventSource error:', error);
+      this.handleConnectionError();
+    };
+  }
+
+  private processDataUpdate(data: any): void {
+    // Only process fields we care about
+    const relevantFields = [
+      'employees', 'tasks', 'dailyData', 'completedTasks', 
+      'taskAssignments', 'customRoles'
+    ];
+    
+    for (const field of relevantFields) {
+      if (data[field] && this.syncCallbacks.has(field)) {
+        const callback = this.syncCallbacks.get(field)!;
+        
+        // Throttle updates to prevent spam
         const now = Date.now();
-        const lastTimestamp = this.lastDataTimestamp.get(field) || 0;
+        const lastUpdate = this.lastDataTimestamp.get(field) || 0;
         
-        // Throttle updates to prevent infinite loops
-        if (now - lastTimestamp < 1000) {
-          console.log(`⏱️ Throttling ${field} update to prevent loop`);
-          return;
-        }
-        
-        this.lastDataTimestamp.set(field, now);
-        
-        console.log(`📥 Received real-time update for ${field}`);
-        
-        // Apply data update
-        if (this.syncCallbacks.has(field)) {
-          const callback = this.syncCallbacks.get(field)!;
+        if (now - lastUpdate > 2000) { // Only update every 2 seconds
+          this.lastDataTimestamp.set(field, now);
           
-          // Handle different data types appropriately
-          let processedData = data;
-          if (field === 'completedTasks' && Array.isArray(data)) {
-            processedData = new Set(data);
+          let processedData = data[field];
+          if (field === 'completedTasks' && Array.isArray(processedData)) {
+            processedData = new Set(processedData);
           }
           
           callback(processedData);
@@ -342,122 +338,134 @@ export class MultiDeviceSyncService {
             deviceId: 'remote',
             deviceName: 'Remote Device',
             field,
-            description: `${field} updated from remote device`,
-            data: processedData
+            description: `${field} updated`
           });
         }
-        
-      } catch (error) {
-        console.error(`❌ Error processing ${field} update:`, error);
       }
-    };
-    
-    eventSource.onerror = (error) => {
-      console.error(`❌ EventSource error for ${field}:`, error);
-      // Store cleanup function
-      this.dataListeners.set(field, () => eventSource.close());
-      
-      // Reconnect after delay if still listening
-      setTimeout(() => {
-        if (this.isListening) {
-          console.log(`🔄 Reconnecting ${field} listener...`);
-          this.setupFieldListener(field);
-        }
-      }, 5000);
-    };
-    
-    // Store cleanup function
-    this.dataListeners.set(field, () => eventSource.close());
+    }
   }
 
-  // Setup presence listener for device count updates
-  private setupPresenceListener(): void {
-    const eventSourceUrl = `${this.baseUrl}/presence.json`;
-    const eventSource = new EventSource(eventSourceUrl);
-    
-    eventSource.onmessage = async (event) => {
-      try {
-        // Update device count when presence changes
-        const devices = await this.getActiveDevices();
-        if (this.onDeviceCountChange) {
-          this.onDeviceCountChange(devices.length, devices);
-        }
-      } catch (error) {
-        console.error('❌ Error processing presence update:', error);
-      }
-    };
-    
-    this.dataListeners.set('presence', () => eventSource.close());
-  }
-
-  // Stop listening for changes
   private stopListening(): void {
-    this.isListening = false;
-    
-    // Close all event sources
-    this.dataListeners.forEach((cleanup, field) => {
-      console.log(`🔇 Stopping listener for ${field}`);
-      cleanup();
-    });
-    
-    this.dataListeners.clear();
+    if (this.eventSource) {
+      console.log('🔇 Stopping listener');
+      this.eventSource.close();
+      this.eventSource = null;
+    }
   }
 
-  // Start heartbeat to maintain presence
+  private handleConnectionError(): void {
+    this.stopListening();
+    
+    if (this.connectionRetryCount < this.maxRetries) {
+      this.scheduleReconnect();
+    } else {
+      console.warn('⚠️ Max reconnection attempts reached');
+      this.isConnected = false;
+    }
+  }
+
+  private scheduleReconnect(): void {
+    if (this.retryTimeout) return;
+    
+    this.connectionRetryCount++;
+    const delay = Math.min(1000 * Math.pow(2, this.connectionRetryCount), 30000); // Exponential backoff, max 30s
+    
+    console.log(`🔄 Reconnecting in ${delay/1000}s (attempt ${this.connectionRetryCount})`);
+    
+    this.retryTimeout = setTimeout(() => {
+      this.retryTimeout = null;
+      if (!this.isConnected) {
+        this.startListening();
+      }
+    }, delay);
+  }
+
+  // PERFORMANCE: Batched sync operations
+  async syncData(field: string, data: any): Promise<void> {
+    // Add to sync queue instead of immediate sync
+    this.syncQueue.set(field, data);
+    
+    // Debounce sync operations
+    if (this.syncTimer) {
+      clearTimeout(this.syncTimer);
+    }
+    
+    this.syncTimer = setTimeout(() => {
+      this.processSyncQueue();
+    }, 1000); // Batch syncs after 1 second
+  }
+
+  private async processSyncQueue(): Promise<void> {
+    if (this.isSyncing || this.syncQueue.size === 0) return;
+    
+    this.isSyncing = true;
+    const queue = new Map(this.syncQueue);
+    this.syncQueue.clear();
+    
+    try {
+      console.log('📤 Processing sync queue:', Array.from(queue.keys()));
+      
+      // Process all queued syncs in parallel
+      const syncPromises = Array.from(queue.entries()).map(async ([field, data]) => {
+        try {
+          let processedData = data instanceof Set ? Array.from(data) : data;
+          
+          const response = await fetch(`${this.baseUrl}/${field}.json`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(processedData)
+          });
+
+          if (!response.ok) {
+            throw new Error(`Sync failed for ${field}: ${response.status}`);
+          }
+          
+          console.log(`✅ Synced ${field}`);
+          
+          // Emit sync event
+          this.emitSyncEvent({
+            type: 'data_update',
+            timestamp: Date.now(),
+            deviceId: this.deviceId,
+            deviceName: this.deviceInfo.name,
+            field,
+            description: `${field} synced`
+          });
+          
+        } catch (error) {
+          console.warn(`⚠️ Failed to sync ${field}:`, error);
+          // Re-queue failed syncs for retry
+          this.syncQueue.set(field, data);
+        }
+      });
+
+      await Promise.allSettled(syncPromises);
+      
+    } catch (error) {
+      console.error('❌ Sync queue processing failed:', error);
+    } finally {
+      this.isSyncing = false;
+      
+      // Process any new items that were queued during sync
+      if (this.syncQueue.size > 0) {
+        setTimeout(() => this.processSyncQueue(), 2000);
+      }
+    }
+  }
+
+  // Lightweight heartbeat
   private startHeartbeat(): void {
     this.heartbeatInterval = setInterval(() => {
-      this.updatePresence(true);
-    }, 60000); // Update every minute
+      if (this.isConnected) {
+        this.updatePresence(true).catch(console.warn);
+      }
+    }, 90000); // Every 90 seconds
   }
 
-  // Stop heartbeat
   private stopHeartbeat(): void {
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = null;
-    }
-  }
-
-  // Sync data field to other devices with conflict prevention
-  async syncData(field: string, data: any): Promise<void> {
-    try {
-      // Set timestamp to prevent immediate echo
-      this.lastDataTimestamp.set(field, Date.now());
-      
-      // Convert Set to Array for JSON serialization
-      let processedData = data;
-      if (data instanceof Set) {
-        processedData = Array.from(data);
-      }
-      
-      const response = await fetch(`${this.baseUrl}/${field}.json`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(processedData)
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to sync ${field}: ${response.status}`);
-      }
-      
-      console.log(`📤 Synced ${field} to other devices`);
-      
-      // Emit sync event
-      this.emitSyncEvent({
-        type: 'data_update',
-        timestamp: Date.now(),
-        deviceId: this.deviceId,
-        deviceName: this.deviceInfo.name,
-        field,
-        description: `${field} synced to all devices`,
-        data: processedData
-      });
-      
-    } catch (error) {
-      console.error(`❌ Failed to sync ${field}:`, error);
-      throw error;
     }
   }
 
@@ -466,127 +474,84 @@ export class MultiDeviceSyncService {
     this.syncCallbacks.set(field, callback);
   }
 
-  // Unsubscribe from field changes
   offFieldChange(field: string): void {
     this.syncCallbacks.delete(field);
   }
 
-  // Set device count change callback
   onDeviceCountChanged(callback: (count: number, devices: DeviceInfo[]) => void): void {
     this.onDeviceCountChange = callback;
   }
 
-  // Set sync event callback
   onSyncEventReceived(callback: (event: SyncEvent) => void): void {
     this.onSyncEvent = callback;
   }
 
-  // Emit sync event
   private emitSyncEvent(event: SyncEvent): void {
     if (this.onSyncEvent) {
       this.onSyncEvent(event);
     }
   }
 
-  // Force refresh data from all devices
+  // PERFORMANCE: Fast refresh with timeout
   async refreshDataFromAllDevices(): Promise<SyncData> {
     try {
-      console.log('🔄 Refreshing data from all devices...');
+      console.log('🔄 Fast refresh...');
       
-      const [
-        employeesRes,
-        tasksRes,
-        dailyDataRes,
-        completedTasksRes,
-        taskAssignmentsRes,
-        customRolesRes,
-        prepItemsRes,
-        scheduledPrepsRes,
-        prepSelectionsRes,
-        storeItemsRes
-      ] = await Promise.all([
-        fetch(`${this.baseUrl}/employees.json`),
-        fetch(`${this.baseUrl}/tasks.json`),
-        fetch(`${this.baseUrl}/dailyData.json`),
-        fetch(`${this.baseUrl}/completedTasks.json`),
-        fetch(`${this.baseUrl}/taskAssignments.json`),
-        fetch(`${this.baseUrl}/customRoles.json`),
-        fetch(`${this.baseUrl}/prepItems.json`),
-        fetch(`${this.baseUrl}/scheduledPreps.json`),
-        fetch(`${this.baseUrl}/prepSelections.json`),
-        fetch(`${this.baseUrl}/storeItems.json`)
-      ]);
+      // Only fetch essential data with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+      
+      const promises = [
+        'employees', 'tasks', 'dailyData', 'completedTasks', 'taskAssignments'
+      ].map(field => 
+        fetch(`${this.baseUrl}/${field}.json`, { 
+          signal: controller.signal 
+        }).then(res => res.json()).then(data => ({ [field]: data }))
+      );
 
-      const data: SyncData = {
-        employees: await employeesRes.json(),
-        tasks: await tasksRes.json(),
-        dailyData: await dailyDataRes.json(),
-        completedTasks: await completedTasksRes.json(),
-        taskAssignments: await taskAssignmentsRes.json(),
-        customRoles: await customRolesRes.json(),
-        prepItems: await prepItemsRes.json(),
-        scheduledPreps: await scheduledPrepsRes.json(),
-        prepSelections: await prepSelectionsRes.json(),
-        storeItems: await storeItemsRes.json()
-      };
-
-      // Trigger callbacks for all fields that have data
-      Object.entries(data).forEach(([field, fieldData]) => {
-        if (this.syncCallbacks.has(field) && fieldData !== null) {
-          const callback = this.syncCallbacks.get(field)!;
-          
-          // Handle Set conversion
-          let processedData = fieldData;
-          if (field === 'completedTasks' && Array.isArray(fieldData)) {
-            processedData = new Set(fieldData);
-          }
-          
-          callback(processedData);
+      const results = await Promise.allSettled(promises);
+      clearTimeout(timeoutId);
+      
+      const data: SyncData = {};
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          Object.assign(data, result.value);
+        } else {
+          console.warn(`⚠️ Failed to fetch ${['employees', 'tasks', 'dailyData', 'completedTasks', 'taskAssignments'][index]}:`, result.reason);
         }
       });
 
-      // Emit full sync event
-      this.emitSyncEvent({
-        type: 'full_sync',
-        timestamp: Date.now(),
-        deviceId: this.deviceId,
-        deviceName: this.deviceInfo.name,
-        description: 'Full data refresh completed',
-        data: data
-      });
-
-      console.log('✅ Data refreshed from all devices');
+      console.log('✅ Fast refresh completed');
       return data;
       
     } catch (error) {
-      console.error('❌ Failed to refresh data:', error);
+      console.error('❌ Fast refresh failed:', error);
       throw error;
     }
   }
 
-  // Get current device info
   getDeviceInfo(): DeviceInfo {
     return { ...this.deviceInfo, lastSeen: Date.now() };
   }
 
-  // Update current user
   updateCurrentUser(userName: string): void {
     this.deviceInfo.user = userName;
-    this.updatePresence(true);
+    this.updatePresence(true).catch(console.warn);
   }
 
-  // Get sync statistics
   getSyncStats(): { 
     isConnected: boolean; 
     deviceCount: number; 
     lastSync: number; 
     isListening: boolean;
+    queueSize: number;
   } {
     return {
-      isConnected: this.isListening,
-      deviceCount: 0, // Will be updated by presence listener
-      lastSync: Math.max(...Array.from(this.lastDataTimestamp.values())),
-      isListening: this.isListening
+      isConnected: this.isConnected,
+      deviceCount: this.deviceCache?.devices.length || 0,
+      lastSync: Math.max(...Array.from(this.lastDataTimestamp.values()), 0),
+      isListening: this.eventSource !== null,
+      queueSize: this.syncQueue.size
     };
   }
 }
