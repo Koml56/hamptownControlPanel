@@ -414,12 +414,11 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
                 {/* Status section */}
                 <div className="bg-white/50 backdrop-blur-sm rounded-lg p-3 border border-white/30">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-gray-700">Connection Status</span>
-                    <div className={`w-2 h-2 rounded-full ${
-                      connectionStatus === 'connected' ? 'bg-green-500' :
-                      connectionStatus === 'connecting' ? 'bg-yellow-500' :
-                      'bg-red-500'
-                    }`} />
+                    <span className="text-sm font-medium text-gray-700">Real-time Sync</span>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 rounded-full bg-green-500" />
+                      <span className="text-xs text-green-600 font-medium">Active</span>
+                    </div>
                   </div>
                   <div className="text-xs text-gray-600">
                     {connectionStatus === 'connected' ? 'Connected to Firebase' :
@@ -433,86 +432,56 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
                   )}
                 </div>
 
-                {/* Multi-device toggle */}
-                <div className="bg-white/40 backdrop-blur-sm rounded-lg p-3 border border-white/30">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <Users className="w-4 h-4 text-gray-600" />
-                      <div>
-                        <span className="text-sm font-medium text-gray-700">Real-time Sync</span>
-                        <div className="text-xs text-gray-500">Sync across devices</div>
-                      </div>
-                    </div>
+                {/* Connected devices */}
+                <div className="bg-white/30 backdrop-blur-sm rounded-lg p-3 border border-white/30">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm font-medium text-gray-700">Connected Devices ({activeDevices.length})</span>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        toggleMultiDeviceSync();
+                        refreshFromAllDevices();
                       }}
-                      className={`relative w-12 h-6 rounded-full transition-all duration-200 ${
-                        isMultiDeviceEnabled 
-                          ? 'bg-emerald-500' 
-                          : 'bg-gray-300'
-                      }`}
+                      className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full hover:bg-blue-200 transition-colors"
                     >
-                      <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-all duration-200 ${
-                        isMultiDeviceEnabled ? 'left-6' : 'left-0.5'
-                      }`} />
+                      Refresh
                     </button>
                   </div>
-                </div>
-
-                {/* Connected devices */}
-                {isMultiDeviceEnabled && (
-                  <div className="bg-white/30 backdrop-blur-sm rounded-lg p-3 border border-white/30">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-sm font-medium text-gray-700">Connected Devices ({activeDevices.length})</span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          refreshFromAllDevices();
-                        }}
-                        className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full hover:bg-blue-200 transition-colors"
-                      >
-                        Refresh
-                      </button>
-                    </div>
-                    
-                    {activeDevices.length > 0 ? (
-                      <div className="space-y-2 max-h-32 overflow-y-auto">
-                        {activeDevices.map((device, index) => (
-                          <div key={device.id} className="flex items-center justify-between p-2 bg-white/40 rounded-lg">
-                            <div className="flex items-center space-x-2">
-                              <div className={`w-2 h-2 rounded-full ${
-                                device.isActive ? 'bg-green-500' : 'bg-gray-400'
-                              }`} />
-                              <div className="text-blue-600">
-                                {getDeviceIcon(device)}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <div className="text-xs font-medium text-gray-700 truncate">
-                                  {device.name}
-                                </div>
-                                <div className="text-xs text-gray-500 truncate">
-                                  {device.user} • {device.browserInfo}
-                                </div>
-                              </div>
+                  
+                  {activeDevices.length > 0 ? (
+                    <div className="space-y-2 max-h-32 overflow-y-auto">
+                      {activeDevices.map((device, index) => (
+                        <div key={device.id} className="flex items-center justify-between p-2 bg-white/40 rounded-lg">
+                          <div className="flex items-center space-x-2">
+                            <div className={`w-2 h-2 rounded-full ${
+                              device.isActive ? 'bg-green-500' : 'bg-gray-400'
+                            }`} />
+                            <div className="text-blue-600">
+                              {getDeviceIcon(device)}
                             </div>
-                            <div className="text-xs text-gray-500 whitespace-nowrap">
-                              {formatTimeAgo(device.lastSeen)}
+                            <div className="min-w-0 flex-1">
+                              <div className="text-xs font-medium text-gray-700 truncate">
+                                {device.name}
+                              </div>
+                              <div className="text-xs text-gray-500 truncate">
+                                {device.user} • {device.browserInfo}
+                              </div>
                             </div>
                           </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-4 text-xs text-gray-500">
-                        No other devices connected
-                      </div>
-                    )}
-                  </div>
-                )}
+                          <div className="text-xs text-gray-500 whitespace-nowrap">
+                            {formatTimeAgo(device.lastSeen)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-4 text-xs text-gray-500">
+                      No other devices connected
+                    </div>
+                  )}
+                </div>
 
                 {/* Recent sync events */}
-                {isMultiDeviceEnabled && syncEvents.length > 0 && (
+                {syncEvents.length > 0 && (
                   <div className="bg-white/30 backdrop-blur-sm rounded-lg p-3 border border-white/30">
                     <div className="text-sm font-medium text-gray-700 mb-2">Recent Activity</div>
                     <div className="space-y-1 max-h-24 overflow-y-auto">
