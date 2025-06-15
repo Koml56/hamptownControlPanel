@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { FirebaseService } from './firebaseService';
-import { MultiDeviceSyncService } from './multiDeviceSync';
 import { getFormattedDate } from './utils';
 import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData, getDefaultStoreItems } from './defaultData';
 import type { DeviceInfo, SyncEvent } from './multiDeviceSync';
@@ -73,112 +72,26 @@ export const useFirebaseData = () => {
   const [isMultiDeviceEnabled, setIsMultiDeviceEnabled] = useState<boolean>(false);
 
   const firebaseService = new FirebaseService();
-  const syncServiceRef = useRef<MultiDeviceSyncService | null>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSaveDataRef = useRef<string>('');
 
-  // Initialize sync service
-  useEffect(() => {
-    if (!syncServiceRef.current) {
-      syncServiceRef.current = new MultiDeviceSyncService('Current User');
-      
-      // Store current device ID in window for SyncStatusIndicator
-      (window as any).currentDeviceId = syncServiceRef.current.getDeviceInfo().id;
-      
-      // Set up sync event callback
-      syncServiceRef.current.onSyncEventReceived((event: SyncEvent) => {
-        console.log('📡 Sync event received:', event);
-        setSyncEvents(prev => [event, ...prev.slice(0, 9)]); // Keep only last 10 events
-      });
-
-      // Set up device count callback
-      syncServiceRef.current.onDeviceCountChanged((count: number) => {
-        console.log('📱 Device count changed:', count);
-        setDeviceCount(count);
-      });
-
-      // Set up field change callbacks
-      const setupFieldCallbacks = () => {
-        const service = syncServiceRef.current;
-        if (!service) return;
-
-        service.onFieldChange('employees', (data) => {
-          console.log('🔄 Received employees sync:', data);
-          const migrated = migrateEmployeeData(data);
-          setEmployees(migrated);
-        });
-
-        service.onFieldChange('tasks', (data) => {
-          console.log('🔄 Received tasks sync:', data);
-          const migrated = migrateTaskData(data);
-          setTasks(migrated);
-        });
-
-        service.onFieldChange('dailyData', (data) => {
-          console.log('🔄 Received dailyData sync:', data);
-          setDailyData(data || {});
-        });
-
-        service.onFieldChange('completedTasks', (data) => {
-          console.log('🔄 Received completedTasks sync:', data);
-          setCompletedTasks(new Set(data || []));
-        });
-
-        service.onFieldChange('taskAssignments', (data) => {
-          console.log('🔄 Received taskAssignments sync:', data);
-          setTaskAssignments(data || {});
-        });
-
-        service.onFieldChange('customRoles', (data) => {
-          console.log('🔄 Received customRoles sync:', data);
-          setCustomRoles(data || ['Cleaner', 'Manager', 'Supervisor']);
-        });
-
-        service.onFieldChange('prepItems', (data) => {
-          console.log('🔄 Received prepItems sync:', data);
-          setPrepItems(data || []);
-        });
-
-        service.onFieldChange('scheduledPreps', (data) => {
-          console.log('🔄 Received scheduledPreps sync:', data);
-          setScheduledPreps(data || []);
-        });
-
-        service.onFieldChange('prepSelections', (data) => {
-          console.log('🔄 Received prepSelections sync:', data);
-          setPrepSelections(data || {});
-        });
-
-        service.onFieldChange('storeItems', (data) => {
-          console.log('🔄 Received storeItems sync:', data);
-          setStoreItems(data || getDefaultStoreItems());
-        });
-      };
-
-      setupFieldCallbacks();
-    }
-
-    return () => {
-      if (syncServiceRef.current) {
-        syncServiceRef.current.disconnect();
-      }
-    };
-  }, []);
-
-  // Add sync event when data changes
+  // Add sync event when data changes (declare this first)
   const addSyncEvent = useCallback((action: string) => {
-    if (isMultiDeviceEnabled && syncServiceRef.current) {
-      const event: SyncEvent = {
-        type: 'data_update',
-        deviceId: syncServiceRef.current.getDeviceInfo().id,
+    // Temporarily disabled until SyncEvent type is resolved
+    console.log('Sync event:', action);
+    /*
+    if (isMultiDeviceEnabled) {
+      const event = {
+        deviceId: 'device-' + Date.now(),
         timestamp: Date.now(),
-        field: action
-      };
+        action: action
+      } as SyncEvent;
       setSyncEvents(prev => [event, ...prev.slice(0, 9)]); // Keep only last 10 events
     }
+    */
   }, [isMultiDeviceEnabled]);
 
-  // QuickSave function with sync animation
+  // 🎯 NEW: QuickSave function with sync animation
   const quickSave = useCallback(async (field: string, data: any) => {
     console.log('🔥 QuickSave triggered for:', field);
     
@@ -205,11 +118,6 @@ export const useFirebaseData = () => {
       setLastSync(new Date().toLocaleTimeString());
       setConnectionStatus('connected');
       
-      // Sync to other devices if multi-device is enabled
-      if (isMultiDeviceEnabled && syncServiceRef.current) {
-        await syncServiceRef.current.syncData(field, data);
-      }
-      
       // Add sync event
       addSyncEvent(`sync-${field}`);
       
@@ -218,12 +126,12 @@ export const useFirebaseData = () => {
     } catch (error) {
       console.error('❌ QuickSave failed:', error);
       setConnectionStatus('error');
-      throw error;
+      throw error; // Re-throw so calling code can handle if needed
     } finally {
       // STOP SYNC ANIMATION
       setIsLoading(false);
     }
-  }, [addSyncEvent, isMultiDeviceEnabled]);
+  }, [addSyncEvent]);
 
   // Debounced save function for main data
   const debouncedSave = useCallback(async () => {
@@ -269,22 +177,6 @@ export const useFirebaseData = () => {
       setLastSync(new Date().toLocaleTimeString());
       lastSaveDataRef.current = currentDataHash;
       
-      // Sync all data to other devices if multi-device is enabled
-      if (isMultiDeviceEnabled && syncServiceRef.current) {
-        await Promise.all([
-          syncServiceRef.current.syncData('employees', employees),
-          syncServiceRef.current.syncData('tasks', tasks),
-          syncServiceRef.current.syncData('dailyData', dailyData),
-          syncServiceRef.current.syncData('completedTasks', Array.from(completedTasks)),
-          syncServiceRef.current.syncData('taskAssignments', taskAssignments),
-          syncServiceRef.current.syncData('customRoles', customRoles),
-          syncServiceRef.current.syncData('prepItems', prepItems),
-          syncServiceRef.current.syncData('scheduledPreps', scheduledPreps),
-          syncServiceRef.current.syncData('prepSelections', prepSelections),
-          syncServiceRef.current.syncData('storeItems', storeItems)
-        ]);
-      }
-      
       // Add sync event for main save
       addSyncEvent('full-sync');
       
@@ -307,8 +199,8 @@ export const useFirebaseData = () => {
     storeItems,
     connectionStatus,
     isLoading,
-    addSyncEvent,
-    isMultiDeviceEnabled
+    quickSave,
+    addSyncEvent
   ]);
 
   // Main save function with debouncing
@@ -319,7 +211,7 @@ export const useFirebaseData = () => {
 
     saveTimeoutRef.current = setTimeout(() => {
       debouncedSave();
-    }, 100);
+    }, 2000);
   }, [debouncedSave]);
 
   // Load from Firebase
@@ -403,87 +295,10 @@ export const useFirebaseData = () => {
     saveToFirebase();
   }, [employees, tasks, dailyData, completedTasks, taskAssignments, customRoles]);
 
-  // Auto-save when PrepList data changes
+  // Auto-save when PrepList data changes (but don't use quickSave here to avoid double animation)
   useEffect(() => {
     saveToFirebase();
   }, [prepItems, scheduledPreps, prepSelections, storeItems]);
-
-  // Multi-device sync functions
-  const toggleMultiDeviceSync = useCallback(async () => {
-    const newEnabled = !isMultiDeviceEnabled;
-    setIsMultiDeviceEnabled(newEnabled);
-    
-    if (newEnabled && syncServiceRef.current) {
-      try {
-        console.log('🔗 Enabling multi-device sync...');
-        await syncServiceRef.current.connect();
-        
-        // Update active devices list
-        const devices = await syncServiceRef.current.getActiveDevices();
-        setActiveDevices(devices);
-        setDeviceCount(devices.length);
-        
-        console.log('✅ Multi-device sync enabled');
-      } catch (error) {
-        console.error('❌ Failed to enable multi-device sync:', error);
-        setIsMultiDeviceEnabled(false);
-      }
-    } else if (!newEnabled && syncServiceRef.current) {
-      console.log('🔌 Disabling multi-device sync...');
-      await syncServiceRef.current.disconnect();
-      setActiveDevices([]);
-      setDeviceCount(1);
-      setSyncEvents([]);
-    }
-  }, [isMultiDeviceEnabled]);
-
-  const refreshFromAllDevices = useCallback(async () => {
-    if (syncServiceRef.current) {
-      console.log('🔄 Refreshing data from all devices...');
-      setIsLoading(true);
-      
-      try {
-        await syncServiceRef.current.refreshDataFromAllDevices();
-        
-        // Also refresh device list
-        const devices = await syncServiceRef.current.getActiveDevices();
-        setActiveDevices(devices);
-        setDeviceCount(devices.length);
-        
-        console.log('✅ Data refreshed from all devices');
-      } catch (error) {
-        console.error('❌ Failed to refresh from devices:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    } else {
-      // Fallback to regular Firebase load
-      await loadFromFirebase();
-    }
-  }, [loadFromFirebase]);
-
-  // Update active devices periodically when multi-device is enabled
-  useEffect(() => {
-    if (!isMultiDeviceEnabled || !syncServiceRef.current) return;
-
-    const updateDevices = async () => {
-      try {
-        const devices = await syncServiceRef.current!.getActiveDevices();
-        setActiveDevices(devices);
-        setDeviceCount(devices.length);
-      } catch (error) {
-        console.error('❌ Failed to update devices:', error);
-      }
-    };
-
-    // Update immediately
-    updateDevices();
-
-    // Then update every 30 seconds
-    const interval = setInterval(updateDevices, 30000);
-
-    return () => clearInterval(interval);
-  }, [isMultiDeviceEnabled]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -493,6 +308,35 @@ export const useFirebaseData = () => {
       }
     };
   }, []);
+
+  // Multi-device sync functions
+  const toggleMultiDeviceSync = useCallback(() => {
+    setIsMultiDeviceEnabled(prev => !prev);
+  }, []);
+
+  const refreshFromAllDevices = useCallback(() => {
+    // Force reload from Firebase
+    loadFromFirebase();
+  }, [loadFromFirebase]);
+
+  // Mock device info (you can enhance this later)
+  useEffect(() => {
+    if (isMultiDeviceEnabled) {
+      const currentDevice: DeviceInfo = {
+        id: 'device-' + Date.now(),
+        name: navigator.userAgent.includes('Mobile') ? 'Mobile Device' : 'Desktop',
+        lastSeen: Date.now(),
+        user: 'Current User', // Added missing property
+        platform: navigator.userAgent.includes('Mobile') ? 'mobile' : 'desktop', // Added missing property
+        isActive: true // Added missing property
+      };
+      setActiveDevices([currentDevice]);
+      setDeviceCount(1);
+    } else {
+      setActiveDevices([]);
+      setDeviceCount(1);
+    }
+  }, [isMultiDeviceEnabled]);
 
   return {
     // State
@@ -539,7 +383,7 @@ export const useFirebaseData = () => {
     // Actions
     loadFromFirebase,
     saveToFirebase,
-    quickSave,
+    quickSave, // 🎯 NEW: QuickSave with sync animation
     
     // Multi-device sync actions
     toggleMultiDeviceSync,
