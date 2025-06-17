@@ -1,4 +1,5 @@
-// PrepListPrototype.tsx - Complete implementation with all features
+
+// PrepListPrototype.tsx - Fixed to handle rapid state updates correctly
 import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, Plus, ChefHat, Check, Star, Trash2, Users, Search, X } from 'lucide-react';
 import { getFormattedDate } from './utils';
@@ -489,21 +490,34 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
     togglePrepSelection(customPrep);
   };
 
-  // Toggle prep completion (for today's view)
+  // FIXED: Toggle prep completion with proper state updates
   const togglePrepCompletion = (scheduledPrepId: number): void => {
-    // Create updated data immediately
-    const updatedScheduledPreps = scheduledPreps.map(prep => 
-      prep.id === scheduledPrepId 
-        ? { ...prep, completed: !prep.completed }
-        : prep
-    );
-    
-    // Update state
-    setScheduledPreps(() => updatedScheduledPreps);
-    
-    // Immediately save to Firebase
-    console.log('🔥 Immediate save triggered by prep completion');
-    quickSave('scheduledPreps', updatedScheduledPreps);
+    // Use functional update to ensure we're working with the latest state
+    setScheduledPreps(prev => {
+      // Create updated data based on the latest state
+      const updatedScheduledPreps = prev.map(prep => 
+        prep.id === scheduledPrepId 
+          ? { ...prep, completed: !prep.completed }
+          : prep
+      );
+      
+      // Log debug info
+      const toggledPrep = updatedScheduledPreps.find(p => p.id === scheduledPrepId);
+      console.log('🔄 Toggling prep completion:', {
+        prepId: scheduledPrepId,
+        prepName: toggledPrep?.name,
+        newCompletedStatus: toggledPrep?.completed,
+        totalScheduledPreps: updatedScheduledPreps.length
+      });
+      
+      // Immediately save the updated data to Firebase
+      console.log('🔥 Immediate save triggered by prep completion');
+      quickSave('scheduledPreps', updatedScheduledPreps).catch(error => {
+        console.error('❌ Failed to save prep completion:', error);
+      });
+      
+      return updatedScheduledPreps;
+    });
   };
 
   // Filter preps
