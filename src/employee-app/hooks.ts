@@ -269,7 +269,7 @@ export const useFirebaseData = () => {
     }
   }, [isMultiDeviceEnabled, debouncedBatchSync]);
 
-  // PERFORMANCE: Non-blocking main save function
+  // PERFORMANCE: Non-blocking main save function - FIXED to include all fields
   const debouncedSave = useCallback(async () => {
     if (isSavingRef.current || connectionStatus === 'error') {
       console.log('⏭️ Skipping save (already saving or offline)');
@@ -297,7 +297,7 @@ export const useFirebaseData = () => {
     console.log('💾 Saving data (non-blocking)...');
     
     try {
-      // Save to Firebase (background operation)
+      // FIXED: Save to Firebase with ALL fields included
       await firebaseService.saveData({
         employees,
         tasks,
@@ -305,6 +305,7 @@ export const useFirebaseData = () => {
         completedTasks,
         taskAssignments,
         customRoles,
+        // FIXED: Include all prep and store fields
         prepItems,
         scheduledPreps,
         prepSelections,
@@ -323,6 +324,9 @@ export const useFirebaseData = () => {
         pendingSyncData.current.add('completedTasks');
         pendingSyncData.current.add('taskAssignments');
         pendingSyncData.current.add('scheduledPreps');
+        pendingSyncData.current.add('prepItems');
+        pendingSyncData.current.add('prepSelections');
+        pendingSyncData.current.add('storeItems');
         
         setTimeout(() => {
           debouncedBatchSync();
@@ -494,7 +498,7 @@ export const useFirebaseData = () => {
     }
   }, [isMultiDeviceEnabled, initializeSyncService]);
 
-  // PERFORMANCE: Fast refresh function with retry logic
+  // PERFORMANCE: Fast refresh function with retry logic - FIXED for prep data
   const refreshFromAllDevices = useCallback(async () => {
     if (!isMultiDeviceEnabled || !syncServiceRef.current) {
       await loadFromFirebase();
@@ -512,13 +516,24 @@ export const useFirebaseData = () => {
 
       const syncData = await Promise.race([refreshPromise, timeoutPromise]) as any;
       
-      // Apply data immediately
+      // FIXED: Apply all data immediately including prep and store data
       if (syncData.employees) setEmployees(migrateEmployeeData(syncData.employees));
       if (syncData.tasks) setTasks(migrateTaskData(syncData.tasks));
       if (syncData.dailyData) setDailyData(syncData.dailyData);
       if (syncData.completedTasks) setCompletedTasks(new Set(syncData.completedTasks));
       if (syncData.taskAssignments) setTaskAssignments(syncData.taskAssignments);
-      if (syncData.scheduledPreps) setScheduledPreps(syncData.scheduledPreps);
+      if (syncData.prepItems) setPrepItems(syncData.prepItems);
+      if (syncData.scheduledPreps) {
+        setScheduledPreps(syncData.scheduledPreps);
+        console.log('🔄 Refreshed scheduledPreps from sync:', {
+          count: syncData.scheduledPreps.length,
+          todayCount: syncData.scheduledPreps.filter((prep: any) => 
+            prep.scheduledDate === getFormattedDate(new Date())
+          ).length
+        });
+      }
+      if (syncData.prepSelections) setPrepSelections(syncData.prepSelections);
+      if (syncData.storeItems) setStoreItems(syncData.storeItems);
       
       setLastSync(new Date().toLocaleTimeString());
       console.log('✅ Quick refresh completed');
