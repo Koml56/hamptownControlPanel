@@ -1,4 +1,4 @@
-// multiDeviceSync.ts - Optimized for performance and reliability
+// multiDeviceSync.ts - Optimized for performance and reliability with full prep/store support
 import { FIREBASE_CONFIG } from './constants';
 import type { Employee, Task, DailyDataMap, TaskAssignments, PrepItem, ScheduledPrep, PrepSelections, StoreItem } from './types';
 
@@ -306,11 +306,20 @@ export class MultiDeviceSyncService {
     };
   }
 
+  // FIXED: Process data updates for ALL fields including prep and store data
   private processDataUpdate(data: any): void {
-    // Only process fields we care about
+    // FIXED: Include all relevant fields including prep and store data
     const relevantFields = [
-      'employees', 'tasks', 'dailyData', 'completedTasks', 
-      'taskAssignments', 'customRoles'
+      'employees', 
+      'tasks', 
+      'dailyData', 
+      'completedTasks', 
+      'taskAssignments', 
+      'customRoles',
+      'prepItems',
+      'scheduledPreps',
+      'prepSelections',
+      'storeItems'
     ];
     
     for (const field of relevantFields) {
@@ -492,18 +501,28 @@ export class MultiDeviceSyncService {
     }
   }
 
-  // PERFORMANCE: Fast refresh with timeout
+  // PERFORMANCE: Fast refresh with timeout - FIXED to include prep and store data
   async refreshDataFromAllDevices(): Promise<SyncData> {
     try {
       console.log('🔄 Fast refresh...');
       
-      // Only fetch essential data with timeout
+      // FIXED: Fetch all essential data including prep and store fields
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
       
-      const promises = [
-        'employees', 'tasks', 'dailyData', 'completedTasks', 'taskAssignments'
-      ].map(field => 
+      const fieldsToFetch = [
+        'employees', 
+        'tasks', 
+        'dailyData', 
+        'completedTasks', 
+        'taskAssignments',
+        'prepItems',
+        'scheduledPreps',
+        'prepSelections',
+        'storeItems'
+      ];
+      
+      const promises = fieldsToFetch.map(field => 
         fetch(`${this.baseUrl}/${field}.json`, { 
           signal: controller.signal 
         }).then(res => res.json()).then(data => ({ [field]: data }))
@@ -517,7 +536,7 @@ export class MultiDeviceSyncService {
         if (result.status === 'fulfilled') {
           Object.assign(data, result.value);
         } else {
-          console.warn(`⚠️ Failed to fetch ${['employees', 'tasks', 'dailyData', 'completedTasks', 'taskAssignments'][index]}:`, result.reason);
+          console.warn(`⚠️ Failed to fetch ${fieldsToFetch[index]}:`, result.reason);
         }
       });
 
