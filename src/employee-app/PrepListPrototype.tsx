@@ -385,7 +385,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
     saveToFirebase();
   };
 
-  // Render prep list items
+  // Render prep list items - FIXED function
   const renderPrepItems = (items: PrepItem[], context: string = 'main'): JSX.Element[] => {
     return items.map(prep => (
       <PrepItemCard
