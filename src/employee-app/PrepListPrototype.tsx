@@ -582,10 +582,11 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
       {activeView === 'today' && (
         <>
           {/* Debug Info Panel - Admin Only */}
-          {(currentUser?.isAdmin || currentUser?.role === 'admin') && (
+          {/* TODO: Replace this condition with your admin check */}
+          {process.env.NODE_ENV === 'development' && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
               <div className="flex items-center justify-between mb-2">
-                <h4 className="font-medium text-blue-800">🔍 Debug Info (Admin Only)</h4>
+                <h4 className="font-medium text-blue-800">🔍 Debug Info (Development Only)</h4>
                 <div className="flex gap-2">
                   <button
                     onClick={async () => {
