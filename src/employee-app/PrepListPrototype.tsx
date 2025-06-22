@@ -581,89 +581,91 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
       {/* Today's Preps View */}
       {activeView === 'today' && (
         <>
-          {/* Debug Info Panel */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="font-medium text-blue-800">🔍 Debug Info</h4>
-              <div className="flex gap-2">
-                <button
-                  onClick={async () => {
-                    console.log('🔄 Manual Firebase check triggered');
-                    try {
-                      const response = await fetch('https://hamptown-panel-default-rtdb.firebaseio.com/scheduledPreps.json');
-                      const firebaseData = await response.json();
-                      const todayStr = getDateString(new Date());
-                      const firebaseTodayPreps = firebaseData ? firebaseData.filter((prep: any) => prep.scheduledDate === todayStr) : [];
-                      
-                      console.log('🔍 Manual Firebase check result:', {
-                        firebaseHasData: !!firebaseData,
-                        firebaseTotalCount: firebaseData ? firebaseData.length : 0,
-                        firebaseTodayCount: firebaseTodayPreps.length,
-                        firebaseTodayCompleted: firebaseTodayPreps.filter((prep: any) => prep.completed === true).length,
-                        localTodayCount: scheduledPreps.filter(prep => prep.scheduledDate === todayStr).length,
-                        firebaseSample: firebaseTodayPreps.slice(0, 3)
-                      });
-                      
-                      alert(`Firebase Check:\nTotal: ${firebaseData ? firebaseData.length : 0}\nToday: ${firebaseTodayPreps.length}\nCompleted: ${firebaseTodayPreps.filter((prep: any) => prep.completed === true).length}`);
-                    } catch (error) {
-                      console.error('❌ Manual Firebase check failed:', error);
-                      alert('Firebase check failed - see console');
-                    }
-                  }}
-                  className="px-3 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-600"
-                >
-                  Check Firebase
-                </button>
-                <button
-                  onClick={() => {
-                    console.log('🔄 Manual reload triggered');
-                    window.location.reload();
-                  }}
-                  className="px-3 py-1 bg-green-500 text-white rounded text-xs hover:bg-green-600"
-                >
-                  Force Reload
-                </button>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-              <div>
-                <div className="font-medium text-blue-700">Today's Date</div>
-                <div className="text-blue-600">{getDateString(new Date())}</div>
-              </div>
-              <div>
-                <div className="font-medium text-blue-700">Total Scheduled</div>
-                <div className="text-blue-600">{scheduledPreps.length}</div>
-              </div>
-              <div>
-                <div className="font-medium text-blue-700">Today's Preps</div>
-                <div className="text-blue-600">
-                  {scheduledPreps.filter(prep => prep.scheduledDate === getDateString(new Date())).length}
+          {/* Debug Info Panel - Admin Only */}
+          {(currentUser?.isAdmin || currentUser?.role === 'admin') && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="font-medium text-blue-800">🔍 Debug Info (Admin Only)</h4>
+                <div className="flex gap-2">
+                  <button
+                    onClick={async () => {
+                      console.log('🔄 Manual Firebase check triggered');
+                      try {
+                        const response = await fetch('https://hamptown-panel-default-rtdb.firebaseio.com/scheduledPreps.json');
+                        const firebaseData = await response.json();
+                        const todayStr = getDateString(new Date());
+                        const firebaseTodayPreps = firebaseData ? firebaseData.filter((prep: any) => prep.scheduledDate === todayStr) : [];
+                        
+                        console.log('🔍 Manual Firebase check result:', {
+                          firebaseHasData: !!firebaseData,
+                          firebaseTotalCount: firebaseData ? firebaseData.length : 0,
+                          firebaseTodayCount: firebaseTodayPreps.length,
+                          firebaseTodayCompleted: firebaseTodayPreps.filter((prep: any) => prep.completed === true).length,
+                          localTodayCount: scheduledPreps.filter(prep => prep.scheduledDate === todayStr).length,
+                          firebaseSample: firebaseTodayPreps.slice(0, 3)
+                        });
+                        
+                        alert(`Firebase Check:\nTotal: ${firebaseData ? firebaseData.length : 0}\nToday: ${firebaseTodayPreps.length}\nCompleted: ${firebaseTodayPreps.filter((prep: any) => prep.completed === true).length}`);
+                      } catch (error) {
+                        console.error('❌ Manual Firebase check failed:', error);
+                        alert('Firebase check failed - see console');
+                      }
+                    }}
+                    className="px-3 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-600"
+                  >
+                    Check Firebase
+                  </button>
+                  <button
+                    onClick={() => {
+                      console.log('🔄 Manual reload triggered');
+                      window.location.reload();
+                    }}
+                    className="px-3 py-1 bg-green-500 text-white rounded text-xs hover:bg-green-600"
+                  >
+                    Force Reload
+                  </button>
                 </div>
               </div>
-              <div>
-                <div className="font-medium text-blue-700">Connection</div>
-                <div className={connectionStatus === 'connected' ? 'text-green-600' : 'text-red-600'}>
-                  {connectionStatus}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <div className="font-medium text-blue-700">Today's Date</div>
+                  <div className="text-blue-600">{getDateString(new Date())}</div>
+                </div>
+                <div>
+                  <div className="font-medium text-blue-700">Total Scheduled</div>
+                  <div className="text-blue-600">{scheduledPreps.length}</div>
+                </div>
+                <div>
+                  <div className="font-medium text-blue-700">Today's Preps</div>
+                  <div className="text-blue-600">
+                    {scheduledPreps.filter(prep => prep.scheduledDate === getDateString(new Date())).length}
+                  </div>
+                </div>
+                <div>
+                  <div className="font-medium text-blue-700">Connection</div>
+                  <div className={connectionStatus === 'connected' ? 'text-green-600' : 'text-red-600'}>
+                    {connectionStatus}
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="mt-3">
-              <div className="font-medium text-blue-700 mb-1">All Scheduled Dates:</div>
-              <div className="text-blue-600 text-xs">
-                {Array.from(new Set(scheduledPreps.map(p => p.scheduledDate))).sort().join(', ') || 'None'}
-              </div>
-            </div>
-            {scheduledPreps.length > 0 && (
-              <div className="mt-2">
-                <div className="font-medium text-blue-700 mb-1">Sample Preps:</div>
+              <div className="mt-3">
+                <div className="font-medium text-blue-700 mb-1">All Scheduled Dates:</div>
                 <div className="text-blue-600 text-xs">
-                  {scheduledPreps.slice(0, 3).map(p => 
-                    `${p.name} (${p.scheduledDate})${p.completed ? ' ✅' : ' ⏳'}`
-                  ).join(' | ')}
+                  {Array.from(new Set(scheduledPreps.map(p => p.scheduledDate))).sort().join(', ') || 'None'}
                 </div>
               </div>
-            )}
-          </div>
+              {scheduledPreps.length > 0 && (
+                <div className="mt-2">
+                  <div className="font-medium text-blue-700 mb-1">Sample Preps:</div>
+                  <div className="text-blue-600 text-xs">
+                    {scheduledPreps.slice(0, 3).map(p => 
+                      `${p.name} (${p.scheduledDate})${p.completed ? ' ✅' : ' ⏳'}`
+                    ).join(' | ')}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <TodayView
             scheduledPreps={scheduledPreps}
