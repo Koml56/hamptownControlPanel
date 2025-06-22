@@ -33,7 +33,7 @@ const TodayView: React.FC<TodayViewProps> = ({
       todayDateString,
       totalScheduledPreps: scheduledPreps.length,
       todayScheduledPreps: todayScheduledPreps.length,
-      allScheduledDates: [...new Set(scheduledPreps.map(p => p.scheduledDate))].sort(),
+      allScheduledDates: Array.from(new Set(scheduledPreps.map(p => p.scheduledDate))).sort(),
       sampleTodayPreps: todayScheduledPreps.slice(0, 3).map(p => ({
         id: p.id,
         name: p.name,
