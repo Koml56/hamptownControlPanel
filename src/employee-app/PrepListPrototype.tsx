@@ -1,4 +1,4 @@
-// PrepListPrototype.tsx - FIXED: Proper Firebase save for prep completions
+// PrepListPrototype.tsx - Main component for prep list management (Updated with Week View)
 import React, { useState, useEffect } from 'react';
 import { Calendar, Check, ChefHat, Plus, Search, Users, X } from 'lucide-react';
 
@@ -23,6 +23,7 @@ import {
 
 // Components
 import TodayView from './TodayView';
+import WeekView from './WeekView';
 import PrepItemCard from './PrepItemCard';
 import RecipeModal from './RecipeModal';
 
@@ -40,9 +41,11 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
   // UI State
   const [activeView, setActiveView] = useState('today');
   const [selectedDate, setSelectedDate] = useState(() => {
-    // Start with today instead of tomorrow
-    return new Date();
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return tomorrow;
   });
+  const [currentDate, setCurrentDate] = useState(new Date()); // For week view navigation
   const [showAddCustom, setShowAddCustom] = useState(false);
   const [newPrepName, setNewPrepName] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -59,10 +62,6 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
   const [showSuggestedPreps, setShowSuggestedPreps] = useState(true);
   const [movedPrepsNotification, setMovedPrepsNotification] = useState<number>(0);
 
-  // FIXED: Track if we're in the middle of a save operation to prevent race conditions
-  const [isSaving, setIsSaving] = useState(false);
-  const [syncPaused, setSyncPaused] = useState(false);
-
   // Initialize with default prep items if empty
   useEffect(() => {
     if (prepItems.length === 0) {
@@ -72,27 +71,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
     }
   }, [prepItems.length, setPrepItems, quickSave]);
 
-  // FIXED: Auto-save scheduledPreps whenever they change (but not during save operation)
-  useEffect(() => {
-    if (scheduledPreps.length > 0 && !isSaving) {
-      console.log('🔄 Auto-saving scheduledPreps due to state change');
-      
-      // Add a small delay to ensure state is fully updated
-      const saveTimer = setTimeout(() => {
-        quickSave('scheduledPreps', scheduledPreps)
-          .then(() => {
-            console.log('✅ ScheduledPreps auto-save completed');
-          })
-          .catch((error) => {
-            console.error('❌ ScheduledPreps auto-save failed:', error);
-          });
-      }, 300);
-
-      return () => clearTimeout(saveTimer);
-    }
-  }, [scheduledPreps, quickSave, isSaving]);
-
-  // Move incomplete preps from yesterday to today
+  // Check and move incomplete preps to tomorrow (run once per day)
   useEffect(() => {
     const moveIncompletePreps = () => {
       const today = new Date();
@@ -100,7 +79,8 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
       yesterday.setDate(yesterday.getDate() - 1);
       const todayStr = getDateString(today);
       const yesterdayStr = getDateString(yesterday);
-
+      
+      // Find incomplete preps from yesterday
       const incompletePreps = scheduledPreps.filter(prep => 
         prep.scheduledDate === yesterdayStr && !prep.completed
       );
@@ -108,12 +88,14 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
       if (incompletePreps.length > 0) {
         console.log(`🔄 Moving ${incompletePreps.length} incomplete preps from ${yesterdayStr} to ${todayStr}`);
         
+        // Show notification
         setMovedPrepsNotification(incompletePreps.length);
-        setTimeout(() => setMovedPrepsNotification(0), 8000);
+        setTimeout(() => setMovedPrepsNotification(0), 8000); // Hide after 8 seconds
         
+        // Remove from yesterday and add to today
         const movedPreps = incompletePreps.map(prep => ({
           ...prep,
-          id: generateUniqueId(),
+          id: Date.now() + Math.random(), // New ID to avoid conflicts
           scheduledDate: todayStr
         }));
         
@@ -124,9 +106,10 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
           ...movedPreps
         ]);
         
+        // Update prep selections for today
         const newSelections: PrepSelections = {};
         incompletePreps.forEach(prep => {
-          const selectionKey = getSelectionKey(today, prep.prepId);
+          const selectionKey = `${todayStr}-${prep.prepId}`;
           newSelections[selectionKey] = {
             priority: prep.priority,
             timeSlot: prep.timeSlot,
@@ -135,242 +118,40 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
         });
         
         setPrepSelections(prev => ({ ...prev, ...newSelections }));
+        
+        // Save immediately
+        quickSave('scheduledPreps', [
+          ...scheduledPreps.filter(prep => 
+            !(prep.scheduledDate === yesterdayStr && !prep.completed)
+          ),
+          ...movedPreps
+        ]);
       }
     };
-
+    
+    // Check on app load and once per day
     const lastMoveCheck = localStorage.getItem('lastPrepMoveCheck');
     const todayStr = getDateString(new Date());
-
+    
     if (lastMoveCheck !== todayStr) {
       moveIncompletePreps();
       localStorage.setItem('lastPrepMoveCheck', todayStr);
     }
-  }, [scheduledPreps, setPrepSelections, setScheduledPreps]);
-
-  // FIXED: Proper prep completion toggle with sync protection
-  const togglePrepCompletion = async (scheduledPrepId: number): Promise<void> => {
-    console.log('🔄 Toggling prep completion for ID:', scheduledPrepId);
     
-    // Prevent concurrent saves
-    if (isSaving) {
-      console.log('⏳ Save in progress, skipping...');
-      return;
-    }
-
-    setIsSaving(true);
-    setSyncPaused(true); // PAUSE SYNC during save operation
-
-    try {
-      // Find the prep item to update
-      const prepToUpdate = scheduledPreps.find(p => p.id === scheduledPrepId);
-      if (!prepToUpdate) {
-        console.error('❌ Prep item not found:', scheduledPrepId);
-        return;
-      }
-
-      const newCompletedStatus = !prepToUpdate.completed;
-      console.log(`📋 ${prepToUpdate.name}: ${prepToUpdate.completed ? 'COMPLETED' : 'PENDING'} → ${newCompletedStatus ? 'COMPLETED' : 'PENDING'}`);
-      console.log('🛡️ SYNC PAUSED during save operation');
-
-      // Update the state
-      const updatedScheduledPreps = scheduledPreps.map(prep =>
-        prep.id === scheduledPrepId
-          ? { ...prep, completed: newCompletedStatus }
-          : prep
-      );
-
-      // ENHANCED: Log what we're about to save
-      const todayStr = getDateString(new Date());
-      const updatedTodayPreps = updatedScheduledPreps.filter(prep => prep.scheduledDate === todayStr);
-      const updatedTodayCompleted = updatedTodayPreps.filter(prep => prep.completed);
-      
-      console.log('📤 About to save scheduledPreps:', {
-        totalCount: updatedScheduledPreps.length,
-        todayCount: updatedTodayPreps.length,
-        todayCompletedCount: updatedTodayCompleted.length,
-        updatedItem: {
-          id: scheduledPrepId,
-          name: prepToUpdate.name,
-          completed: newCompletedStatus,
-          scheduledDate: prepToUpdate.scheduledDate
-        }
-      });
-
-      // Update state immediately for UI responsiveness
-      setScheduledPreps(() => updatedScheduledPreps);
-
-      // CRITICAL: Save to Firebase immediately with detailed logging
-      console.log('🔥 Saving prep completion to Firebase...');
-      const saveSuccess = await quickSave('scheduledPreps', updatedScheduledPreps);
-
-      if (saveSuccess) {
-        console.log('✅ Prep completion saved successfully');
-        
-        // ENHANCED: Wait longer before re-enabling sync to ensure save propagates
-        setTimeout(async () => {
-          setSyncPaused(false);
-          console.log('🔄 SYNC RESUMED after save completion');
-          
-          // Verify what we actually saved
-          try {
-            const verifyResponse = await fetch('https://hamptown-panel-default-rtdb.firebaseio.com/scheduledPreps.json');
-            const firebaseData = await verifyResponse.json();
-            
-            if (firebaseData) {
-              const firebaseTodayPreps = firebaseData.filter((prep: any) => prep.scheduledDate === todayStr);
-              const firebaseTodayCompleted = firebaseTodayPreps.filter((prep: any) => prep.completed === true);
-              const firebaseUpdatedItem = firebaseData.find((prep: any) => prep.id === scheduledPrepId);
-              
-              console.log('🔍 Firebase verification after save:', {
-                firebaseTotalCount: firebaseData.length,
-                firebaseTodayCount: firebaseTodayPreps.length,
-                firebaseTodayCompleted: firebaseTodayCompleted.length,
-                firebaseUpdatedItem: firebaseUpdatedItem ? {
-                  id: firebaseUpdatedItem.id,
-                  name: firebaseUpdatedItem.name,
-                  completed: firebaseUpdatedItem.completed,
-                  scheduledDate: firebaseUpdatedItem.scheduledDate
-                } : 'NOT FOUND'
-              });
-              
-              if (!firebaseUpdatedItem || firebaseUpdatedItem.completed !== newCompletedStatus) {
-                console.error('❌ SAVE VERIFICATION FAILED! Item not found or completion status mismatch');
-              } else {
-                console.log('✅ Save verification passed');
-              }
-            } else {
-              console.error('❌ No data found in Firebase during verification');
-            }
-          } catch (error) {
-            console.warn('⚠️ Failed to verify save:', error);
-          }
-        }, 3000); // Wait 3 seconds before resuming sync
-        
-      } else {
-        console.error('❌ Failed to save prep completion to Firebase');
-        // Revert the state change if save failed
-        setScheduledPreps(() => scheduledPreps);
-        setSyncPaused(false);
-      }
-
-    } catch (error) {
-      console.error('❌ Error toggling prep completion:', error);
-      // Revert the state change if there was an error
-      setScheduledPreps(() => scheduledPreps);
-      setSyncPaused(false);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  // Check if prep is selected for current date
-  const isPrepSelected = (prep: PrepItem): boolean => {
-    const selectionKey = getSelectionKey(selectedDate, prep.id);
-    return prepSelections[selectionKey]?.selected || false;
-  };
-
-  // Get prep selection details
-  const getPrepSelection = (prep: PrepItem) => {
-    const selectionKey = getSelectionKey(selectedDate, prep.id);
-    return prepSelections[selectionKey] || { priority: 'medium' as Priority, timeSlot: '', selected: false };
-  };
-
-  // Update prep selection with smart workflow
-  const updatePrepSelection = (
-    prep: PrepItem,
-    field: 'priority' | 'timeSlot',
-    value: string,
-    context: string = 'main'
-  ): void => {
-    const selectionKey = getSelectionKey(selectedDate, prep.id);
-    const currentSelection = prepSelections[selectionKey] || { priority: 'medium' as Priority, timeSlot: '', selected: false };
-
-    if (field === 'priority') {
-      setPrepSelections(prev => ({
-        ...prev,
-        [selectionKey]: { 
-          ...prev[selectionKey], 
-          priority: value as Priority,
-          selected: currentSelection.selected
-        }
-      }));
-      
-      setAssignmentStep(prev => ({ ...prev, [prep.id]: 'timeSlot' }));
-      setShowPriorityOptions(null);
-      
-      const timeSlotId = context === 'suggested' ? `suggested-${prep.id}` : prep.id;
-      setShowTimeOptions(timeSlotId);
-      
-    } else if (field === 'timeSlot') {
-      const updatedSelection = {
-        priority: currentSelection.priority,
-        timeSlot: value,
-        selected: true
-      };
-      
-      setPrepSelections(prev => ({
-        ...prev,
-        [selectionKey]: updatedSelection
-      }));
-      
-      const existingScheduledPrep = scheduledPreps.find(p => 
-        p.prepId === prep.id && p.scheduledDate === getDateString(selectedDate)
-      );
-      
-      if (existingScheduledPrep) {
-        setScheduledPreps(prev => prev.map(p => 
-          p.prepId === prep.id && p.scheduledDate === getDateString(selectedDate)
-            ? { ...p, priority: updatedSelection.priority, timeSlot: value }
-            : p
-        ));
-      } else {
-        const newScheduledPrep: ScheduledPrep = {
-          id: generateUniqueId(),
-          prepId: prep.id,
-          name: prep.name,
-          category: prep.category,
-          estimatedTime: prep.estimatedTime,
-          isCustom: prep.isCustom,
-          hasRecipe: prep.hasRecipe,
-          recipe: prep.recipe,
-          scheduledDate: getDateString(selectedDate),
-          priority: updatedSelection.priority,
-          timeSlot: value,
-          completed: false,
-          assignedTo: null,
-          notes: ''
-        };
-        setScheduledPreps(prev => [...prev, newScheduledPrep]);
-      }
-      
-      setAssignmentStep(prev => ({ ...prev, [prep.id]: null }));
-      setShowPriorityOptions(null);
-      setShowTimeOptions(null);
-    }
-  };
-
-  // Reset workflow when clicking outside
-  const resetWorkflow = () => {
-    setShowPriorityOptions(null);
-    setShowTimeOptions(null);
-    setAssignmentStep({});
-  };
-
-  // Click outside handler
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent): void => {
-      const target = event.target as HTMLElement;
-      const isInsideDropdown = target.closest('.dropdown-container');
-      if (!isInsideDropdown) {
-        resetWorkflow();
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
+    // Set up daily check at midnight
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 1, 0, 0); // 12:01 AM
+    
+    const timeUntilMidnight = tomorrow.getTime() - now.getTime();
+    const midnightTimer = setTimeout(() => {
+      moveIncompletePreps();
+      localStorage.setItem('lastPrepMoveCheck', getDateString(new Date()));
+    }, timeUntilMidnight);
+    
+    return () => clearTimeout(midnightTimer);
+  }, [scheduledPreps, setPrepSelections, setScheduledPreps, quickSave]);
 
   // Show recipe modal
   const showRecipe = (recipe: Recipe, name: string) => {
@@ -379,11 +160,42 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
     setShowRecipeModal(true);
   };
 
-  // Toggle prep selection
-  const togglePrepSelection = (prep: PrepItem): void => {
-    const selectionKey = getSelectionKey(selectedDate, prep.id);
-    const isSelected = prepSelections[selectionKey]?.selected;
+  // FIXED: Toggle prep completion with proper state updates
+  const togglePrepCompletion = (scheduledPrepId: number): void => {
+    setScheduledPreps(prev => {
+      const updatedScheduledPreps = prev.map(prep => 
+        prep.id === scheduledPrepId 
+          ? { ...prep, completed: !prep.completed }
+          : prep
+      );
+      
+      const toggledPrep = updatedScheduledPreps.find(p => p.id === scheduledPrepId);
+      console.log('🔄 Toggling prep completion:', {
+        prepId: scheduledPrepId,
+        prepName: toggledPrep?.name,
+        newCompletedStatus: toggledPrep?.completed,
+        totalScheduledPreps: updatedScheduledPreps.length
+      });
+      
+      console.log('🔥 Immediate save triggered by prep completion');
+      quickSave('scheduledPreps', updatedScheduledPreps).catch(error => {
+        console.error('❌ Failed to save prep completion:', error);
+      });
+      
+      return updatedScheduledPreps;
+    });
+  };
 
+  // Additional utility functions for Plan View (simplified for brevity)
+  const isPrepSelected = (prep: PrepItem): boolean => {
+    const selectionKey = `${getDateString(selectedDate)}-${prep.id}`;
+    return prepSelections[selectionKey]?.selected || false;
+  };
+
+  const togglePrepSelection = (prep: PrepItem): void => {
+    const selectionKey = `${getDateString(selectedDate)}-${prep.id}`;
+    const isSelected = prepSelections[selectionKey]?.selected;
+    
     if (isSelected) {
       setPrepSelections(prev => {
         const newSelections = { ...prev };
@@ -416,7 +228,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
         }));
         
         const newScheduledPrep: ScheduledPrep = {
-          id: generateUniqueId(),
+          id: Date.now() + Math.random(),
           prepId: prep.id,
           name: prep.name,
           category: prep.category,
@@ -436,47 +248,22 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
     }
   };
 
-  // Add custom prep
-  const addCustomPrep = () => {
-    if (!newPrepName.trim()) return;
-
-    const customPrep: PrepItem = {
-      id: Date.now(),
-      name: newPrepName.trim(),
-      category: selectedCategory === 'all' ? 'majoneesit' : selectedCategory,
-      estimatedTime: '20 min',
-      isCustom: true,
-      hasRecipe: showRecipeForm,
-      frequency: 2,
-      recipe: showRecipeForm ? {
-        ingredients: recipeData.ingredients,
-        instructions: recipeData.instructions
-      } : null
-    };
-
-    setPrepItems(prev => [...prev, customPrep]);
-    setNewPrepName('');
-    setShowAddCustom(false);
-    setShowRecipeForm(false);
-    setRecipeData({ ingredients: '', instructions: '' });
-    setSelectedCategory('majoneesit');
-
-    togglePrepSelection(customPrep);
-  };
-
-  // Filter preps
+  // Filter preps for Plan View
   const filteredPreps = prepItems.filter(prep => {
     const matchesCategory = selectedCategory === 'all' || prep.category === selectedCategory;
-    const matchesSearch = searchQuery === '' ||
+    const matchesSearch = searchQuery === '' || 
       prep.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       prep.category.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCategory && matchesSearch;
   });
 
+  // Get selected date's scheduled preps for Plan View
+  const selectedDateScheduledPreps = scheduledPreps.filter(prep => 
+    prep.scheduledDate === getDateString(selectedDate)
+  );
+
   return (
     <div className="space-y-6">
-      <style dangerouslySetInnerHTML={{ __html: PREP_STYLES }} />
-
       {/* Header */}
       <div className="bg-white rounded-xl shadow-sm p-6">
         <div className="flex items-center justify-between mb-4">
@@ -488,19 +275,8 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
             </div>
           </div>
           
+          {/* Connection Status */}
           <div className="flex items-center space-x-2">
-            {isSaving && (
-              <div className="flex items-center text-blue-600">
-                <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full mr-2"></div>
-                <span className="text-sm">Saving...</span>
-              </div>
-            )}
-            {syncPaused && (
-              <div className="flex items-center text-orange-600">
-                <div className="w-4 h-4 bg-orange-500 rounded-full mr-2"></div>
-                <span className="text-sm">Sync Paused</span>
-              </div>
-            )}
             <div className={`w-2 h-2 rounded-full ${
               connectionStatus === 'connected' ? 'bg-green-500' : 'bg-red-500'
             }`}></div>
@@ -510,6 +286,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
           </div>
         </div>
 
+        {/* Navigation Tabs */}
         <div className="flex space-x-2">
           <button
             onClick={() => setActiveView('today')}
@@ -578,97 +355,11 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
 
       {/* Today's Preps View */}
       {activeView === 'today' && (
-        <>
-          {/* Debug Info Panel */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="font-medium text-blue-800">🔍 Debug Info</h4>
-              <div className="flex gap-2">
-                <button
-                  onClick={async () => {
-                    console.log('🔄 Manual Firebase check triggered');
-                    try {
-                      const response = await fetch('https://hamptown-panel-default-rtdb.firebaseio.com/scheduledPreps.json');
-                      const firebaseData = await response.json();
-                      const todayStr = getDateString(new Date());
-                      const firebaseTodayPreps = firebaseData ? firebaseData.filter((prep: any) => prep.scheduledDate === todayStr) : [];
-                      
-                      console.log('🔍 Manual Firebase check result:', {
-                        firebaseHasData: !!firebaseData,
-                        firebaseTotalCount: firebaseData ? firebaseData.length : 0,
-                        firebaseTodayCount: firebaseTodayPreps.length,
-                        firebaseTodayCompleted: firebaseTodayPreps.filter((prep: any) => prep.completed === true).length,
-                        localTodayCount: scheduledPreps.filter(prep => prep.scheduledDate === todayStr).length,
-                        firebaseSample: firebaseTodayPreps.slice(0, 3)
-                      });
-                      
-                      alert(`Firebase Check:\nTotal: ${firebaseData ? firebaseData.length : 0}\nToday: ${firebaseTodayPreps.length}\nCompleted: ${firebaseTodayPreps.filter((prep: any) => prep.completed === true).length}`);
-                    } catch (error) {
-                      console.error('❌ Manual Firebase check failed:', error);
-                      alert('Firebase check failed - see console');
-                    }
-                  }}
-                  className="px-3 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-600"
-                >
-                  Check Firebase
-                </button>
-                <button
-                  onClick={() => {
-                    console.log('🔄 Manual reload triggered');
-                    window.location.reload();
-                  }}
-                  className="px-3 py-1 bg-green-500 text-white rounded text-xs hover:bg-green-600"
-                >
-                  Force Reload
-                </button>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-              <div>
-                <div className="font-medium text-blue-700">Today's Date</div>
-                <div className="text-blue-600">{getDateString(new Date())}</div>
-              </div>
-              <div>
-                <div className="font-medium text-blue-700">Total Scheduled</div>
-                <div className="text-blue-600">{scheduledPreps.length}</div>
-              </div>
-              <div>
-                <div className="font-medium text-blue-700">Today's Preps</div>
-                <div className="text-blue-600">
-                  {scheduledPreps.filter(prep => prep.scheduledDate === getDateString(new Date())).length}
-                </div>
-              </div>
-              <div>
-                <div className="font-medium text-blue-700">Connection</div>
-                <div className={connectionStatus === 'connected' ? 'text-green-600' : 'text-red-600'}>
-                  {connectionStatus}
-                </div>
-              </div>
-            </div>
-            <div className="mt-3">
-              <div className="font-medium text-blue-700 mb-1">All Scheduled Dates:</div>
-              <div className="text-blue-600 text-xs">
-                {Array.from(new Set(scheduledPreps.map(p => p.scheduledDate))).sort().join(', ') || 'None'}
-              </div>
-            </div>
-            {scheduledPreps.length > 0 && (
-              <div className="mt-2">
-                <div className="font-medium text-blue-700 mb-1">Sample Preps:</div>
-                <div className="text-blue-600 text-xs">
-                  {scheduledPreps.slice(0, 3).map(p => 
-                    `${p.name} (${p.scheduledDate})${p.completed ? ' ✅' : ' ⏳'}`
-                  ).join(' | ')}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <TodayView
-            scheduledPreps={scheduledPreps}
-            onToggleCompletion={togglePrepCompletion}
-            onShowRecipe={showRecipe}
-          />
-        </>
+        <TodayView
+          scheduledPreps={scheduledPreps}
+          onToggleCompletion={togglePrepCompletion}
+          onShowRecipe={showRecipe}
+        />
       )}
 
       {/* Plan View */}
@@ -750,94 +441,123 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
 
             {/* Prep Items List */}
             <div className="space-y-3">
-              {filteredPreps.map(prep => (
-                <PrepItemCard
-                  key={prep.id}
-                  prep={prep}
-                  isSelected={isPrepSelected(prep)}
-                  selection={getPrepSelection(prep)}
-                  showPriorityOptions={showPriorityOptions}
-                  showTimeOptions={showTimeOptions}
-                  assignmentStep={assignmentStep}
-                  onToggleSelection={togglePrepSelection}
-                  onUpdateSelection={updatePrepSelection}
-                  onShowPriorityOptions={setShowPriorityOptions}
-                  onShowRecipe={showRecipe}
-                  context="main"
-                />
-              ))}
+              {filteredPreps.map(prep => {
+                const isSelected = isPrepSelected(prep);
+
+                return (
+                  <div key={prep.id} className={`border rounded-lg p-4 transition-colors ${
+                    isSelected ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                  }`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3 flex-1">
+                        <button
+                          onClick={() => togglePrepSelection(prep)}
+                          className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
+                            isSelected 
+                              ? 'bg-blue-500 border-blue-500' 
+                              : 'border-gray-300 hover:border-blue-500'
+                          }`}
+                        >
+                          {isSelected && <Check className="w-4 h-4 text-white" />}
+                        </button>
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2">
+                            <h4 className={`font-medium ${isSelected ? 'text-blue-900' : 'text-gray-800'}`}>
+                              {prep.name}
+                            </h4>
+                            {prep.hasRecipe && (
+                              <button
+                                onClick={() => prep.recipe && showRecipe(prep.recipe, prep.name)}
+                                className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full hover:bg-green-200 transition-colors"
+                              >
+                                📖 Recipe
+                              </button>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-600 flex items-center space-x-2">
+                            <span>{prep.estimatedTime}</span>
+                            <span>•</span>
+                            <span>{prep.category}</span>
+                            <span>•</span>
+                            <span>Every {prep.frequency} days</span>
+                            {prep.isCustom && <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs">Custom</span>}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
-            {/* Add Custom Prep */}
-            <div className="mt-6 pt-6 border-t">
-              {!showAddCustom ? (
-                <button
-                  onClick={() => setShowAddCustom(true)}
-                  className="flex items-center px-4 py-2 border border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:text-blue-500 transition-colors"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Custom Prep Item
-                </button>
-              ) : (
-                <div className="border rounded-lg p-4 bg-gray-50">
-                  <h4 className="font-medium text-gray-800 mb-4">Add Custom Prep</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Prep Name</label>
-                      <input
-                        type="text"
-                        value={newPrepName}
-                        onChange={(e) => setNewPrepName(e.target.value)}
-                        placeholder="e.g., Prep special sauce"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                      <select
-                        value={selectedCategory === 'all' ? 'majoneesit' : selectedCategory}
-                        onChange={(e) => setSelectedCategory(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      >
-                        {categories.slice(1).map(category => (
-                          <option key={category.id} value={category.id}>{category.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 mt-4">
-                    <button
-                      onClick={addCustomPrep}
-                      className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors"
-                    >
-                      Add Prep
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowAddCustom(false);
-                        setNewPrepName('');
-                        setShowRecipeForm(false);
-                        setRecipeData({ ingredients: '', instructions: '' });
-                        setSelectedCategory('majoneesit');
-                      }}
-                      className="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+            {/* No Results Message */}
+            {filteredPreps.length === 0 && searchQuery && (
+              <div className="text-center py-8 text-gray-500">
+                <Search className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p>No prep items found matching "{searchQuery}"</p>
+                <p className="text-sm">Try a different search term or browse categories above.</p>
+              </div>
+            )}
           </div>
+
+          {/* Scheduled Preps for Selected Date */}
+          {selectedDateScheduledPreps.length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                Scheduled for {formatDate(selectedDate).split(',')[0]}
+              </h3>
+              <div className="space-y-2">
+                {selectedDateScheduledPreps.map(prep => {
+                  const priority = priorities.find(p => p.id === prep.priority);
+                  const timeSlot = timeSlots.find(t => t.id === prep.timeSlot);
+                  
+                  return (
+                    <div key={prep.id} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <span className="text-lg">{prep.timeSlot ? timeSlot?.icon : '🕐'}</span>
+                        <div>
+                          <div className="font-medium text-gray-800 flex items-center space-x-2">
+                            <span>{prep.name}</span>
+                            {prep.hasRecipe && (
+                              <button
+                                onClick={() => prep.recipe && showRecipe(prep.recipe, prep.name)}
+                                className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full hover:bg-green-200 transition-colors"
+                              >
+                                📖
+                              </button>
+                            )}
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            {prep.timeSlot ? timeSlot?.name : 'Anytime'} • {prep.estimatedTime}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <span className={`px-2 py-1 rounded-full text-xs ${priority?.color || 'bg-gray-100 text-gray-700'}`}>
+                          {priority?.name || 'Medium'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Week View - Placeholder */}
+      {/* Week View */}
       {activeView === 'week' && (
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">Week View</h3>
-          <p className="text-gray-600">Week view implementation coming soon...</p>
-        </div>
+        <WeekView
+          scheduledPreps={scheduledPreps}
+          currentDate={currentDate}
+          setCurrentDate={setCurrentDate}
+          selectedDate={selectedDate}
+          setSelectedDate={setSelectedDate}
+          setActiveView={setActiveView}
+          onToggleCompletion={togglePrepCompletion}
+          onShowRecipe={showRecipe}
+        />
       )}
 
       {/* Recipe Modal */}
