@@ -176,26 +176,69 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
           : prep
       );
 
+      // ENHANCED: Log what we're about to save
+      const todayStr = getDateString(new Date());
+      const updatedTodayPreps = updatedScheduledPreps.filter(prep => prep.scheduledDate === todayStr);
+      const updatedTodayCompleted = updatedTodayPreps.filter(prep => prep.completed);
+      
+      console.log('📤 About to save scheduledPreps:', {
+        totalCount: updatedScheduledPreps.length,
+        todayCount: updatedTodayPreps.length,
+        todayCompletedCount: updatedTodayCompleted.length,
+        updatedItem: {
+          id: scheduledPrepId,
+          name: prepToUpdate.name,
+          completed: newCompletedStatus,
+          scheduledDate: prepToUpdate.scheduledDate
+        }
+      });
+
       // Update state immediately for UI responsiveness
       setScheduledPreps(() => updatedScheduledPreps);
 
-      // CRITICAL: Save to Firebase immediately
+      // CRITICAL: Save to Firebase immediately with detailed logging
       console.log('🔥 Saving prep completion to Firebase...');
       const saveSuccess = await quickSave('scheduledPreps', updatedScheduledPreps);
 
       if (saveSuccess) {
         console.log('✅ Prep completion saved successfully');
         
-        // Log current status for debugging
-        const todayStr = getDateString(new Date());
-        const todayPreps = updatedScheduledPreps.filter(prep => prep.scheduledDate === todayStr);
-        const todayCompleted = todayPreps.filter(prep => prep.completed);
+        // ENHANCED: Verify what we actually saved
+        setTimeout(async () => {
+          try {
+            const verifyResponse = await fetch('https://hamptown-panel-default-rtdb.firebaseio.com/scheduledPreps.json');
+            const firebaseData = await verifyResponse.json();
+            
+            if (firebaseData) {
+              const firebaseTodayPreps = firebaseData.filter((prep: any) => prep.scheduledDate === todayStr);
+              const firebaseTodayCompleted = firebaseTodayPreps.filter((prep: any) => prep.completed === true);
+              const firebaseUpdatedItem = firebaseData.find((prep: any) => prep.id === scheduledPrepId);
+              
+              console.log('🔍 Firebase verification after save:', {
+                firebaseTotalCount: firebaseData.length,
+                firebaseTodayCount: firebaseTodayPreps.length,
+                firebaseTodayCompleted: firebaseTodayCompleted.length,
+                firebaseUpdatedItem: firebaseUpdatedItem ? {
+                  id: firebaseUpdatedItem.id,
+                  name: firebaseUpdatedItem.name,
+                  completed: firebaseUpdatedItem.completed,
+                  scheduledDate: firebaseUpdatedItem.scheduledDate
+                } : 'NOT FOUND'
+              });
+              
+              if (!firebaseUpdatedItem || firebaseUpdatedItem.completed !== newCompletedStatus) {
+                console.error('❌ SAVE VERIFICATION FAILED! Item not found or completion status mismatch');
+              } else {
+                console.log('✅ Save verification passed');
+              }
+            } else {
+              console.error('❌ No data found in Firebase during verification');
+            }
+          } catch (error) {
+            console.warn('⚠️ Failed to verify save:', error);
+          }
+        }, 1000);
         
-        console.log('📊 Today\'s prep status:', {
-          total: todayPreps.length,
-          completed: todayCompleted.length,
-          percentage: todayPreps.length > 0 ? Math.round((todayCompleted.length / todayPreps.length) * 100) : 0
-        });
       } else {
         console.error('❌ Failed to save prep completion to Firebase');
         // Revert the state change if save failed
@@ -523,7 +566,48 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
         <>
           {/* Debug Info Panel */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-            <h4 className="font-medium text-blue-800 mb-2">🔍 Debug Info</h4>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-medium text-blue-800">🔍 Debug Info</h4>
+              <div className="flex gap-2">
+                <button
+                  onClick={async () => {
+                    console.log('🔄 Manual Firebase check triggered');
+                    try {
+                      const response = await fetch('https://hamptown-panel-default-rtdb.firebaseio.com/scheduledPreps.json');
+                      const firebaseData = await response.json();
+                      const todayStr = getDateString(new Date());
+                      const firebaseTodayPreps = firebaseData ? firebaseData.filter((prep: any) => prep.scheduledDate === todayStr) : [];
+                      
+                      console.log('🔍 Manual Firebase check result:', {
+                        firebaseHasData: !!firebaseData,
+                        firebaseTotalCount: firebaseData ? firebaseData.length : 0,
+                        firebaseTodayCount: firebaseTodayPreps.length,
+                        firebaseTodayCompleted: firebaseTodayPreps.filter((prep: any) => prep.completed === true).length,
+                        localTodayCount: scheduledPreps.filter(prep => prep.scheduledDate === todayStr).length,
+                        firebaseSample: firebaseTodayPreps.slice(0, 3)
+                      });
+                      
+                      alert(`Firebase Check:\nTotal: ${firebaseData ? firebaseData.length : 0}\nToday: ${firebaseTodayPreps.length}\nCompleted: ${firebaseTodayPreps.filter((prep: any) => prep.completed === true).length}`);
+                    } catch (error) {
+                      console.error('❌ Manual Firebase check failed:', error);
+                      alert('Firebase check failed - see console');
+                    }
+                  }}
+                  className="px-3 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-600"
+                >
+                  Check Firebase
+                </button>
+                <button
+                  onClick={() => {
+                    console.log('🔄 Manual reload triggered');
+                    window.location.reload();
+                  }}
+                  className="px-3 py-1 bg-green-500 text-white rounded text-xs hover:bg-green-600"
+                >
+                  Force Reload
+                </button>
+              </div>
+            </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
               <div>
                 <div className="font-medium text-blue-700">Today's Date</div>
