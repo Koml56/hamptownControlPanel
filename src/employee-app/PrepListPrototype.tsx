@@ -532,24 +532,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
           </div>
           
           <div className="flex items-center space-x-2">
-            {isSaving && (
-              <div className="flex items-center text-blue-600">
-                <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full mr-2"></div>
-                <span className="text-sm">Saving...</span>
-              </div>
-            )}
-            {syncPaused && (
-              <div className="flex items-center text-orange-600">
-                <div className="w-4 h-4 bg-orange-500 rounded-full mr-2"></div>
-                <span className="text-sm">Sync Paused</span>
-              </div>
-            )}
-            <div className={`w-2 h-2 rounded-full ${
-              connectionStatus === 'connected' ? 'bg-green-500' : 'bg-red-500'
-            }`}></div>
-            <span className="text-sm text-gray-600">
-              {connectionStatus === 'connected' ? 'Synced' : 'Offline'}
-            </span>
+            {/* Status indicators removed as requested */}
           </div>
         </div>
 
