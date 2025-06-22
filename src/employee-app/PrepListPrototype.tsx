@@ -1,4 +1,4 @@
-// PrepListPrototype.tsx - Main component for prep list management
+// PrepListPrototype.tsx - FIXED: Proper Firebase save for prep completions
 import React, { useState, useEffect } from 'react';
 import { Calendar, Check, ChefHat, Plus, Search, Users, X } from 'lucide-react';
 
@@ -60,6 +60,9 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
   const [showSuggestedPreps, setShowSuggestedPreps] = useState(true);
   const [movedPrepsNotification, setMovedPrepsNotification] = useState<number>(0);
 
+  // FIXED: Track if we're in the middle of a save operation to prevent race conditions
+  const [isSaving, setIsSaving] = useState(false);
+
   // Initialize with default prep items if empty
   useEffect(() => {
     if (prepItems.length === 0) {
@@ -68,6 +71,26 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
       quickSave('prepItems', defaultPreps);
     }
   }, [prepItems.length, setPrepItems, quickSave]);
+
+  // FIXED: Auto-save scheduledPreps whenever they change (but not during save operation)
+  useEffect(() => {
+    if (scheduledPreps.length > 0 && !isSaving) {
+      console.log('🔄 Auto-saving scheduledPreps due to state change');
+      
+      // Add a small delay to ensure state is fully updated
+      const saveTimer = setTimeout(() => {
+        quickSave('scheduledPreps', scheduledPreps)
+          .then(() => {
+            console.log('✅ ScheduledPreps auto-save completed');
+          })
+          .catch((error) => {
+            console.error('❌ ScheduledPreps auto-save failed:', error);
+          });
+      }, 300);
+
+      return () => clearTimeout(saveTimer);
+    }
+  }, [scheduledPreps, quickSave, isSaving]);
 
   // Move incomplete preps from yesterday to today
   useEffect(() => {
@@ -112,9 +135,6 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
         });
         
         setPrepSelections(prev => ({ ...prev, ...newSelections }));
-        quickSave('scheduledPreps', [...scheduledPreps.filter(prep => 
-          !(prep.scheduledDate === yesterdayStr && !prep.completed)
-        ), ...movedPreps]);
       }
     };
 
@@ -125,7 +145,72 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
       moveIncompletePreps();
       localStorage.setItem('lastPrepMoveCheck', todayStr);
     }
-  }, [scheduledPreps, setPrepSelections, setScheduledPreps, quickSave]);
+  }, [scheduledPreps, setPrepSelections, setScheduledPreps]);
+
+  // FIXED: Proper prep completion toggle with immediate Firebase save
+  const togglePrepCompletion = async (scheduledPrepId: number): Promise<void> => {
+    console.log('🔄 Toggling prep completion for ID:', scheduledPrepId);
+    
+    // Prevent concurrent saves
+    if (isSaving) {
+      console.log('⏳ Save in progress, skipping...');
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      // Find the prep item to update
+      const prepToUpdate = scheduledPreps.find(p => p.id === scheduledPrepId);
+      if (!prepToUpdate) {
+        console.error('❌ Prep item not found:', scheduledPrepId);
+        return;
+      }
+
+      const newCompletedStatus = !prepToUpdate.completed;
+      console.log(`📋 ${prepToUpdate.name}: ${prepToUpdate.completed ? 'COMPLETED' : 'PENDING'} → ${newCompletedStatus ? 'COMPLETED' : 'PENDING'}`);
+
+      // Update the state
+      const updatedScheduledPreps = scheduledPreps.map(prep =>
+        prep.id === scheduledPrepId
+          ? { ...prep, completed: newCompletedStatus }
+          : prep
+      );
+
+      // Update state immediately for UI responsiveness
+      setScheduledPreps(() => updatedScheduledPreps);
+
+      // CRITICAL: Save to Firebase immediately
+      console.log('🔥 Saving prep completion to Firebase...');
+      const saveSuccess = await quickSave('scheduledPreps', updatedScheduledPreps);
+
+      if (saveSuccess) {
+        console.log('✅ Prep completion saved successfully');
+        
+        // Log current status for debugging
+        const todayStr = getDateString(new Date());
+        const todayPreps = updatedScheduledPreps.filter(prep => prep.scheduledDate === todayStr);
+        const todayCompleted = todayPreps.filter(prep => prep.completed);
+        
+        console.log('📊 Today\'s prep status:', {
+          total: todayPreps.length,
+          completed: todayCompleted.length,
+          percentage: todayPreps.length > 0 ? Math.round((todayCompleted.length / todayPreps.length) * 100) : 0
+        });
+      } else {
+        console.error('❌ Failed to save prep completion to Firebase');
+        // Revert the state change if save failed
+        setScheduledPreps(scheduledPreps);
+      }
+
+    } catch (error) {
+      console.error('❌ Error toggling prep completion:', error);
+      // Revert the state change if there was an error
+      setScheduledPreps(scheduledPreps);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   // Check if prep is selected for current date
   const isPrepSelected = (prep: PrepItem): boolean => {
@@ -328,31 +413,6 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
     togglePrepSelection(customPrep);
   };
 
-  // Toggle prep completion
-  const togglePrepCompletion = (scheduledPrepId: number): void => {
-    setScheduledPreps(prev => {
-      const updatedScheduledPreps = prev.map(prep =>
-        prep.id === scheduledPrepId
-          ? { ...prep, completed: !prep.completed }
-          : prep
-      );
-      
-      const toggledPrep = updatedScheduledPreps.find(p => p.id === scheduledPrepId);
-      console.log('🔄 Toggling prep completion:', {
-        prepId: scheduledPrepId,
-        prepName: toggledPrep?.name,
-        newCompletedStatus: toggledPrep?.completed,
-        totalScheduledPreps: updatedScheduledPreps.length
-      });
-      
-      quickSave('scheduledPreps', updatedScheduledPreps).catch(error => {
-        console.error('❌ Failed to save prep completion:', error);
-      });
-      
-      return updatedScheduledPreps;
-    });
-  };
-
   // Filter preps
   const filteredPreps = prepItems.filter(prep => {
     const matchesCategory = selectedCategory === 'all' || prep.category === selectedCategory;
@@ -378,6 +438,12 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
           </div>
           
           <div className="flex items-center space-x-2">
+            {isSaving && (
+              <div className="flex items-center text-blue-600">
+                <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full mr-2"></div>
+                <span className="text-sm">Saving...</span>
+              </div>
+            )}
             <div className={`w-2 h-2 rounded-full ${
               connectionStatus === 'connected' ? 'bg-green-500' : 'bg-red-500'
             }`}></div>
