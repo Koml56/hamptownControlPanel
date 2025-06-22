@@ -200,13 +200,13 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
       } else {
         console.error('❌ Failed to save prep completion to Firebase');
         // Revert the state change if save failed
-        setScheduledPreps(scheduledPreps);
+        setScheduledPreps(() => scheduledPreps);
       }
 
     } catch (error) {
       console.error('❌ Error toggling prep completion:', error);
       // Revert the state change if there was an error
-      setScheduledPreps(scheduledPreps);
+      setScheduledPreps(() => scheduledPreps);
     } finally {
       setIsSaving(false);
     }
