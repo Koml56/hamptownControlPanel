@@ -38,6 +38,46 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
   setPrepSelections,
   quickSave
 }) => {
+  // Detect admin mode by checking for admin UI elements
+  const [isAdminMode, setIsAdminMode] = useState(false);
+  
+  useEffect(() => {
+    // Check for admin mode indicators
+    const checkAdminMode = () => {
+      // Method 1: Check for "Admin Mode" badge in header (most reliable)
+      const adminBadge = document.querySelector('.bg-red-100.text-red-700');
+      const hasAdminBadge = adminBadge && adminBadge.textContent?.includes('Admin Mode');
+      
+      // Method 2: Check if admin/reports tabs are visible (only shown when admin)
+      const tabsContainer = document.querySelector('.bg-white.border-b');
+      const hasAdminTabs = tabsContainer && (
+        tabsContainer.textContent?.includes('Admin Panel') || 
+        tabsContainer.textContent?.includes('Daily Reports')
+      );
+      
+      // Method 3: Check for admin logout button
+      const logoutButton = document.querySelector('[title="Logout Admin"]');
+      
+      const isAdmin = hasAdminBadge || hasAdminTabs || !!logoutButton;
+      setIsAdminMode(isAdmin);
+      
+      // Debug log
+      if (isAdmin !== isAdminMode) {
+        console.log('🔧 Admin mode detected:', { 
+          hasAdminBadge: !!hasAdminBadge, 
+          hasAdminTabs: !!hasAdminTabs, 
+          hasLogoutButton: !!logoutButton,
+          isAdmin 
+        });
+      }
+    };
+    
+    // Check immediately and set up interval to check periodically
+    checkAdminMode();
+    const interval = setInterval(checkAdminMode, 500); // Check every 500ms
+    
+    return () => clearInterval(interval);
+  }, [isAdminMode]);
   // UI State
   const [activeView, setActiveView] = useState('today');
   const [selectedDate, setSelectedDate] = useState(() => {
@@ -582,11 +622,23 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
       {activeView === 'today' && (
         <>
           {/* Debug Info Panel - Admin Only */}
-          {/* TODO: Replace this condition with your admin check */}
-          {process.env.NODE_ENV === 'development' && (
+          {(isAdminMode || process.env.NODE_ENV === 'development') && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
               <div className="flex items-center justify-between mb-2">
-                <h4 className="font-medium text-blue-800">🔍 Debug Info (Development Only)</h4>
+                <h4 className="font-medium text-blue-800">
+                  🔍 Debug Info {isAdminMode ? '(Admin Mode Active)' : '(Development Mode)'}
+                </h4>
+                <div className="flex gap-2">
+                  {process.env.NODE_ENV === 'development' && (
+                    <button
+                      onClick={() => setIsAdminMode(!isAdminMode)}
+                      className={`px-2 py-1 rounded text-xs ${
+                        isAdminMode ? 'bg-red-500 text-white' : 'bg-gray-500 text-white'
+                      }`}
+                    >
+                      {isAdminMode ? 'Disable Admin' : 'Enable Admin'}
+                    </button>
+                  )}
                 <div className="flex gap-2">
                   <button
                     onClick={async () => {
@@ -624,6 +676,8 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
                     className="px-3 py-1 bg-green-500 text-white rounded text-xs hover:bg-green-600"
                   >
                     Force Reload
+                  </button>
+                </div>
                   </button>
                 </div>
               </div>
