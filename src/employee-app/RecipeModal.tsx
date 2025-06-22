@@ -4,18 +4,19 @@ import { X, ChefHat } from 'lucide-react';
 import type { Recipe } from './prep-types';
 import { formatRecipeText } from './prep-utils';
 
+// Updated props interface with 'name' instead of 'recipeName'
 interface RecipeModalProps {
-  isOpen: boolean;
   recipe: Recipe | null;
-  recipeName: string;
+  name: string; // Changed from 'recipeName' to 'name' to match usage
   onClose: () => void;
+  isOpen?: boolean; // Made optional since it might not be used in all places
 }
 
 const RecipeModal: React.FC<RecipeModalProps> = ({
-  isOpen,
   recipe,
-  recipeName,
-  onClose
+  name,
+  onClose,
+  isOpen = true // Default to true if not provided
 }) => {
   if (!isOpen || !recipe) return null;
 
@@ -29,7 +30,7 @@ const RecipeModal: React.FC<RecipeModalProps> = ({
               <ChefHat className="w-5 h-5 text-green-600" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-gray-800">{recipeName}</h3>
+              <h3 className="text-lg font-semibold text-gray-800">{name}</h3>
               <p className="text-sm text-gray-600">Recipe Details</p>
             </div>
           </div>
