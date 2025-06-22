@@ -78,7 +78,7 @@ const TodayView: React.FC<TodayViewProps> = ({
       <div key={prep.id} className={`flex items-center justify-between p-4 border rounded-lg transition-all ${
         isSaving ? 'bg-blue-50 border-blue-200' : 'hover:bg-gray-50'
       }`}>
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-3 select-none">
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -135,11 +135,7 @@ const TodayView: React.FC<TodayViewProps> = ({
           <span className={`px-2 py-1 rounded-full text-xs ${priority?.color || 'bg-gray-100 text-gray-700'}`}>
             {priority?.name || 'Medium'}
           </span>
-          {prep.completed && (
-            <span className="text-xs text-green-600 font-medium">
-              ✅ Done
-            </span>
-          )}
+          {/* Removed '✅ Done' text after checkbox as requested */}
         </div>
       </div>
     );

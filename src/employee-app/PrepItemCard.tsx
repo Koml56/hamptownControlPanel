@@ -19,6 +19,7 @@ interface PrepItemCardProps {
   onUpdateSelection: (prep: PrepItem, field: 'priority' | 'timeSlot', value: string, context?: string) => void;
   onShowPriorityOptions: (prepId: number | string | null) => void;
   onShowRecipe: (recipe: Recipe, name: string) => void;
+  onSave: (prep: PrepItem, selection: { priority: Priority; timeSlot: string; selected: boolean }) => void;
   context?: string;
 }
 
@@ -33,6 +34,7 @@ const PrepItemCard: React.FC<PrepItemCardProps> = ({
   onUpdateSelection,
   onShowPriorityOptions,
   onShowRecipe,
+  onSave,
   context = 'main'
 }) => {
   const contextId = context === 'suggested' ? `suggested-${prep.id}` : prep.id;
@@ -55,7 +57,7 @@ const PrepItemCard: React.FC<PrepItemCardProps> = ({
           </button>
           <div className="flex-1">
             <div className="flex items-center space-x-2">
-              <h4 className={`font-medium ${isSelected ? 'text-blue-900' : 'text-gray-800'}`}>
+              <h4 className={`font-medium ${isSelected ? 'text-blue-900' : 'text-gray-800'}`}> 
                 {prep.name}
               </h4>
               {prep.hasRecipe && prep.recipe && (
@@ -66,6 +68,12 @@ const PrepItemCard: React.FC<PrepItemCardProps> = ({
                   📖 Recipe
                 </button>
               )}
+              <button
+                onClick={() => onSave(prep, selection)}
+                className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full hover:bg-blue-200 transition-colors"
+              >
+                💾 Save
+              </button>
             </div>
             <p className="text-sm text-gray-600 flex items-center space-x-2">
               <span>{prep.estimatedTime}</span>

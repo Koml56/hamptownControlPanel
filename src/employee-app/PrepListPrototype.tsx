@@ -803,6 +803,10 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
                   onUpdateSelection={updatePrepSelection}
                   onShowPriorityOptions={setShowPriorityOptions}
                   onShowRecipe={showRecipe}
+                  onSave={(prep, selection) => {
+                    // TODO: Replace with actual save logic
+                    console.log('Save clicked for prep:', prep, selection);
+                  }}
                   context="main"
                 />
               ))}
