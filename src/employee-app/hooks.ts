@@ -285,7 +285,7 @@ export const useFirebaseData = () => {
     }
   }, [isMultiDeviceEnabled]);
 
-  // PERFORMANCE: Debounced batch sync function (with sync pause protection)
+  // PERFORMANCE: Debounced batch sync function (with sync pause protection and prep data protection)
   const debouncedBatchSync = useCallback(async () => {
     if (!isMultiDeviceEnabled || !syncServiceRef.current || pendingSyncData.current.size === 0 || isSavingRef.current) {
       if (isSavingRef.current) {
@@ -295,12 +295,22 @@ export const useFirebaseData = () => {
     }
 
     const fieldsToSync = Array.from(pendingSyncData.current);
+    
+    // CRITICAL: Remove scheduledPreps from sync to prevent overwrites
+    const filteredFields = fieldsToSync.filter(field => field !== 'scheduledPreps');
+    
+    if (filteredFields.length === 0) {
+      console.log('🛡️ No fields to sync after filtering out scheduledPreps');
+      pendingSyncData.current.clear();
+      return;
+    }
+    
     pendingSyncData.current.clear();
 
     try {
-      console.log('🔄 Batch syncing fields:', fieldsToSync);
+      console.log('🔄 Batch syncing fields (excluding scheduledPreps):', filteredFields);
       
-      const syncPromises = fieldsToSync.map(async (field) => {
+      const syncPromises = filteredFields.map(async (field) => {
         let data: any;
         switch (field) {
           case 'employees': data = employees; break;
@@ -310,14 +320,6 @@ export const useFirebaseData = () => {
           case 'taskAssignments': data = taskAssignments; break;
           case 'customRoles': data = customRoles; break;
           case 'prepItems': data = prepItems; break;
-          case 'scheduledPreps': 
-            // PROTECTION: Don't sync scheduledPreps if save is in progress
-            if (isSavingRef.current) {
-              console.log('🛡️ Skipping scheduledPreps sync - save in progress');
-              return;
-            }
-            data = scheduledPreps; 
-            break;
           case 'prepSelections': data = prepSelections; break;
           case 'storeItems': data = storeItems; break;
           default: return;
@@ -327,7 +329,7 @@ export const useFirebaseData = () => {
       });
 
       await Promise.allSettled(syncPromises); // Don't fail if one sync fails
-      console.log('✅ Batch sync completed');
+      console.log('✅ Batch sync completed (scheduledPreps protected)');
       
     } catch (error) {
       console.warn('⚠️ Batch sync failed (non-blocking):', error);
@@ -583,7 +585,7 @@ export const useFirebaseData = () => {
     }
   }, [isMultiDeviceEnabled, initializeSyncService]);
 
-  // PERFORMANCE: Fast refresh function with retry logic - FIXED for prep data
+  // PERFORMANCE: Fast refresh function with retry logic - PROTECTED for prep data
   const refreshFromAllDevices = useCallback(async () => {
     if (!isMultiDeviceEnabled || !syncServiceRef.current) {
       await loadFromFirebase();
@@ -601,40 +603,41 @@ export const useFirebaseData = () => {
 
       const syncData = await Promise.race([refreshPromise, timeoutPromise]) as any;
       
-      // FIXED: Apply all data immediately including prep and store data
+      // FIXED: Apply all data immediately but PROTECT scheduledPreps
       if (syncData.employees) setEmployees(migrateEmployeeData(syncData.employees));
       if (syncData.tasks) setTasks(migrateTaskData(syncData.tasks));
       if (syncData.dailyData) setDailyData(syncData.dailyData);
       if (syncData.completedTasks) setCompletedTasks(new Set(syncData.completedTasks));
       if (syncData.taskAssignments) setTaskAssignments(syncData.taskAssignments);
       if (syncData.prepItems) setPrepItems(syncData.prepItems);
+      
+      // CRITICAL: Don't overwrite scheduledPreps from sync - only from manual Firebase load
       if (syncData.scheduledPreps) {
-        const migratedScheduledPreps = migrateScheduledPreps(syncData.scheduledPreps);
-        setScheduledPreps(migratedScheduledPreps);
-        
-        // ENHANCED: Log refreshed prep data with completion status
-        const todayStr = getFormattedDate(new Date());
-        const todayPreps = migratedScheduledPreps.filter((prep: any) => prep.scheduledDate === todayStr);
-        const todayCompleted = todayPreps.filter((prep: any) => prep.completed === true);
-        
-        console.log('🔄 Refreshed scheduledPreps from sync:', {
-          count: migratedScheduledPreps.length,
-          todayCount: todayPreps.length,
-          todayCompletedCount: todayCompleted.length,
-          completionPercentage: todayPreps.length > 0 ? Math.round((todayCompleted.length / todayPreps.length) * 100) : 0
+        console.log('🛡️ BLOCKING scheduledPreps sync overwrite to prevent data loss');
+        console.log('🔍 Sync wanted to set:', {
+          syncCount: syncData.scheduledPreps.length,
+          localCount: scheduledPreps.length,
+          syncTodayCount: syncData.scheduledPreps.filter((prep: any) => 
+            prep.scheduledDate === getFormattedDate(new Date())
+          ).length,
+          localTodayCount: scheduledPreps.filter((prep: any) => 
+            prep.scheduledDate === getFormattedDate(new Date())
+          ).length
         });
+        // NOTE: We deliberately DON'T update scheduledPreps from sync
       }
+      
       if (syncData.prepSelections) setPrepSelections(syncData.prepSelections);
       if (syncData.storeItems) setStoreItems(syncData.storeItems);
       
       setLastSync(new Date().toLocaleTimeString());
-      console.log('✅ Quick refresh completed');
+      console.log('✅ Quick refresh completed (scheduledPreps protected)');
       
     } catch (error) {
       console.warn('⚠️ Quick refresh failed, falling back to normal load:', error);
       await loadFromFirebase();
     }
-  }, [isMultiDeviceEnabled, loadFromFirebase]);
+  }, [isMultiDeviceEnabled, loadFromFirebase, scheduledPreps]);
 
   // Manual retry function for when initial load fails
   const retryLoadFromFirebase = useCallback(async () => {
