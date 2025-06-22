@@ -285,9 +285,12 @@ export const useFirebaseData = () => {
     }
   }, [isMultiDeviceEnabled]);
 
-  // PERFORMANCE: Debounced batch sync function
+  // PERFORMANCE: Debounced batch sync function (with sync pause protection)
   const debouncedBatchSync = useCallback(async () => {
-    if (!isMultiDeviceEnabled || !syncServiceRef.current || pendingSyncData.current.size === 0) {
+    if (!isMultiDeviceEnabled || !syncServiceRef.current || pendingSyncData.current.size === 0 || isSavingRef.current) {
+      if (isSavingRef.current) {
+        console.log('🛡️ Batch sync paused - save operation in progress');
+      }
       return;
     }
 
@@ -307,7 +310,14 @@ export const useFirebaseData = () => {
           case 'taskAssignments': data = taskAssignments; break;
           case 'customRoles': data = customRoles; break;
           case 'prepItems': data = prepItems; break;
-          case 'scheduledPreps': data = scheduledPreps; break;
+          case 'scheduledPreps': 
+            // PROTECTION: Don't sync scheduledPreps if save is in progress
+            if (isSavingRef.current) {
+              console.log('🛡️ Skipping scheduledPreps sync - save in progress');
+              return;
+            }
+            data = scheduledPreps; 
+            break;
           case 'prepSelections': data = prepSelections; break;
           case 'storeItems': data = storeItems; break;
           default: return;
@@ -511,10 +521,15 @@ export const useFirebaseData = () => {
     }
   }, [isLoading, isMultiDeviceEnabled, initializeSyncService]);
 
-  // CRITICAL FIX: Auto-save critical data immediately (includes scheduledPreps for prep completions)
+  // CRITICAL FIX: Auto-save critical data immediately (but respect sync pause)
   useEffect(() => {
-    if (isInitializedRef.current) {
-      saveToFirebase();
+    if (isInitializedRef.current && !isSavingRef.current) {
+      // Add a small delay to batch multiple changes together
+      const autoSaveTimer = setTimeout(() => {
+        saveToFirebase();
+      }, 1000);
+      
+      return () => clearTimeout(autoSaveTimer);
     }
   }, [employees, tasks, dailyData, completedTasks, taskAssignments, customRoles, scheduledPreps]);
 
