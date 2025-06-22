@@ -61,6 +61,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
 
   // FIXED: Track if we're in the middle of a save operation to prevent race conditions
   const [isSaving, setIsSaving] = useState(false);
+  const [syncPaused, setSyncPaused] = useState(false);
 
   // Initialize with default prep items if empty
   useEffect(() => {
@@ -146,7 +147,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
     }
   }, [scheduledPreps, setPrepSelections, setScheduledPreps]);
 
-  // FIXED: Proper prep completion toggle with immediate Firebase save
+  // FIXED: Proper prep completion toggle with sync protection
   const togglePrepCompletion = async (scheduledPrepId: number): Promise<void> => {
     console.log('🔄 Toggling prep completion for ID:', scheduledPrepId);
     
@@ -157,6 +158,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
     }
 
     setIsSaving(true);
+    setSyncPaused(true); // PAUSE SYNC during save operation
 
     try {
       // Find the prep item to update
@@ -168,6 +170,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
 
       const newCompletedStatus = !prepToUpdate.completed;
       console.log(`📋 ${prepToUpdate.name}: ${prepToUpdate.completed ? 'COMPLETED' : 'PENDING'} → ${newCompletedStatus ? 'COMPLETED' : 'PENDING'}`);
+      console.log('🛡️ SYNC PAUSED during save operation');
 
       // Update the state
       const updatedScheduledPreps = scheduledPreps.map(prep =>
@@ -203,8 +206,12 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
       if (saveSuccess) {
         console.log('✅ Prep completion saved successfully');
         
-        // ENHANCED: Verify what we actually saved
+        // ENHANCED: Wait longer before re-enabling sync to ensure save propagates
         setTimeout(async () => {
+          setSyncPaused(false);
+          console.log('🔄 SYNC RESUMED after save completion');
+          
+          // Verify what we actually saved
           try {
             const verifyResponse = await fetch('https://hamptown-panel-default-rtdb.firebaseio.com/scheduledPreps.json');
             const firebaseData = await verifyResponse.json();
@@ -237,18 +244,20 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
           } catch (error) {
             console.warn('⚠️ Failed to verify save:', error);
           }
-        }, 1000);
+        }, 3000); // Wait 3 seconds before resuming sync
         
       } else {
         console.error('❌ Failed to save prep completion to Firebase');
         // Revert the state change if save failed
         setScheduledPreps(() => scheduledPreps);
+        setSyncPaused(false);
       }
 
     } catch (error) {
       console.error('❌ Error toggling prep completion:', error);
       // Revert the state change if there was an error
       setScheduledPreps(() => scheduledPreps);
+      setSyncPaused(false);
     } finally {
       setIsSaving(false);
     }
@@ -484,6 +493,12 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
               <div className="flex items-center text-blue-600">
                 <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full mr-2"></div>
                 <span className="text-sm">Saving...</span>
+              </div>
+            )}
+            {syncPaused && (
+              <div className="flex items-center text-orange-600">
+                <div className="w-4 h-4 bg-orange-500 rounded-full mr-2"></div>
+                <span className="text-sm">Sync Paused</span>
               </div>
             )}
             <div className={`w-2 h-2 rounded-full ${
