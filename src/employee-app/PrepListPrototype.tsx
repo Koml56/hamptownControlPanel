@@ -38,6 +38,33 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
   setPrepSelections,
   quickSave
 }) => {
+  // UI State
+  const [activeView, setActiveView] = useState('today');
+  const [selectedDate, setSelectedDate] = useState(() => {
+    // Start with today instead of tomorrow
+    return new Date();
+  });
+  const [currentDate, setCurrentDate] = useState(new Date()); // For week view navigation
+  const [showAddCustom, setShowAddCustom] = useState(false);
+  const [newPrepName, setNewPrepName] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showRecipeForm, setShowRecipeForm] = useState(false);
+  const [recipeData, setRecipeData] = useState<Recipe>({ ingredients: '', instructions: '' });
+  const [showRecipeModal, setShowRecipeModal] = useState(false);
+  const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
+  const [selectedRecipeName, setSelectedRecipeName] = useState<string>('');
+  const [showPriorityOptions, setShowPriorityOptions] = useState<number | string | null>(null);
+  const [showTimeOptions, setShowTimeOptions] = useState<number | string | null>(null);
+  const [assignmentStep, setAssignmentStep] = useState<Record<number, string | null>>({});
+  const [showSuggestedPreps, setShowSuggestedPreps] = useState(true);
+  const [movedPrepsNotification, setMovedPrepsNotification] = useState<number>(0);
+
+  // FIXED: Track if we're in the middle of a save operation to prevent race conditions
+  const [isSaving, setIsSaving] = useState(false);
+  const [syncPaused, setSyncPaused] = useState(false);
+
   // Detect admin mode by checking for admin UI elements
   const [isAdminMode, setIsAdminMode] = useState(false);
   
@@ -78,32 +105,6 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
     
     return () => clearInterval(interval);
   }, [isAdminMode]);
-  // UI State
-  const [activeView, setActiveView] = useState('today');
-  const [selectedDate, setSelectedDate] = useState(() => {
-    // Start with today instead of tomorrow
-    return new Date();
-  });
-  const [currentDate, setCurrentDate] = useState(new Date()); // For week view navigation
-  const [showAddCustom, setShowAddCustom] = useState(false);
-  const [newPrepName, setNewPrepName] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [showSearch, setShowSearch] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showRecipeForm, setShowRecipeForm] = useState(false);
-  const [recipeData, setRecipeData] = useState<Recipe>({ ingredients: '', instructions: '' });
-  const [showRecipeModal, setShowRecipeModal] = useState(false);
-  const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
-  const [selectedRecipeName, setSelectedRecipeName] = useState<string>('');
-  const [showPriorityOptions, setShowPriorityOptions] = useState<number | string | null>(null);
-  const [showTimeOptions, setShowTimeOptions] = useState<number | string | null>(null);
-  const [assignmentStep, setAssignmentStep] = useState<Record<number, string | null>>({});
-  const [showSuggestedPreps, setShowSuggestedPreps] = useState(true);
-  const [movedPrepsNotification, setMovedPrepsNotification] = useState<number>(0);
-
-  // FIXED: Track if we're in the middle of a save operation to prevent race conditions
-  const [isSaving, setIsSaving] = useState(false);
-  const [syncPaused, setSyncPaused] = useState(false);
 
   // Initialize with default prep items if empty
   useEffect(() => {
@@ -639,7 +640,6 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
                       {isAdminMode ? 'Disable Admin' : 'Enable Admin'}
                     </button>
                   )}
-                <div className="flex gap-2">
                   <button
                     onClick={async () => {
                       console.log('🔄 Manual Firebase check triggered');
@@ -676,8 +676,6 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
                     className="px-3 py-1 bg-green-500 text-white rounded text-xs hover:bg-green-600"
                   >
                     Force Reload
-                  </button>
-                </div>
                   </button>
                 </div>
               </div>
