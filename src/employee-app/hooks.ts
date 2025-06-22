@@ -1,7 +1,6 @@
 // hooks.ts - FIXED: Enhanced Firebase save/load for prep completions with better debugging
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { FirebaseService } from './firebaseService';
-import { MultiDeviceSyncService, type DeviceInfo, type SyncEvent } from './multiDeviceSync';
 import { getFormattedDate } from './utils';
 import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData, getDefaultStoreItems } from './defaultData';
 import type {
@@ -16,6 +15,9 @@ import type {
   PrepSelections,
   StoreItem
 } from './types';
+import { getDatabase, ref, onValue, off } from 'firebase/database';
+import { initializeApp } from 'firebase/app';
+import { FIREBASE_CONFIG } from './constants';
 
 // Migration functions
 const migrateEmployeeData = (employees: any[]): Employee[] => {
@@ -65,15 +67,6 @@ const migrateScheduledPreps = (scheduledPreps: any[]): ScheduledPrep[] => {
   }));
 };
 
-// Helper function to get initial multi-device sync state
-const getInitialSyncState = (): boolean => {
-  const savedPreference = localStorage.getItem('workVibe_multiDeviceSyncEnabled');
-  if (savedPreference !== null) {
-    return savedPreference === 'true';
-  }
-  return true; // Default enabled
-};
-
 export const useFirebaseData = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
@@ -95,20 +88,11 @@ export const useFirebaseData = () => {
   // Store data
   const [storeItems, setStoreItems] = useState<StoreItem[]>([]);
   
-  // Multi-device sync data
-  const [activeDevices, setActiveDevices] = useState<DeviceInfo[]>([]);
-  const [syncEvents, setSyncEvents] = useState<SyncEvent[]>([]);
-  const [deviceCount, setDeviceCount] = useState<number>(1);
-  const [isMultiDeviceEnabled, setIsMultiDeviceEnabled] = useState<boolean>(getInitialSyncState());
-
   const firebaseService = new FirebaseService();
-  const syncServiceRef = useRef<MultiDeviceSyncService | null>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSaveDataRef = useRef<string>('');
   const isInitializedRef = useRef<boolean>(false);
   const isSavingRef = useRef<boolean>(false);
-  const pendingSyncData = useRef<Set<string>>(new Set());
 
   // FIXED: Enhanced quickSave with better error handling and completion status logging
   const quickSave = useCallback(async (field: string, data: any): Promise<boolean> => {
@@ -226,19 +210,6 @@ export const useFirebaseData = () => {
         });
       }
 
-      // Schedule sync (non-blocking)
-      if (isMultiDeviceEnabled) {
-        pendingSyncData.current.add(field);
-        
-        if (syncTimeoutRef.current) {
-          clearTimeout(syncTimeoutRef.current);
-        }
-        
-        syncTimeoutRef.current = setTimeout(() => {
-          debouncedBatchSync();
-        }, 1000); // Batch sync after 1 second of inactivity
-      }
-      
       return true;
       
     } catch (error) {
@@ -246,96 +217,18 @@ export const useFirebaseData = () => {
       setConnectionStatus('error');
       return false;
     }
-  }, [isMultiDeviceEnabled]);
+  }, []);
 
   // PERFORMANCE OPTIMIZATION: Initialize sync service lazily after initial load
   const initializeSyncService = useCallback(async () => {
-    if (syncServiceRef.current || !isMultiDeviceEnabled) return;
-
-    try {
-      console.log('🔄 Initializing sync service (lazy load)...');
-      const userName = localStorage.getItem('currentUserName') || 'Unknown User';
-      syncServiceRef.current = new MultiDeviceSyncService(userName);
-      
-      // Setup event listeners
-      syncServiceRef.current.onSyncEventReceived((event: SyncEvent) => {
-        console.log('📥 Sync event:', event.type, event.field);
-        setSyncEvents(prev => [event, ...prev.slice(0, 4)]); // Keep only 5 events
-      });
-
-      syncServiceRef.current.onDeviceCountChanged((count: number, devices: DeviceInfo[]) => {
-        setDeviceCount(count);
-        setActiveDevices(devices.slice(0, 10)); // Limit to 10 devices for performance
-      });
-
-      // LAZY CONNECT: Connect after a short delay to not block initial load
-      setTimeout(async () => {
-        if (syncServiceRef.current && isMultiDeviceEnabled) {
-          try {
-            await syncServiceRef.current.connect();
-            console.log('✅ Sync service connected (lazy)');
-          } catch (error) {
-            console.warn('⚠️ Sync connection failed (non-blocking):', error);
-          }
-        }
-      }, 2000); // 2 second delay after initial load
-
-    } catch (error) {
-      console.error('❌ Failed to initialize sync service:', error);
-    }
-  }, [isMultiDeviceEnabled]);
+    // REMOVE: MultiDeviceSyncService initialization
+  }, []);
 
   // PERFORMANCE: Debounced batch sync function (with sync pause protection and prep data protection)
   const debouncedBatchSync = useCallback(async () => {
-    if (!isMultiDeviceEnabled || !syncServiceRef.current || pendingSyncData.current.size === 0 || isSavingRef.current) {
-      if (isSavingRef.current) {
-        console.log('🛡️ Batch sync paused - save operation in progress');
-      }
-      return;
-    }
-
-    const fieldsToSync = Array.from(pendingSyncData.current);
-    
-    // CRITICAL: Remove scheduledPreps from sync to prevent overwrites
-    const filteredFields = fieldsToSync.filter(field => field !== 'scheduledPreps');
-    
-    if (filteredFields.length === 0) {
-      console.log('🛡️ No fields to sync after filtering out scheduledPreps');
-      pendingSyncData.current.clear();
-      return;
-    }
-    
-    pendingSyncData.current.clear();
-
-    try {
-      console.log('🔄 Batch syncing fields (excluding scheduledPreps):', filteredFields);
-      
-      const syncPromises = filteredFields.map(async (field) => {
-        let data: any;
-        switch (field) {
-          case 'employees': data = employees; break;
-          case 'tasks': data = tasks; break;
-          case 'dailyData': data = dailyData; break;
-          case 'completedTasks': data = Array.from(completedTasks); break;
-          case 'taskAssignments': data = taskAssignments; break;
-          case 'customRoles': data = customRoles; break;
-          case 'prepItems': data = prepItems; break;
-          case 'prepSelections': data = prepSelections; break;
-          case 'storeItems': data = storeItems; break;
-          default: return;
-        }
-        
-        return syncServiceRef.current!.syncData(field, data);
-      });
-
-      await Promise.allSettled(syncPromises); // Don't fail if one sync fails
-      console.log('✅ Batch sync completed (scheduledPreps protected)');
-      
-    } catch (error) {
-      console.warn('⚠️ Batch sync failed (non-blocking):', error);
-    }
+    // REMOVE: Batch sync logic
   }, [employees, tasks, dailyData, completedTasks, taskAssignments, customRoles, 
-      prepItems, scheduledPreps, prepSelections, storeItems, isMultiDeviceEnabled]);
+      prepItems, scheduledPreps, prepSelections, storeItems]);
 
   // PERFORMANCE: Non-blocking main save function - FIXED to include all fields
   const debouncedSave = useCallback(async () => {
@@ -384,23 +277,6 @@ export const useFirebaseData = () => {
       lastSaveDataRef.current = currentDataHash;
       setConnectionStatus('connected');
       
-      // Schedule batch sync (non-blocking) - only if we have real data
-      if (isMultiDeviceEnabled && isInitializedRef.current) {
-        pendingSyncData.current.add('employees');
-        pendingSyncData.current.add('tasks');
-        pendingSyncData.current.add('dailyData');
-        pendingSyncData.current.add('completedTasks');
-        pendingSyncData.current.add('taskAssignments');
-        pendingSyncData.current.add('scheduledPreps');
-        pendingSyncData.current.add('prepItems');
-        pendingSyncData.current.add('prepSelections');
-        pendingSyncData.current.add('storeItems');
-        
-        setTimeout(() => {
-          debouncedBatchSync();
-        }, 500); // Sync after save completes
-      }
-      
     } catch (error) {
       console.error('❌ Save failed:', error);
       setConnectionStatus('error');
@@ -410,7 +286,7 @@ export const useFirebaseData = () => {
   }, [
     employees, tasks, dailyData, completedTasks, taskAssignments, customRoles,
     prepItems, scheduledPreps, prepSelections, storeItems,
-    connectionStatus, isMultiDeviceEnabled, debouncedBatchSync
+    connectionStatus, debouncedBatchSync
   ]);
 
   // PERFORMANCE: Longer debounce for main saves
@@ -495,13 +371,6 @@ export const useFirebaseData = () => {
 
       console.log('✅ Data loaded successfully');
 
-      // Initialize sync service AFTER load completes (non-blocking)
-      if (isMultiDeviceEnabled) {
-        setTimeout(() => {
-          initializeSyncService();
-        }, 1000);
-      }
-
     } catch (error) {
       console.error('❌ Load failed:', error);
       setConnectionStatus('error');
@@ -521,7 +390,7 @@ export const useFirebaseData = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading, isMultiDeviceEnabled, initializeSyncService]);
+  }, [isLoading]);
 
   // CRITICAL FIX: Auto-save critical data immediately (but respect sync pause)
   useEffect(() => {
@@ -546,112 +415,99 @@ export const useFirebaseData = () => {
     }
   }, [prepItems, prepSelections, storeItems]);
 
-  // Save multi-device sync preference
-  useEffect(() => {
-    localStorage.setItem('workVibe_multiDeviceSyncEnabled', isMultiDeviceEnabled.toString());
-  }, [isMultiDeviceEnabled]);
+  // --- REAL-TIME SYNC SETUP ---
+  // Initialize Firebase app and database (only once)
+  const firebaseAppRef = useRef<any>(null);
+  const dbRef = useRef<any>(null);
+  if (!firebaseAppRef.current) {
+    firebaseAppRef.current = initializeApp(FIREBASE_CONFIG);
+    dbRef.current = getDatabase(firebaseAppRef.current);
+  }
 
-  // Cleanup on unmount
+  // Real-time listeners for all shared data types
   useEffect(() => {
+    const db = dbRef.current;
+    if (!db) return;
+    // Employees
+    const employeesRef = ref(db, 'employees');
+    const handleEmployees = (snapshot: any) => {
+      const data = snapshot.val() || [];
+      setEmployees(Array.isArray(data) ? data : Object.values(data));
+    };
+    onValue(employeesRef, handleEmployees);
+    // Tasks
+    const tasksRef = ref(db, 'tasks');
+    const handleTasks = (snapshot: any) => {
+      const data = snapshot.val() || [];
+      setTasks(Array.isArray(data) ? data : Object.values(data));
+    };
+    onValue(tasksRef, handleTasks);
+    // DailyData
+    const dailyDataRef = ref(db, 'dailyData');
+    const handleDailyData = (snapshot: any) => {
+      setDailyData(snapshot.val() || {});
+    };
+    onValue(dailyDataRef, handleDailyData);
+    // CompletedTasks
+    const completedTasksRef = ref(db, 'completedTasks');
+    const handleCompletedTasks = (snapshot: any) => {
+      setCompletedTasks(new Set(snapshot.val() || []));
+    };
+    onValue(completedTasksRef, handleCompletedTasks);
+    // TaskAssignments
+    const taskAssignmentsRef = ref(db, 'taskAssignments');
+    const handleTaskAssignments = (snapshot: any) => {
+      setTaskAssignments(snapshot.val() || {});
+    };
+    onValue(taskAssignmentsRef, handleTaskAssignments);
+    // CustomRoles
+    const customRolesRef = ref(db, 'customRoles');
+    const handleCustomRoles = (snapshot: any) => {
+      setCustomRoles(Array.isArray(snapshot.val()) ? snapshot.val() : []);
+    };
+    onValue(customRolesRef, handleCustomRoles);
+    // PrepItems
+    const prepItemsRef = ref(db, 'prepItems');
+    const handlePrepItems = (snapshot: any) => {
+      const data = snapshot.val() || [];
+      setPrepItems(Array.isArray(data) ? data : Object.values(data));
+    };
+    onValue(prepItemsRef, handlePrepItems);
+    // ScheduledPreps
+    const scheduledPrepsRef = ref(db, 'scheduledPreps');
+    const handleScheduledPreps = (snapshot: any) => {
+      const data = snapshot.val() || [];
+      const migrated = migrateScheduledPreps(Array.isArray(data) ? data : Object.values(data));
+      setScheduledPreps(migrated);
+    };
+    onValue(scheduledPrepsRef, handleScheduledPreps);
+    // PrepSelections
+    const prepSelectionsRef = ref(db, 'prepSelections');
+    const handlePrepSelections = (snapshot: any) => {
+      setPrepSelections(snapshot.val() || {});
+    };
+    onValue(prepSelectionsRef, handlePrepSelections);
+    // StoreItems
+    const storeItemsRef = ref(db, 'storeItems');
+    const handleStoreItems = (snapshot: any) => {
+      const data = snapshot.val() || [];
+      setStoreItems(Array.isArray(data) ? data : Object.values(data));
+    };
+    onValue(storeItemsRef, handleStoreItems);
+    // Cleanup
     return () => {
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
-      if (syncServiceRef.current) {
-        syncServiceRef.current.disconnect().catch(console.error);
-      }
+      off(employeesRef, 'value', handleEmployees);
+      off(tasksRef, 'value', handleTasks);
+      off(dailyDataRef, 'value', handleDailyData);
+      off(completedTasksRef, 'value', handleCompletedTasks);
+      off(taskAssignmentsRef, 'value', handleTaskAssignments);
+      off(customRolesRef, 'value', handleCustomRoles);
+      off(prepItemsRef, 'value', handlePrepItems);
+      off(scheduledPrepsRef, 'value', handleScheduledPreps);
+      off(prepSelectionsRef, 'value', handlePrepSelections);
+      off(storeItemsRef, 'value', handleStoreItems);
     };
   }, []);
-
-  // PERFORMANCE: Optimized toggle function
-  const toggleMultiDeviceSync = useCallback(async () => {
-    const newState = !isMultiDeviceEnabled;
-    setIsMultiDeviceEnabled(newState);
-    
-    if (newState) {
-      console.log('✅ Multi-device sync enabled');
-      // Initialize lazily
-      setTimeout(() => {
-        initializeSyncService();
-      }, 1000);
-    } else {
-      console.log('❌ Multi-device sync disabled');
-      if (syncServiceRef.current) {
-        await syncServiceRef.current.disconnect();
-        syncServiceRef.current = null;
-      }
-      setActiveDevices([]);
-      setDeviceCount(1);
-      setSyncEvents([]);
-    }
-  }, [isMultiDeviceEnabled, initializeSyncService]);
-
-  // PERFORMANCE: Fast refresh function with retry logic - PROTECTED for prep data
-  const refreshFromAllDevices = useCallback(async () => {
-    if (!isMultiDeviceEnabled || !syncServiceRef.current) {
-      await loadFromFirebase();
-      return;
-    }
-
-    try {
-      console.log('🔄 Quick refresh...');
-      
-      // Quick refresh with timeout
-      const refreshPromise = syncServiceRef.current.refreshDataFromAllDevices();
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Refresh timeout')), 5000)
-      );
-
-      const syncData = await Promise.race([refreshPromise, timeoutPromise]) as any;
-      
-      // FIXED: Apply all data immediately but PROTECT scheduledPreps
-      if (syncData.employees) setEmployees(migrateEmployeeData(syncData.employees));
-      if (syncData.tasks) setTasks(migrateTaskData(syncData.tasks));
-      if (syncData.dailyData) setDailyData(syncData.dailyData);
-      if (syncData.completedTasks) setCompletedTasks(new Set(syncData.completedTasks));
-      if (syncData.taskAssignments) setTaskAssignments(syncData.taskAssignments);
-      if (syncData.prepItems) setPrepItems(syncData.prepItems);
-      
-      // CRITICAL: Don't overwrite scheduledPreps from sync - only from manual Firebase load
-      if (syncData.scheduledPreps) {
-        console.log('🛡️ BLOCKING scheduledPreps sync overwrite to prevent data loss');
-        console.log('🔍 Sync wanted to set:', {
-          syncCount: syncData.scheduledPreps.length,
-          localCount: scheduledPreps.length,
-          syncTodayCount: syncData.scheduledPreps.filter((prep: any) => 
-            prep.scheduledDate === getFormattedDate(new Date())
-          ).length,
-          localTodayCount: scheduledPreps.filter((prep: any) => 
-            prep.scheduledDate === getFormattedDate(new Date())
-          ).length
-        });
-        // NOTE: We deliberately DON'T update scheduledPreps from sync
-      }
-      
-      if (syncData.prepSelections) setPrepSelections(syncData.prepSelections);
-      if (syncData.storeItems) setStoreItems(syncData.storeItems);
-      
-      setLastSync(new Date().toLocaleTimeString());
-      console.log('✅ Quick refresh completed (scheduledPreps protected)');
-      
-    } catch (error) {
-      console.warn('⚠️ Quick refresh failed, falling back to normal load:', error);
-      await loadFromFirebase();
-    }
-  }, [isMultiDeviceEnabled, loadFromFirebase, scheduledPreps]);
-
-  // Manual retry function for when initial load fails
-  const retryLoadFromFirebase = useCallback(async () => {
-    console.log('🔄 Manual retry of Firebase load...');
-    try {
-      await loadFromFirebase();
-      if (connectionStatus === 'connected') {
-        console.log('✅ Manual retry succeeded - enabling sync');
-        isInitializedRef.current = true; // Now we can safely sync
-      }
-    } catch (error) {
-      console.error('❌ Manual retry failed:', error);
-    }
-  }, [loadFromFirebase, connectionStatus]);
 
   return {
     // State
@@ -668,12 +524,6 @@ export const useFirebaseData = () => {
     scheduledPreps,
     prepSelections,
     storeItems,
-    
-    // Multi-device sync state
-    activeDevices,
-    syncEvents,
-    deviceCount,
-    isMultiDeviceEnabled,
 
     // Setters
     setEmployees,
@@ -690,10 +540,7 @@ export const useFirebaseData = () => {
     // Actions
     loadFromFirebase,
     saveToFirebase,
-    quickSave,
-    toggleMultiDeviceSync,
-    refreshFromAllDevices,
-    retryLoadFromFirebase
+    quickSave
   };
 };
 

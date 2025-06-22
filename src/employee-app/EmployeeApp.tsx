@@ -50,11 +50,7 @@ const EmployeeApp: React.FC = () => {
     scheduledPreps,
     prepSelections,
     storeItems: firebaseStoreItems,
-    // Multi-device sync properties
-    activeDevices,
-    syncEvents,
-    deviceCount,
-    isMultiDeviceEnabled,
+    // Remove multi-device sync properties that no longer exist
     setEmployees,
     setTasks,
     setDailyData,
@@ -67,10 +63,7 @@ const EmployeeApp: React.FC = () => {
     setStoreItems: setFirebaseStoreItems,
     loadFromFirebase,
     saveToFirebase,
-    quickSave,
-    // Multi-device sync actions
-    toggleMultiDeviceSync,
-    refreshFromAllDevices
+    quickSave
   } = useFirebaseData();
 
   const {
@@ -313,13 +306,6 @@ const EmployeeApp: React.FC = () => {
                 Admin Mode
               </div>
             )}
-            {/* Multi-device sync indicator in header */}
-            {isMultiDeviceEnabled && deviceCount > 1 && (
-              <div className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full flex items-center space-x-1">
-                <Users className="w-3 h-3" />
-                <span>{deviceCount} devices</span>
-              </div>
-            )}
           </div>
           <div className="flex items-center space-x-2">
             {isAdmin && (
@@ -475,11 +461,6 @@ const EmployeeApp: React.FC = () => {
                   <p className="mt-1 text-sm text-blue-600">
                     All cleaning tasks and assignments have been reset for today. Time to start fresh and earn those points!
                   </p>
-                  {isMultiDeviceEnabled && deviceCount > 1 && (
-                    <p className="mt-1 text-xs text-blue-500">
-                      📱 Synced across {deviceCount} devices
-                    </p>
-                  )}
                 </div>
                 <div className="flex-shrink-0 ml-3">
                   <button
@@ -514,12 +495,6 @@ const EmployeeApp: React.FC = () => {
           lastSync={lastSync}
           connectionStatus={connectionStatus}
           loadFromFirebase={loadFromFirebase}
-          activeDevices={activeDevices}
-          syncEvents={syncEvents}
-          deviceCount={deviceCount}
-          isMultiDeviceEnabled={isMultiDeviceEnabled}
-          toggleMultiDeviceSync={toggleMultiDeviceSync}
-          refreshFromAllDevices={refreshFromAllDevices}
         />
 
         {/* Tab Content */}
