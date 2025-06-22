@@ -443,12 +443,13 @@ export const useFirebaseData = () => {
         todayCompleted: finalScheduledPreps.filter((prep: any) => 
           prep.scheduledDate === getFormattedDate(new Date()) && prep.completed === true
         ).length,
-        sampleData: finalScheduledPreps.slice(0, 3).map((prep: any) => ({
+        sampleData: finalScheduledPreps.slice(0, 5).map((prep: any) => ({
           id: prep.id,
           name: prep.name,
           completed: prep.completed,
           scheduledDate: prep.scheduledDate
-        }))
+        })),
+        rawDataSample: data.scheduledPreps ? data.scheduledPreps.slice(0, 3) : 'No raw data'
       });
 
       // Set data immediately
