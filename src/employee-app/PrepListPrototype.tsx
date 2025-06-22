@@ -40,9 +40,8 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
   // UI State
   const [activeView, setActiveView] = useState('today');
   const [selectedDate, setSelectedDate] = useState(() => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    return tomorrow;
+    // Start with today instead of tomorrow
+    return new Date();
   });
   const [showAddCustom, setShowAddCustom] = useState(false);
   const [newPrepName, setNewPrepName] = useState('');
@@ -521,11 +520,56 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
 
       {/* Today's Preps View */}
       {activeView === 'today' && (
-        <TodayView
-          scheduledPreps={scheduledPreps}
-          onToggleCompletion={togglePrepCompletion}
-          onShowRecipe={showRecipe}
-        />
+        <>
+          {/* Debug Info Panel */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+            <h4 className="font-medium text-blue-800 mb-2">🔍 Debug Info</h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div>
+                <div className="font-medium text-blue-700">Today's Date</div>
+                <div className="text-blue-600">{getDateString(new Date())}</div>
+              </div>
+              <div>
+                <div className="font-medium text-blue-700">Total Scheduled</div>
+                <div className="text-blue-600">{scheduledPreps.length}</div>
+              </div>
+              <div>
+                <div className="font-medium text-blue-700">Today's Preps</div>
+                <div className="text-blue-600">
+                  {scheduledPreps.filter(prep => prep.scheduledDate === getDateString(new Date())).length}
+                </div>
+              </div>
+              <div>
+                <div className="font-medium text-blue-700">Connection</div>
+                <div className={connectionStatus === 'connected' ? 'text-green-600' : 'text-red-600'}>
+                  {connectionStatus}
+                </div>
+              </div>
+            </div>
+            <div className="mt-3">
+              <div className="font-medium text-blue-700 mb-1">All Scheduled Dates:</div>
+              <div className="text-blue-600 text-xs">
+                {[...new Set(scheduledPreps.map(p => p.scheduledDate))].sort().join(', ') || 'None'}
+              </div>
+            </div>
+            {scheduledPreps.length > 0 && (
+              <div className="mt-2">
+                <div className="font-medium text-blue-700 mb-1">Sample Preps:</div>
+                <div className="text-blue-600 text-xs">
+                  {scheduledPreps.slice(0, 3).map(p => 
+                    `${p.name} (${p.scheduledDate})${p.completed ? ' ✅' : ' ⏳'}`
+                  ).join(' | ')}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <TodayView
+            scheduledPreps={scheduledPreps}
+            onToggleCompletion={togglePrepCompletion}
+            onShowRecipe={showRecipe}
+          />
+        </>
       )}
 
       {/* Plan View */}
