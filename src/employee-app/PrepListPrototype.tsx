@@ -105,9 +105,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
 
       const incompletePreps = scheduledPreps.filter(prep => 
         prep.scheduledDate === yesterdayStr && !prep.completed
-    };
-
-export default PrepListPrototype;
+      );
       
       if (incompletePreps.length > 0) {
         console.log(`🔄 Moving ${incompletePreps.length} incomplete preps from ${yesterdayStr} to ${todayStr}`);
