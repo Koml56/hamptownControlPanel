@@ -549,7 +549,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
             <div className="mt-3">
               <div className="font-medium text-blue-700 mb-1">All Scheduled Dates:</div>
               <div className="text-blue-600 text-xs">
-                {[...new Set(scheduledPreps.map(p => p.scheduledDate))].sort().join(', ') || 'None'}
+                {Array.from(new Set(scheduledPreps.map(p => p.scheduledDate))).sort().join(', ') || 'None'}
               </div>
             </div>
             {scheduledPreps.length > 0 && (
