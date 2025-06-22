@@ -1,4 +1,4 @@
-// prep-types.ts - Type definitions for prep list system
+// prep-types.ts - FIXED: Corrected quickSave return type to match implementation
 export interface PrepItem {
   id: number;
   name: string;
@@ -78,6 +78,6 @@ export interface PrepListPrototypeProps {
   setPrepItems: (updater: (prev: PrepItem[]) => PrepItem[]) => void;
   setScheduledPreps: (updater: (prev: ScheduledPrep[]) => ScheduledPrep[]) => void;
   setPrepSelections: (updater: (prev: PrepSelections) => PrepSelections) => void;
-  // Firebase actions
-  quickSave: (field: string, data: any) => Promise<void>;
+  // Firebase actions - FIXED: Changed return type from Promise<void> to Promise<boolean>
+  quickSave: (field: string, data: any) => Promise<boolean>;
 }
