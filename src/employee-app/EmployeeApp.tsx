@@ -559,7 +559,7 @@ const EmployeeApp: React.FC = () => {
             setPrepItems={setPrepItems}
             setScheduledPreps={setScheduledPreps}
             setPrepSelections={setPrepSelections}
-            quickSave={quickSave}
+            saveToFirebase={saveToFirebase}
           />
         )}
 
