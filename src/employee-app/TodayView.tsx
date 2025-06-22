@@ -19,9 +19,29 @@ const TodayView: React.FC<TodayViewProps> = ({
   // Track which prep items are currently being saved
   const [savingPreps, setSavingPreps] = useState<Set<number>>(new Set());
 
+  // Get today's date string
+  const todayDateString = getDateString(new Date());
+  
+  // Filter today's scheduled preps
   const todayScheduledPreps = scheduledPreps.filter(prep =>
-    prep.scheduledDate === getDateString(new Date())
+    prep.scheduledDate === todayDateString
   );
+
+  // Debug logging to see what's happening
+  React.useEffect(() => {
+    console.log('🔍 TodayView Debug Info:', {
+      todayDateString,
+      totalScheduledPreps: scheduledPreps.length,
+      todayScheduledPreps: todayScheduledPreps.length,
+      allScheduledDates: [...new Set(scheduledPreps.map(p => p.scheduledDate))].sort(),
+      sampleTodayPreps: todayScheduledPreps.slice(0, 3).map(p => ({
+        id: p.id,
+        name: p.name,
+        scheduledDate: p.scheduledDate,
+        completed: p.completed
+      }))
+    });
+  }, [todayDateString, scheduledPreps.length, todayScheduledPreps.length]);
 
   const completedToday = todayScheduledPreps.filter(prep => prep.completed).length;
   const totalToday = todayScheduledPreps.length;
