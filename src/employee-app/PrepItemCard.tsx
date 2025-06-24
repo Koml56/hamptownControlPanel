@@ -68,12 +68,6 @@ const PrepItemCard: React.FC<PrepItemCardProps> = ({
                   📖 Recipe
                 </button>
               )}
-              <button
-                onClick={() => onSave(prep, selection)}
-                className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full hover:bg-blue-200 transition-colors"
-              >
-                💾 Save
-              </button>
             </div>
             <p className="text-sm text-gray-600 flex items-center space-x-2">
               <span>{prep.estimatedTime}</span>
