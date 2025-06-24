@@ -65,7 +65,6 @@ interface SmartPrepSuggestionsProps {
   assignmentStep: Record<number, string | null>;
   onShowPriorityOptions: (prepId: number | string | null) => void;
   onResetWorkflow: () => void;
-  adminMode?: boolean; // Pass true when logged in with 6969
 }
 
 interface PrepSuggestion {
@@ -100,14 +99,52 @@ const SmartPrepSuggestions: React.FC<SmartPrepSuggestionsProps> = ({
   showTimeOptions,
   assignmentStep,
   onShowPriorityOptions,
-  onResetWorkflow,
-  adminMode = false
+  onResetWorkflow
 }) => {
   const [showSuggestions, setShowSuggestions] = useState(true);
   const [suggestionMode, setSuggestionMode] = useState<'overdue' | 'smart' | 'all'>('smart');
   const [maxSuggestions, setMaxSuggestions] = useState(5);
   const [showLearningLog, setShowLearningLog] = useState(false);
   const [learningLog, setLearningLog] = useState<LearningLogEntry[]>([]);
+  const [isAdminMode, setIsAdminMode] = useState(false);
+
+  // Detect admin mode using same method as PrepListPrototype
+  useEffect(() => {
+    const checkAdminMode = () => {
+      // Method 1: Check for "Admin Mode" badge in header (most reliable)
+      const adminBadge = document.querySelector('.bg-red-100.text-red-700');
+      const hasAdminBadge = adminBadge && adminBadge.textContent?.includes('Admin Mode');
+      
+      // Method 2: Check if admin/reports tabs are visible (only shown when admin)
+      const tabsContainer = document.querySelector('.bg-white.border-b');
+      const hasAdminTabs = tabsContainer && (
+        tabsContainer.textContent?.includes('Admin Panel') || 
+        tabsContainer.textContent?.includes('Daily Reports')
+      );
+      
+      // Method 3: Check for admin logout button
+      const logoutButton = document.querySelector('[title="Logout Admin"]');
+      
+      const isAdmin = hasAdminBadge || hasAdminTabs || !!logoutButton;
+      setIsAdminMode(isAdmin);
+      
+      // Debug log for admin detection
+      if (isAdmin !== isAdminMode) {
+        console.log('🔧 Prep Suggestions: Admin mode detected:', { 
+          hasAdminBadge: !!hasAdminBadge, 
+          hasAdminTabs: !!hasAdminTabs, 
+          hasLogoutButton: !!logoutButton,
+          isAdmin
+        });
+      }
+    };
+    
+    // Check immediately and then poll every second
+    checkAdminMode();
+    const interval = setInterval(checkAdminMode, 1000);
+    
+    return () => clearInterval(interval);
+  }, [isAdminMode]);
 
   const priorities = [
     { id: 'low', name: 'Low', color: 'bg-green-100 text-green-700', icon: '🟢' },
@@ -217,7 +254,7 @@ const SmartPrepSuggestions: React.FC<SmartPrepSuggestionsProps> = ({
         const effectiveFrequency = (confidence > 60 && learnedFreq > 0) ? learnedFreq : prep.frequency;
         
         // Log learning updates
-        if (adminMode && learnedFreq > 0 && Math.abs(learnedFreq - prep.frequency) > 0.5) {
+        if (isAdminMode && learnedFreq > 0 && Math.abs(learnedFreq - prep.frequency) > 0.5) {
           const logEntry: LearningLogEntry = {
             prepId: prep.id,
             prepName: prep.name,
@@ -357,7 +394,7 @@ const SmartPrepSuggestions: React.FC<SmartPrepSuggestionsProps> = ({
       .slice(0, maxSuggestions);
     
     return allSuggestions;
-  }, [prepItems, scheduledPreps, currentDate, selectedDate, selectedCategory, searchQuery, suggestionMode, maxSuggestions, adminMode]);
+  }, [prepItems, scheduledPreps, currentDate, selectedDate, selectedCategory, searchQuery, suggestionMode, maxSuggestions, isAdminMode]);
 
   // Auto-apply suggestions (optional feature)
   const autoApplySuggestions = () => {
@@ -389,7 +426,7 @@ const SmartPrepSuggestions: React.FC<SmartPrepSuggestionsProps> = ({
               <Brain className="w-5 h-5 text-orange-600" />
               <h4 className="font-semibold text-orange-800">
                 Smart Prep Suggestions
-                {adminMode && <span className="ml-2 text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full">ADMIN</span>}
+                {isAdminMode && <span className="ml-2 text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full">ADMIN</span>}
               </h4>
               <span className="bg-orange-200 text-orange-800 px-2 py-1 rounded-full text-xs font-medium">
                 {suggestions.length}
@@ -405,7 +442,7 @@ const SmartPrepSuggestions: React.FC<SmartPrepSuggestionsProps> = ({
           {showSuggestions && (
             <div className="flex items-center space-x-2">
               {/* Admin Learning Log */}
-              {adminMode && (
+              {isAdminMode && (
                 <button
                   onClick={() => setShowLearningLog(!showLearningLog)}
                   className="flex items-center space-x-1 px-3 py-1 bg-purple-200 text-purple-800 rounded-lg hover:bg-purple-300 transition-colors text-xs font-medium"
@@ -451,7 +488,7 @@ const SmartPrepSuggestions: React.FC<SmartPrepSuggestionsProps> = ({
       </div>
 
       {/* Learning Log Modal */}
-      {adminMode && showLearningLog && (
+      {isAdminMode && showLearningLog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b">
@@ -618,7 +655,7 @@ const SmartPrepSuggestions: React.FC<SmartPrepSuggestionsProps> = ({
                               {Math.round(completionRate)}% completion rate
                             </span>
                           )}
-                          {adminMode && (
+                          {isAdminMode && (
                             <span className="text-gray-400">
                               Score: {score}
                             </span>
@@ -770,7 +807,7 @@ const SmartPrepSuggestions: React.FC<SmartPrepSuggestionsProps> = ({
                   <TrendingUp className="w-3 h-3" />
                   <span>Based on {scheduledPreps.filter(sp => sp.completed).length} completions</span>
                 </span>
-                {adminMode && (
+                {isAdminMode && (
                   <span className="flex items-center space-x-1">
                     <Shield className="w-3 h-3" />
                     <span>Admin mode active</span>
