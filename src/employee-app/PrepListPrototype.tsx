@@ -26,6 +26,7 @@ import TodayView from './TodayView';
 import WeekView from './WeekView';
 import PrepItemCard from './PrepItemCard';
 import RecipeModal from './RecipeModal';
+import SmartPrepSuggestions from './SmartPrepSuggestions';
 
 const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
   currentUser,
@@ -787,6 +788,25 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
                 </button>
               ))}
             </div>
+
+            {/* Smart Suggestions */}
+            <SmartPrepSuggestions
+              currentDate={currentDate}
+              selectedDate={selectedDate}
+              prepItems={prepItems}
+              scheduledPreps={scheduledPreps}
+              prepSelections={prepSelections}
+              selectedCategory={selectedCategory}
+              searchQuery={searchQuery}
+              onToggleSelection={togglePrepSelection}
+              onUpdateSelection={updatePrepSelection}
+              onShowRecipe={showRecipe}
+              showPriorityOptions={showPriorityOptions}
+              showTimeOptions={showTimeOptions}
+              assignmentStep={assignmentStep}
+              onShowPriorityOptions={setShowPriorityOptions}
+              onResetWorkflow={resetWorkflow}
+            />
 
             {/* Prep Items List */}
             <div className="space-y-3">
