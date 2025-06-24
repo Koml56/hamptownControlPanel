@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Calendar, Clock, Lightbulb, TrendingUp, AlertTriangle, CheckCircle2, Star, Zap, Brain, Target, Timer, Flame } from 'lucide-react';
+import { Calendar, Clock, Lightbulb, TrendingUp, AlertTriangle, CheckCircle2, Star, Zap, Brain, Target, Timer, Flame, Shield, BookOpen, BarChart3 } from 'lucide-react';
 
 interface PrepItem {
   id: number;
@@ -8,7 +8,8 @@ interface PrepItem {
   estimatedTime: string;
   isCustom: boolean;
   hasRecipe: boolean;
-  frequency: number;
+  frequency: number; // Recommended frequency
+  learnedFrequency?: number; // AI-calculated optimal frequency
   recipe: any;
 }
 
@@ -37,6 +38,17 @@ interface PrepSelections {
   };
 }
 
+interface LearningLogEntry {
+  prepId: number;
+  prepName: string;
+  timestamp: string;
+  recommendedFreq: number;
+  learnedFreq: number;
+  reason: string;
+  confidence: number;
+  dataPoints: number;
+}
+
 interface SmartPrepSuggestionsProps {
   currentDate: Date;
   selectedDate: Date;
@@ -53,6 +65,7 @@ interface SmartPrepSuggestionsProps {
   assignmentStep: Record<number, string | null>;
   onShowPriorityOptions: (prepId: number | string | null) => void;
   onResetWorkflow: () => void;
+  adminMode?: boolean; // Pass true when logged in with 6969
 }
 
 interface PrepSuggestion {
@@ -67,6 +80,9 @@ interface PrepSuggestion {
   score: number;
   completionRate: number;
   avgDaysBetween: number;
+  learnedFrequency: number;
+  frequencyConfidence: number;
+  dayPatterns: Record<string, number>;
 }
 
 const SmartPrepSuggestions: React.FC<SmartPrepSuggestionsProps> = ({
@@ -84,11 +100,14 @@ const SmartPrepSuggestions: React.FC<SmartPrepSuggestionsProps> = ({
   showTimeOptions,
   assignmentStep,
   onShowPriorityOptions,
-  onResetWorkflow
+  onResetWorkflow,
+  adminMode = false
 }) => {
   const [showSuggestions, setShowSuggestions] = useState(true);
   const [suggestionMode, setSuggestionMode] = useState<'overdue' | 'smart' | 'all'>('smart');
   const [maxSuggestions, setMaxSuggestions] = useState(5);
+  const [showLearningLog, setShowLearningLog] = useState(false);
+  const [learningLog, setLearningLog] = useState<LearningLogEntry[]>([]);
 
   const priorities = [
     { id: 'low', name: 'Low', color: 'bg-green-100 text-green-700', icon: '🟢' },
@@ -123,7 +142,44 @@ const SmartPrepSuggestions: React.FC<SmartPrepSuggestionsProps> = ({
     return prepSelections[selectionKey] || { priority: 'medium' as const, timeSlot: '', selected: false };
   };
 
-  // Enhanced suggestion algorithm
+  // Calculate learned frequency and day patterns
+  const calculateLearnedFrequency = (prepId: number, completions: ScheduledPrep[]) => {
+    if (completions.length < 2) return { learnedFreq: 0, confidence: 0, dayPatterns: {} };
+
+    // Calculate days between completions
+    const daysBetween = [];
+    const dayPatterns: Record<string, number> = {};
+    
+    for (let i = 0; i < completions.length - 1; i++) {
+      const days = Math.floor(
+        (new Date(completions[i].scheduledDate).getTime() - 
+         new Date(completions[i + 1].scheduledDate).getTime()) / (1000 * 60 * 60 * 24)
+      );
+      daysBetween.push(days);
+    }
+
+    // Track day-of-week patterns
+    completions.forEach(completion => {
+      const dayOfWeek = new Date(completion.scheduledDate).toLocaleDateString('en-US', { weekday: 'long' });
+      dayPatterns[dayOfWeek] = (dayPatterns[dayOfWeek] || 0) + 1;
+    });
+
+    const avgDaysBetween = daysBetween.reduce((sum, days) => sum + days, 0) / daysBetween.length;
+    
+    // Confidence based on data points and consistency
+    const variance = daysBetween.reduce((sum, days) => sum + Math.pow(days - avgDaysBetween, 2), 0) / daysBetween.length;
+    const consistency = 1 / (1 + variance / avgDaysBetween); // 0-1 scale
+    const dataConfidence = Math.min(completions.length / 10, 1); // More data = more confidence
+    const confidence = (consistency * 0.7 + dataConfidence * 0.3) * 100;
+
+    return {
+      learnedFreq: Math.round(avgDaysBetween * 10) / 10,
+      confidence: Math.round(confidence),
+      dayPatterns
+    };
+  };
+
+  // Enhanced suggestion algorithm with hybrid frequency
   const suggestions = useMemo((): PrepSuggestion[] => {
     const today = getDateString(currentDate);
     const selectedDateStr = getDateString(selectedDate);
@@ -154,26 +210,40 @@ const SmartPrepSuggestions: React.FC<SmartPrepSuggestionsProps> = ({
           ? Math.floor((new Date(today).getTime() - new Date(lastCompleted).getTime()) / (1000 * 60 * 60 * 24))
           : 999; // Never completed
         
+        // Calculate learned frequency and patterns
+        const { learnedFreq, confidence, dayPatterns } = calculateLearnedFrequency(prep.id, completions);
+        
+        // Use learned frequency if we have enough confidence, otherwise use recommended
+        const effectiveFrequency = (confidence > 60 && learnedFreq > 0) ? learnedFreq : prep.frequency;
+        
+        // Log learning updates
+        if (adminMode && learnedFreq > 0 && Math.abs(learnedFreq - prep.frequency) > 0.5) {
+          const logEntry: LearningLogEntry = {
+            prepId: prep.id,
+            prepName: prep.name,
+            timestamp: new Date().toISOString(),
+            recommendedFreq: prep.frequency,
+            learnedFreq,
+            reason: `Pattern analysis from ${completions.length} completions`,
+            confidence,
+            dataPoints: completions.length
+          };
+          
+          setLearningLog(prev => {
+            const exists = prev.some(entry => 
+              entry.prepId === prep.id && 
+              Math.abs(new Date(entry.timestamp).getTime() - new Date().getTime()) < 60000
+            );
+            return exists ? prev : [logEntry, ...prev.slice(0, 49)]; // Keep last 50 entries
+          });
+        }
+        
         // Calculate completion rate
         const totalScheduled = scheduledPreps.filter(sp => sp.prepId === prep.id).length;
         const completionRate = totalScheduled > 0 ? (completions.length / totalScheduled) * 100 : 0;
         
-        // Calculate average days between completions
-        let avgDaysBetween = prep.frequency;
-        if (completions.length > 1) {
-          const daysBetween = [];
-          for (let i = 0; i < completions.length - 1; i++) {
-            const days = Math.floor(
-              (new Date(completions[i].scheduledDate).getTime() - 
-               new Date(completions[i + 1].scheduledDate).getTime()) / (1000 * 60 * 60 * 24)
-            );
-            daysBetween.push(days);
-          }
-          avgDaysBetween = daysBetween.reduce((sum, days) => sum + days, 0) / daysBetween.length;
-        }
-        
-        // Calculate urgency and score
-        const targetFrequency = prep.frequency;
+        // Calculate urgency and score using effective frequency
+        const targetFrequency = effectiveFrequency;
         const overdueDays = daysSinceLastPrep - targetFrequency;
         
         let urgency: 'low' | 'medium' | 'high' | 'critical';
@@ -184,17 +254,17 @@ const SmartPrepSuggestions: React.FC<SmartPrepSuggestionsProps> = ({
         let suggestedTimeSlot = 'morning';
         
         if (daysSinceLastPrep === 999) {
-          // Never done
+          // Never done - removed "New" emoji
           urgency = 'high';
           score = 90;
           reason = 'Never prepared before';
-          icon = '🆕';
+          icon = '❓';
           suggestedPriority = 'high';
-        } else if (overdueDays > prep.frequency) {
+        } else if (overdueDays > targetFrequency) {
           // Critically overdue
           urgency = 'critical';
           score = 100 + overdueDays;
-          reason = `${overdueDays} days overdue`;
+          reason = `${Math.round(overdueDays)} days overdue`;
           icon = '🚨';
           suggestedPriority = 'high';
           suggestedTimeSlot = 'morning'; // High priority in morning
@@ -202,7 +272,7 @@ const SmartPrepSuggestions: React.FC<SmartPrepSuggestionsProps> = ({
           // Overdue
           urgency = 'high';
           score = 70 + overdueDays;
-          reason = `${overdueDays} ${overdueDays === 1 ? 'day' : 'days'} overdue`;
+          reason = `${Math.round(overdueDays)} ${Math.round(overdueDays) === 1 ? 'day' : 'days'} overdue`;
           icon = '⚠️';
           suggestedPriority = 'high';
         } else if (daysSinceLastPrep >= targetFrequency - 1) {
@@ -219,14 +289,14 @@ const SmartPrepSuggestions: React.FC<SmartPrepSuggestionsProps> = ({
           reason = `Low completion rate (${Math.round(completionRate)}%)`;
           icon = '📉';
           suggestedPriority = 'medium';
-        } else if (avgDaysBetween > prep.frequency * 1.5) {
-          // Inconsistent preparation
+        } else if (confidence > 60 && Math.abs(learnedFreq - prep.frequency) > 1) {
+          // Frequency mismatch detected
           urgency = 'low';
-          score = 30;
-          reason = 'Inconsistent schedule';
-          icon = '📊';
+          score = 35;
+          reason = `Frequency analysis suggests ${Math.round(learnedFreq)} days`;
+          icon = '🔍';
           suggestedPriority = 'low';
-          suggestedTimeSlot = 'afternoon'; // Lower priority later
+          suggestedTimeSlot = 'afternoon';
         } else {
           // Routine suggestion
           urgency = 'low';
@@ -238,7 +308,7 @@ const SmartPrepSuggestions: React.FC<SmartPrepSuggestionsProps> = ({
         }
         
         // Boost score for high-frequency items
-        if (prep.frequency <= 2) {
+        if (effectiveFrequency <= 2) {
           score += 15;
         }
         
@@ -269,7 +339,10 @@ const SmartPrepSuggestions: React.FC<SmartPrepSuggestionsProps> = ({
           icon,
           score,
           completionRate,
-          avgDaysBetween
+          avgDaysBetween: learnedFreq,
+          learnedFrequency: learnedFreq,
+          frequencyConfidence: confidence,
+          dayPatterns
         };
       })
       .filter(suggestion => {
@@ -284,7 +357,7 @@ const SmartPrepSuggestions: React.FC<SmartPrepSuggestionsProps> = ({
       .slice(0, maxSuggestions);
     
     return allSuggestions;
-  }, [prepItems, scheduledPreps, currentDate, selectedDate, selectedCategory, searchQuery, suggestionMode, maxSuggestions]);
+  }, [prepItems, scheduledPreps, currentDate, selectedDate, selectedCategory, searchQuery, suggestionMode, maxSuggestions, adminMode]);
 
   // Auto-apply suggestions (optional feature)
   const autoApplySuggestions = () => {
@@ -316,6 +389,7 @@ const SmartPrepSuggestions: React.FC<SmartPrepSuggestionsProps> = ({
               <Brain className="w-5 h-5 text-orange-600" />
               <h4 className="font-semibold text-orange-800">
                 Smart Prep Suggestions
+                {adminMode && <span className="ml-2 text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full">ADMIN</span>}
               </h4>
               <span className="bg-orange-200 text-orange-800 px-2 py-1 rounded-full text-xs font-medium">
                 {suggestions.length}
@@ -330,6 +404,18 @@ const SmartPrepSuggestions: React.FC<SmartPrepSuggestionsProps> = ({
           
           {showSuggestions && (
             <div className="flex items-center space-x-2">
+              {/* Admin Learning Log */}
+              {adminMode && (
+                <button
+                  onClick={() => setShowLearningLog(!showLearningLog)}
+                  className="flex items-center space-x-1 px-3 py-1 bg-purple-200 text-purple-800 rounded-lg hover:bg-purple-300 transition-colors text-xs font-medium"
+                  title="View AI Learning Log"
+                >
+                  <BookOpen className="w-3 h-3" />
+                  <span>Learning Log</span>
+                </button>
+              )}
+              
               {/* Mode selector */}
               <select
                 value={suggestionMode}
@@ -358,16 +444,87 @@ const SmartPrepSuggestions: React.FC<SmartPrepSuggestionsProps> = ({
           <div className="mt-2 text-xs text-orange-700">
             <span className="flex items-center space-x-1">
               <Lightbulb className="w-3 h-3" />
-              <span>AI-powered suggestions based on prep frequency, completion history, and urgency</span>
+              <span>AI-powered suggestions with hybrid frequency learning from {scheduledPreps.filter(sp => sp.completed).length} completions</span>
             </span>
           </div>
         )}
       </div>
 
+      {/* Learning Log Modal */}
+      {adminMode && showLearningLog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                  <BarChart3 className="w-5 h-5 text-purple-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-800">AI Learning Log</h3>
+                  <p className="text-sm text-gray-600">Frequency optimization analysis</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowLearningLog(false)}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="p-6">
+              {learningLog.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <BarChart3 className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>No learning data yet. AI will start analyzing patterns as you complete more preps.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {learningLog.map((entry, index) => (
+                    <div key={index} className="border rounded-lg p-4 bg-gray-50">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-medium text-gray-800">{entry.prepName}</h4>
+                        <div className="flex items-center space-x-2">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            entry.confidence > 80 ? 'bg-green-100 text-green-700' :
+                            entry.confidence > 60 ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-red-100 text-red-700'
+                          }`}>
+                            {entry.confidence}% confidence
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {new Date(entry.timestamp).toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-4 text-sm">
+                        <div>
+                          <span className="text-gray-600">Recommended:</span>
+                          <div className="font-medium">Every {entry.recommendedFreq} days</div>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">AI Learned:</span>
+                          <div className="font-medium text-blue-600">Every {entry.learnedFreq} days</div>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Data Points:</span>
+                          <div className="font-medium">{entry.dataPoints} completions</div>
+                        </div>
+                      </div>
+                      <div className="mt-2 text-sm text-gray-600">{entry.reason}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Suggestions List */}
       {showSuggestions && (
         <div className="bg-white p-4 space-y-3">
-          {suggestions.map(({ prep, reason, urgency, daysSinceLastPrep, icon, score, completionRate, suggestedPriority, suggestedTimeSlot }) => {
+          {suggestions.map(({ prep, reason, urgency, daysSinceLastPrep, icon, score, completionRate, suggestedPriority, suggestedTimeSlot, learnedFrequency, frequencyConfidence }) => {
             const isSelected = isPrepSelected(prep);
             const selection = getPrepSelection(prep);
             
@@ -442,6 +599,14 @@ const SmartPrepSuggestions: React.FC<SmartPrepSuggestionsProps> = ({
                           <span>{prep.category}</span>
                           <span>•</span>
                           <span>Every {prep.frequency} days</span>
+                          {learnedFrequency > 0 && frequencyConfidence > 60 && (
+                            <>
+                              <span>→</span>
+                              <span className="text-blue-600 font-medium">
+                                {learnedFrequency} days (learned)
+                              </span>
+                            </>
+                          )}
                         </div>
                         
                         <div className="flex items-center space-x-3 text-xs">
@@ -453,9 +618,11 @@ const SmartPrepSuggestions: React.FC<SmartPrepSuggestionsProps> = ({
                               {Math.round(completionRate)}% completion rate
                             </span>
                           )}
-                          <span className="text-gray-400">
-                            Score: {score}
-                          </span>
+                          {adminMode && (
+                            <span className="text-gray-400">
+                              Score: {score}
+                            </span>
+                          )}
                         </div>
                         
                         {daysSinceLastPrep < 999 && (
@@ -597,12 +764,18 @@ const SmartPrepSuggestions: React.FC<SmartPrepSuggestionsProps> = ({
               <div className="flex items-center space-x-4">
                 <span className="flex items-center space-x-1">
                   <Brain className="w-3 h-3" />
-                  <span>AI-powered suggestions</span>
+                  <span>Hybrid frequency learning</span>
                 </span>
                 <span className="flex items-center space-x-1">
                   <TrendingUp className="w-3 h-3" />
-                  <span>Based on {scheduledPreps.length} historical data points</span>
+                  <span>Based on {scheduledPreps.filter(sp => sp.completed).length} completions</span>
                 </span>
+                {adminMode && (
+                  <span className="flex items-center space-x-1">
+                    <Shield className="w-3 h-3" />
+                    <span>Admin mode active</span>
+                  </span>
+                )}
               </div>
               <div className="flex items-center space-x-2">
                 <span>Show:</span>
