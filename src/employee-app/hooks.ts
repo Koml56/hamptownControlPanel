@@ -291,6 +291,11 @@ export const useFirebaseData = () => {
 
   // PERFORMANCE: Longer debounce for main saves
   const saveToFirebase = useCallback(() => {
+    // Prevent save if offline
+    if (connectionStatus !== 'connected') {
+      console.warn('⛔ Not saving to Firebase: offline or error connection');
+      return;
+    }
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
@@ -298,7 +303,7 @@ export const useFirebaseData = () => {
     saveTimeoutRef.current = setTimeout(() => {
       debouncedSave();
     }, 2000); // Increased debounce to reduce save frequency
-  }, [debouncedSave]);
+  }, [debouncedSave, connectionStatus]);
 
   // PERFORMANCE: Fast, non-blocking load with enhanced prep data handling
   const loadFromFirebase = useCallback(async () => {
