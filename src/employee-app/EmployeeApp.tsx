@@ -665,7 +665,7 @@ const EmployeeApp: React.FC = () => {
       )}
 
       {/* Offline queue handler */}
-      {useEffect(() => {
+      useEffect(() => {
         const handleOnline = () => {
           offlineQueue.processQueue(async (op) => {
             wsManager.sendOperation(op, 'normal');
@@ -675,7 +675,7 @@ const EmployeeApp: React.FC = () => {
         return () => {
           window.removeEventListener('online', handleOnline);
         };
-      }, [])}
+      }, []);
     </div>
   );
 };

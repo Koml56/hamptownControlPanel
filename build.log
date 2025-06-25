@@ -5,13 +5,13 @@
 Creating an optimized production build...
 Failed to compile.
 
-TS2746: This JSX tag's 'children' prop expects a single child of type 'ReactNode', but multiple children were provided.
-    329 |
-    330 |   return (
-  > 331 |     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-        |      ^^^
-    332 |       {/* Header */}
-    333 |       <div className="bg-white shadow-sm border-b">
-    334 |         <div className="px-4 py-3 flex justify-between items-center">
+TS2802: Type 'Set<string>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
+    30 |     let after = false;
+    31 |     const allKeys = new Set([...Object.keys(this.clock), ...Object.keys(otherClock)]);
+  > 32 |     for (const key of allKeys) {
+       |                       ^^^^^^^
+    33 |       const a = this.clock[key] || 0;
+    34 |       const b = otherClock[key] || 0;
+    35 |       if (a < b) before = true;
 
 
