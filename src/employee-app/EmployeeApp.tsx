@@ -659,13 +659,15 @@ const EmployeeApp: React.FC = () => {
           className="fixed inset-0 z-30" 
           onClick={() => {
             setShowUserSwitcher(false);
-            if (!showAdminLogin) setShowAdminLogin(false);
+            if (!showAdminLogin) {
+              setShowAdminLogin(false);
+            }
           }}
         />
       )}
 
       {/* Offline queue handler */}
-      useEffect(() => {
+      <useEffect(() => {
         const handleOnline = () => {
           offlineQueue.processQueue(async (op) => {
             wsManager.sendOperation(op, 'normal');
