@@ -217,6 +217,19 @@ const EmployeeApp: React.FC = () => {
 
   // TODO: підписка на WebSocket для співробітників (аналогічно задачам)
 
+  // Offline queue handler
+  useEffect(() => {
+    const handleOnline = () => {
+      offlineQueue.processQueue(async (op) => {
+        wsManager.sendOperation(op, 'normal');
+      });
+    };
+    window.addEventListener('online', handleOnline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+    };
+  }, []);
+
   // Optimized data change handler
   const handleDataChange = useCallback(() => {
     if (connectionStatus === 'connected') {
@@ -665,19 +678,6 @@ const EmployeeApp: React.FC = () => {
           }}
         />
       )}
-
-      {/* Offline queue handler */}
-      <useEffect(() => {
-        const handleOnline = () => {
-          offlineQueue.processQueue(async (op) => {
-            wsManager.sendOperation(op, 'normal');
-          });
-        };
-        window.addEventListener('online', handleOnline);
-        return () => {
-          window.removeEventListener('online', handleOnline);
-        };
-      }, []);
     </div>
   );
 };
