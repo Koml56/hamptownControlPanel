@@ -1,6 +1,3 @@
-git add .
-git commit -m "Implement full event-driven sync system, conflict resolution, offline queue, and optimizations"
-git push// AdminPanel.tsx
 import React, { useState } from 'react';
 import { Users, CheckSquare, Plus, Trash2, Edit3, Save, Settings, UserPlus, Star, ShoppingBag, Package, ChefHat, Clock, Utensils } from 'lucide-react';
 import { getMoodColor } from './utils';
