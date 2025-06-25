@@ -3,6 +3,7 @@ import React, { useEffect } from 'react';
 import { CheckSquare, Check, Users, Star } from 'lucide-react';
 import { getPriorityColor, getFormattedDate } from './utils';
 import { toggleTaskComplete, assignTask, getAssignedEmployee, reassignCompletedTask } from './taskFunctions';
+import { updateDailyData, addCompletedTask, removeCompletedTask } from './adminFunctions';
 import type { Task, Employee, TaskAssignments, DailyDataMap, CurrentUser } from './types';
 
 interface TaskManagerProps {

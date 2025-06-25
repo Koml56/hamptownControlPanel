@@ -1,6 +1,24 @@
 // adminFunctions.ts
 import { ADMIN_PASSWORD } from './constants';
 import type { Employee, Task, Priority, ActiveTab } from './types';
+import {
+  addTaskOperation,
+  updateTaskOperation,
+  completeTaskOperation,
+  deleteTaskOperation,
+  applyTaskOperation,
+  sendTaskOperationWithOffline
+} from './taskOperations';
+import { wsManager } from './taskOperations';
+import type { SyncOperation } from './OperationManager';
+import {
+  addEmployeeOperation,
+  updateEmployeeOperation,
+  deleteEmployeeOperation,
+  applyEmployeeOperation
+} from './employeeOperations';
+import { wsManager as wsManagerEmp } from './taskOperations'; // Використовуємо той самий wsManager
+import { offlineQueue } from './taskOperations';
 
 export const handleAdminLogin = (
   password: string,
@@ -30,15 +48,19 @@ export const addEmployee = (
 ) => {
   if (name.trim()) {
     const newEmployee: Employee = {
-      id: Math.max(...employees.map(e => e.id)) + 1,
+      id: Math.max(...employees.map(e => e.id), 0) + 1,
       name: name.trim(),
       mood: 3,
       lastUpdated: 'Just added',
       role: role,
       lastMoodDate: null,
-      points: 0 // Added points property
+      points: 0
     };
-    setEmployees(prev => [...prev, newEmployee]);
+    const op = addEmployeeOperation(employees, newEmployee);
+    if (navigator.onLine) {
+      try { wsManagerEmp.sendOperation(op, 'normal'); } catch { offlineQueue.enqueue(op); }
+    } else { offlineQueue.enqueue(op); }
+    setEmployees(prev => applyEmployeeOperation(prev, op));
     setNewEmployeeName('');
     setNewEmployeeRole('Cleaner');
   }
@@ -49,7 +71,13 @@ export const removeEmployee = (
   setEmployees: (updater: (prev: Employee[]) => Employee[]) => void
 ) => {
   if (window.confirm('Are you sure you want to remove this employee?')) {
-    setEmployees(prev => prev.filter(emp => emp.id !== id));
+    setEmployees(prev => {
+      const op = deleteEmployeeOperation(prev, id);
+      if (navigator.onLine) {
+        try { wsManagerEmp.sendOperation(op, 'normal'); } catch { offlineQueue.enqueue(op); }
+      } else { offlineQueue.enqueue(op); }
+      return applyEmployeeOperation(prev, op);
+    });
   }
 };
 
@@ -59,9 +87,13 @@ export const updateEmployee = (
   value: string,
   setEmployees: (updater: (prev: Employee[]) => Employee[]) => void
 ) => {
-  setEmployees(prev => prev.map(emp => 
-    emp.id === id ? { ...emp, [field]: value } : emp
-  ));
+  setEmployees(prev => {
+    const op = updateEmployeeOperation(prev, id, field, value);
+    if (navigator.onLine) {
+      try { wsManagerEmp.sendOperation(op, 'normal'); } catch { offlineQueue.enqueue(op); }
+    } else { offlineQueue.enqueue(op); }
+    return applyEmployeeOperation(prev, op);
+  });
 };
 
 // Task Management
@@ -71,14 +103,16 @@ export const addTask = (
   setEditingTask: (id: number) => void
 ) => {
   const newTask: Task = {
-    id: Math.max(...tasks.map(t => t.id)) + 1,
+    id: Math.max(...tasks.map(t => t.id), 0) + 1,
     task: 'New Task',
     location: 'Location',
     priority: 'medium',
     estimatedTime: '30 min',
     points: 5 // Added points property
   };
-  setTasks(prev => [...prev, newTask]);
+  const op = addTaskOperation(tasks, newTask);
+  sendTaskOperationWithOffline(op, 'normal');
+  setTasks(prev => applyTaskOperation(prev, op));
   setEditingTask(newTask.id);
 };
 
@@ -88,13 +122,11 @@ export const updateTask = (
   value: string,
   setTasks: (updater: (prev: Task[]) => Task[]) => void
 ) => {
-  setTasks(prev => prev.map(task => 
-    task.id === id ? { 
-      ...task, 
-      [field]: field === 'priority' ? value as Priority : 
-               field === 'points' ? parseInt(value) || 0 : value
-    } : task
-  ));
+  setTasks(prev => {
+    const op = updateTaskOperation(prev, id, field, value);
+    sendTaskOperationWithOffline(op, 'normal');
+    return applyTaskOperation(prev, op);
+  });
 };
 
 export const removeTask = (
@@ -102,7 +134,11 @@ export const removeTask = (
   setTasks: (updater: (prev: Task[]) => Task[]) => void
 ) => {
   if (window.confirm('Are you sure you want to remove this task?')) {
-    setTasks(prev => prev.filter(task => task.id !== id));
+    setTasks(prev => {
+      const op = deleteTaskOperation(prev, id);
+      sendTaskOperationWithOffline(op, 'normal');
+      return applyTaskOperation(prev, op);
+    });
   }
 };
 
@@ -135,3 +171,8 @@ export const removeCustomRole = (
     setCustomRoles(prev => prev.filter(role => role !== roleName));
   }
 };
+
+export { addPrepItem, updatePrepItem, deletePrepItem } from './prepOperations';
+export { addStoreItem, updateStoreItem, deleteStoreItem } from './storeOperations';
+export { updateDailyData } from './dailyDataOperations';
+export { addCompletedTask, removeCompletedTask } from './completedTasksOperations';

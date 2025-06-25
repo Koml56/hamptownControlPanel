@@ -16,6 +16,8 @@ interface SyncStatusIndicatorProps {
   isMultiDeviceEnabled?: boolean;
   toggleMultiDeviceSync?: () => void;
   refreshFromAllDevices?: () => void;
+  // Додаємо для нової архітектури:
+  conflictCount?: number;
 }
 
 const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
@@ -28,7 +30,8 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
   deviceCount = 1,
   isMultiDeviceEnabled = true, // Default to true now
   toggleMultiDeviceSync = () => {},
-  refreshFromAllDevices = () => {}
+  refreshFromAllDevices = () => {},
+  conflictCount = 0 // Default to 0
 }) => {
   const [showSyncPulse, setShowSyncPulse] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
@@ -355,6 +358,13 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
                   <div className={`w-full h-full rounded-full ${status.pulseColor}/30 border border-current scale-125`} />
                 </div>
               </>
+            )}
+
+            {/* Додаємо індикатор конфліктів */}
+            {conflictCount && conflictCount > 0 && (
+              <div className="absolute -top-2 -right-2 bg-red-600 text-white text-xs px-2 py-0.5 rounded-full animate-pulse z-50">
+                {conflictCount} conflict{conflictCount > 1 ? 's' : ''}
+              </div>
             )}
           </div>
         </div>

@@ -1,0 +1,17 @@
+
+> employee-mood-app@1.0.0 build
+> react-scripts build
+
+Creating an optimized production build...
+Failed to compile.
+
+TS2746: This JSX tag's 'children' prop expects a single child of type 'ReactNode', but multiple children were provided.
+    329 |
+    330 |   return (
+  > 331 |     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+        |      ^^^
+    332 |       {/* Header */}
+    333 |       <div className="bg-white shadow-sm border-b">
+    334 |         <div className="px-4 py-3 flex justify-between items-center">
+
+

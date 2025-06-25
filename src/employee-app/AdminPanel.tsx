@@ -10,8 +10,22 @@ import {
   updateTask,
   removeTask,
   addCustomRole,
-  removeCustomRole
+  removeCustomRole,
+  addPrepItem,
+  updatePrepItem,
+  deletePrepItem,
+  addStoreItem,
+  updateStoreItem,
+  deleteStoreItem
 } from './adminFunctions';
+import { 
+  addPrepItemOperation,
+  updatePrepItemOperation,
+  deletePrepItemOperation,
+  applyPrepItemOperation
+} from './prepOperations';
+import { wsManager as wsManagerPrep } from './taskOperations';
+import { offlineQueue } from './taskOperations';
 import type { Employee, Task, Priority, StoreItem, PrepItem, Recipe, AdminPanelProps } from './types';
 
 const AdminPanel: React.FC<AdminPanelProps> = ({
@@ -93,7 +107,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
         icon: newItemIcon,
         available: true
       };
-      setStoreItems(prev => [...prev, newItem]);
+      addStoreItem(storeItems, setStoreItems, newItem);
       setNewItemName('');
       setNewItemDescription('');
       setNewItemCost('');
@@ -103,15 +117,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   const handleUpdateStoreItem = (id: number, field: keyof StoreItem, value: any) => {
-    setStoreItems(prev => prev.map(item => 
-      item.id === id ? { ...item, [field]: value } : item
-    ));
+    updateStoreItem(storeItems, id, field, value, setStoreItems);
   };
 
   const handleRemoveStoreItem = (id: number) => {
-    if (window.confirm('Are you sure you want to remove this store item?')) {
-      setStoreItems(prev => prev.filter(item => item.id !== id));
-    }
+    deleteStoreItem(storeItems, id, setStoreItems);
   };
 
   // Prep management functions

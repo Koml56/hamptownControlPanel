@@ -26,8 +26,11 @@ import PrepListPrototype from './PrepListPrototype';
 import SyncStatusIndicator from './SyncStatusIndicator';
 
 // Hooks and Functions
-import { useFirebaseData, useAuth } from './hooks';
+import { useFirebaseData, useAuth, useTaskRealtimeSync } from './hooks';
 import { handleAdminLogin } from './adminFunctions';
+import { offlineQueue, wsManager, resolveTaskConflicts } from './taskOperations';
+import { applyEmployeeOperation, resolveEmployeeConflicts } from './employeeOperations';
+import type { SyncOperation } from './OperationManager';
 
 // Types and Constants
 import { getFormattedDate } from './utils';
@@ -50,7 +53,6 @@ const EmployeeApp: React.FC = () => {
     scheduledPreps,
     prepSelections,
     storeItems: firebaseStoreItems,
-    // Remove multi-device sync properties that no longer exist
     setEmployees,
     setTasks,
     setDailyData,
@@ -63,7 +65,8 @@ const EmployeeApp: React.FC = () => {
     setStoreItems: setFirebaseStoreItems,
     loadFromFirebase,
     saveToFirebase,
-    quickSave
+    quickSave,
+    applyTaskSyncOperation // <-- Додаємо цю функцію
   } = useFirebaseData();
 
   const {
@@ -83,6 +86,14 @@ const EmployeeApp: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState(getFormattedDate(new Date()));
   const [storeItems, setStoreItems] = useState<StoreItem[]>(getDefaultStoreItems());
   const [showDailyResetNotification, setShowDailyResetNotification] = useState(false);
+  // Додаємо стейт для конфліктів
+  const [conflictCount, setConflictCount] = useState(0);
+
+  // Стан для збереження історії операцій задач
+  const [taskOperations, setTaskOperations] = useState<SyncOperation[]>([]);
+
+  // Стан для збереження історії операцій співробітників
+  const [employeeOperations, setEmployeeOperations] = useState<SyncOperation[]>([]);
 
   // Initialize on mount - with better control
   useEffect(() => {
@@ -170,6 +181,41 @@ const EmployeeApp: React.FC = () => {
       setStoreItems(firebaseStoreItems);
     }
   }, [firebaseStoreItems]);
+
+  // Додаємо підрахунок конфліктів
+  useEffect(() => {
+    const conflicts = taskOperations.length - resolveTaskConflicts(taskOperations).length;
+    setConflictCount(conflicts);
+  }, [taskOperations]);
+
+  // Додаємо підрахунок конфліктів для співробітників
+  useEffect(() => {
+    const conflicts = employeeOperations.length - resolveEmployeeConflicts(employeeOperations).length;
+    setConflictCount(prev => prev + conflicts);
+  }, [employeeOperations]);
+
+  // Додаємо обробку вхідних операцій з WebSocket та локальних операцій
+  const handleTaskOperation = useCallback((op: SyncOperation) => {
+    setTaskOperations(prev => [...prev, op]);
+    applyTaskSyncOperation(op);
+  }, [applyTaskSyncOperation]);
+
+  // Підписка на WebSocket (оновлюємо useTaskRealtimeSync)
+  useTaskRealtimeSync(handleTaskOperation);
+
+  // Обгортка для локальних операцій (addTask, updateTask, removeTask)
+  const handleLocalTaskOperation = (op: SyncOperation) => {
+    setTaskOperations(prev => [...prev, op]);
+    // applyTaskSyncOperation(op); // вже викликається через WebSocket
+  };
+
+  // Додаємо обробку вхідних операцій співробітників
+  const handleEmployeeOperation = useCallback((op: SyncOperation) => {
+    setEmployeeOperations(prev => [...prev, op]);
+    applyEmployeeOperation(employees, op);
+  }, [employees]);
+
+  // TODO: підписка на WebSocket для співробітників (аналогічно задачам)
 
   // Optimized data change handler
   const handleDataChange = useCallback(() => {
@@ -261,14 +307,13 @@ const EmployeeApp: React.FC = () => {
     }, 500);
   }, [isAdmin, setCompletedTasks, setTaskAssignments, quickSave, completedTasks, taskAssignments]);
 
-  // Event handlers
-  const handleAdminLoginSubmit = () => {
-    const success = handleAdminLogin(adminPassword, setIsAdmin, setActiveTab, setAdminPassword);
-    if (success) {
-      setShowAdminLogin(false);
-    }
-  };
+  // --- Admin Login Modal logic ---
+  const handleAdminLoginSubmit = useCallback(() => {
+    handleAdminLogin(adminPassword, setIsAdmin, setActiveTab, setAdminPassword);
+    setShowAdminLogin(false);
+  }, [adminPassword, setIsAdmin, setActiveTab, setAdminPassword]);
 
+  // Event handlers
   const handleUserSwitch = (employee: Employee) => {
     switchUser(employee);
     setShowUserSwitcher(false);
@@ -462,15 +507,6 @@ const EmployeeApp: React.FC = () => {
                     All cleaning tasks and assignments have been reset for today. Time to start fresh and earn those points!
                   </p>
                 </div>
-                <div className="flex-shrink-0 ml-3">
-                  <button
-                    onClick={() => setShowDailyResetNotification(false)}
-                    className="text-blue-400 hover:text-blue-600"
-                  >
-                    <span className="sr-only">Close</span>
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
               </div>
             </div>
           </div>
@@ -495,6 +531,7 @@ const EmployeeApp: React.FC = () => {
           lastSync={lastSync}
           connectionStatus={connectionStatus}
           loadFromFirebase={loadFromFirebase}
+          conflictCount={conflictCount}
         />
 
         {/* Tab Content */}
@@ -571,7 +608,7 @@ const EmployeeApp: React.FC = () => {
             setSelectedDate={setSelectedDate}
             dailyData={dailyData}
             employees={employees}
-            connectionStatus={connectionStatus}
+            connectionStatus={connectionStatus as any}
           />
         )}
       </div>
@@ -626,6 +663,19 @@ const EmployeeApp: React.FC = () => {
           }}
         />
       )}
+
+      {/* Offline queue handler */}
+      {useEffect(() => {
+        const handleOnline = () => {
+          offlineQueue.processQueue(async (op) => {
+            wsManager.sendOperation(op, 'normal');
+          });
+        };
+        window.addEventListener('online', handleOnline);
+        return () => {
+          window.removeEventListener('online', handleOnline);
+        };
+      }, [])}
     </div>
   );
 };

@@ -1,0 +1,38 @@
+FAIL src/employee-app/VectorClock.test.ts
+  VectorClock
+    ✕ increments and compares clocks (5 ms)
+    ✓ merges clocks correctly (1 ms)
+
+  ● VectorClock › increments and compares clocks
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "concurrent"
+    Received: "after"
+
+       8 |     vc1.increment('A');
+       9 |     vc2.increment('B');
+    > 10 |     expect(vc1.compare(vc2.getClock())).toBe('concurrent');
+         |                                         ^
+      11 |     vc1.increment('A');
+      12 |     expect(vc1.compare(vc2.getClock())).toBe('after');
+      13 |     vc2.update(vc1.getClock());
+
+      at Object.<anonymous> (src/employee-app/VectorClock.test.ts:10:41)
+
+PASS src/employee-app/SyncIntegration.test.ts
+  Sync Integration
+    ✓ should resolve concurrent updates without data loss (1 ms)
+    ✓ should queue operations offline and send after reconnect (1 ms)
+
+PASS src/employee-app/OperationManager.test.ts
+  OperationManager
+    ✓ should create and apply ADD_TASK operation (1 ms)
+    ✓ should resolve conflicts using vector clocks
+    ✓ should rollback ADD_TASK operation (1 ms)
+
+Test Suites: 1 failed, 2 passed, 3 total
+Tests:       1 failed, 6 passed, 7 total
+Snapshots:   0 total
+Time:        0.574 s, estimated 1 s
+Ran all test suites.

@@ -18,6 +18,9 @@ import type {
 import { getDatabase, ref, onValue, off } from 'firebase/database';
 import { initializeApp } from 'firebase/app';
 import { FIREBASE_CONFIG } from './constants';
+import { applyTaskOperation } from './taskOperations';
+import { wsManager } from './taskOperations';
+import type { SyncOperation } from './OperationManager';
 
 // Migration functions
 const migrateEmployeeData = (employees: any[]): Employee[] => {
@@ -514,6 +517,11 @@ export const useFirebaseData = () => {
     };
   }, []);
 
+  // Додаємо applyTaskOperation для застосування операцій до задач
+  const applyTaskSyncOperation = (op: SyncOperation) => {
+    setTasks(prev => applyTaskOperation(prev, op));
+  };
+
   return {
     // State
     isLoading,
@@ -545,7 +553,10 @@ export const useFirebaseData = () => {
     // Actions
     loadFromFirebase,
     saveToFirebase,
-    quickSave
+    quickSave,
+
+    // Додаємо applyTaskOperation для застосування операцій до задач
+    applyTaskSyncOperation
   };
 };
 
@@ -576,4 +587,19 @@ export const useAuth = () => {
     switchUser,
     logoutAdmin
   };
+};
+
+export const useTaskRealtimeSync = (applyTaskSyncOperation: (op: SyncOperation) => void) => {
+  // Підписка на вхідні операції через WebSocket
+  useEffect(() => {
+    wsManager.onOperationReceived((op: SyncOperation) => {
+      if (op.targetField === 'tasks') {
+        applyTaskSyncOperation(op);
+      }
+    });
+    wsManager.connect().catch(console.error);
+    return () => {
+      // TODO: додати відписку якщо потрібно
+    };
+  }, [applyTaskSyncOperation]);
 };
