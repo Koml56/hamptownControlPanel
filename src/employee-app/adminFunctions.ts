@@ -6,10 +6,8 @@ import {
   updateTaskOperation,
   completeTaskOperation,
   deleteTaskOperation,
-  applyTaskOperation,
-  sendTaskOperationWithOffline
+  applyTaskOperation
 } from './taskOperations';
-import { wsManager } from './taskOperations';
 import type { SyncOperation } from './OperationManager';
 import {
   addEmployeeOperation,
@@ -17,7 +15,6 @@ import {
   deleteEmployeeOperation,
   applyEmployeeOperation
 } from './employeeOperations';
-import { wsManager as wsManagerEmp } from './taskOperations'; // Використовуємо той самий wsManager
 import { offlineQueue } from './taskOperations';
 
 export const handleAdminLogin = (
@@ -57,9 +54,9 @@ export const addEmployee = (
       points: 0
     };
     const op = addEmployeeOperation(employees, newEmployee);
-    if (navigator.onLine) {
-      try { wsManagerEmp.sendOperation(op, 'normal'); } catch { offlineQueue.enqueue(op); }
-    } else { offlineQueue.enqueue(op); }
+    // if (navigator.onLine) {
+    //   try { wsManagerEmp.sendOperation(op, 'normal'); } catch { offlineQueue.enqueue(op); }
+    // } else { offlineQueue.enqueue(op); }
     setEmployees(prev => applyEmployeeOperation(prev, op));
     setNewEmployeeName('');
     setNewEmployeeRole('Cleaner');
@@ -73,9 +70,9 @@ export const removeEmployee = (
   if (window.confirm('Are you sure you want to remove this employee?')) {
     setEmployees(prev => {
       const op = deleteEmployeeOperation(prev, id);
-      if (navigator.onLine) {
-        try { wsManagerEmp.sendOperation(op, 'normal'); } catch { offlineQueue.enqueue(op); }
-      } else { offlineQueue.enqueue(op); }
+      // if (navigator.onLine) {
+      //   try { wsManagerEmp.sendOperation(op, 'normal'); } catch { offlineQueue.enqueue(op); }
+      // } else { offlineQueue.enqueue(op); }
       return applyEmployeeOperation(prev, op);
     });
   }
@@ -89,9 +86,9 @@ export const updateEmployee = (
 ) => {
   setEmployees(prev => {
     const op = updateEmployeeOperation(prev, id, field, value);
-    if (navigator.onLine) {
-      try { wsManagerEmp.sendOperation(op, 'normal'); } catch { offlineQueue.enqueue(op); }
-    } else { offlineQueue.enqueue(op); }
+    // if (navigator.onLine) {
+    //   try { wsManagerEmp.sendOperation(op, 'normal'); } catch { offlineQueue.enqueue(op); }
+    // } else { offlineQueue.enqueue(op); }
     return applyEmployeeOperation(prev, op);
   });
 };
@@ -111,7 +108,7 @@ export const addTask = (
     points: 5 // Added points property
   };
   const op = addTaskOperation(tasks, newTask);
-  sendTaskOperationWithOffline(op, 'normal');
+  // sendTaskOperationWithOffline(op, 'normal');
   setTasks(prev => applyTaskOperation(prev, op));
   setEditingTask(newTask.id);
 };
@@ -124,7 +121,7 @@ export const updateTask = (
 ) => {
   setTasks(prev => {
     const op = updateTaskOperation(prev, id, field, value);
-    sendTaskOperationWithOffline(op, 'normal');
+    // sendTaskOperationWithOffline(op, 'normal');
     return applyTaskOperation(prev, op);
   });
 };
@@ -136,7 +133,7 @@ export const removeTask = (
   if (window.confirm('Are you sure you want to remove this task?')) {
     setTasks(prev => {
       const op = deleteTaskOperation(prev, id);
-      sendTaskOperationWithOffline(op, 'normal');
+      // sendTaskOperationWithOffline(op, 'normal');
       return applyTaskOperation(prev, op);
     });
   }

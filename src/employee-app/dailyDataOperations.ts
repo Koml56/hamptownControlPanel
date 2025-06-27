@@ -2,7 +2,7 @@
 // Операційний CRUD для dailyData через OperationManager
 import { OperationManager, SyncOperation } from './OperationManager';
 import { DailyDataMap } from './types';
-import { wsManager, offlineQueue } from './taskOperations';
+import { offlineQueue } from './taskOperations';
 
 const DEVICE_ID = (() => {
   let id = localStorage.getItem('deviceId');
@@ -24,9 +24,7 @@ export function updateDailyData(
 ) {
   const updated = { ...dailyData[date], [field]: value };
   const op = opManager.createOperation('UPDATE_EMPLOYEE', { date, ...updated }, 'dailyData');
-  if (navigator.onLine) {
-    try { wsManager.sendOperation(op, 'normal'); } catch { offlineQueue.enqueue(op); }
-  } else { offlineQueue.enqueue(op); }
+  offlineQueue.enqueue(op);
   setDailyData(prev => ({ ...prev, [date]: updated }));
 }
 

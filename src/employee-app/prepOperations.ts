@@ -2,7 +2,7 @@
 // Операційний CRUD для prepItems через OperationManager
 import { OperationManager, SyncOperation } from './OperationManager';
 import { PrepItem } from './prep-types';
-import { wsManager, offlineQueue } from './taskOperations';
+import { offlineQueue } from './taskOperations';
 
 const DEVICE_ID = (() => {
   let id = localStorage.getItem('deviceId');
@@ -53,9 +53,7 @@ export function addPrepItem(
   newItem: PrepItem
 ) {
   const op = addPrepItemOperation(prepItems, newItem);
-  if (navigator.onLine) {
-    try { wsManager.sendOperation(op, 'normal'); } catch { offlineQueue.enqueue(op); }
-  } else { offlineQueue.enqueue(op); }
+  offlineQueue.enqueue(op);
   setPrepItems(prev => applyPrepItemOperation(prev, op));
 }
 
@@ -67,9 +65,7 @@ export function updatePrepItem(
 ) {
   setPrepItems(prev => {
     const op = updatePrepItemOperation(prev, id, field, value);
-    if (navigator.onLine) {
-      try { wsManager.sendOperation(op, 'normal'); } catch { offlineQueue.enqueue(op); }
-    } else { offlineQueue.enqueue(op); }
+    offlineQueue.enqueue(op);
     return applyPrepItemOperation(prev, op);
   });
 }
@@ -80,9 +76,7 @@ export function deletePrepItem(
 ) {
   setPrepItems(prev => {
     const op = deletePrepItemOperation(prev, id);
-    if (navigator.onLine) {
-      try { wsManager.sendOperation(op, 'normal'); } catch { offlineQueue.enqueue(op); }
-    } else { offlineQueue.enqueue(op); }
+    offlineQueue.enqueue(op);
     return applyPrepItemOperation(prev, op);
   });
 }

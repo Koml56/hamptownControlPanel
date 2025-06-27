@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Users, CheckSquare, Plus, Trash2, Edit3, Save, Settings, UserPlus, Star, ShoppingBag, Package, ChefHat, Clock, Utensils } from 'lucide-react';
 import { getMoodColor } from './utils';
 import { 
@@ -23,9 +23,10 @@ import {
   deletePrepItemOperation,
   applyPrepItemOperation
 } from './prepOperations';
-import { wsManager as wsManagerPrep } from './taskOperations';
 import { offlineQueue } from './taskOperations';
 import type { Employee, Task, Priority, StoreItem, PrepItem, Recipe, AdminPanelProps } from './types';
+import debounce from 'lodash/debounce';
+import { useFirebaseData } from './hooks';
 
 const AdminPanel: React.FC<AdminPanelProps> = ({
   employees,
@@ -86,8 +87,59 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     );
   };
 
+  // Replace handleAddTask with local-only version
   const handleAddTask = () => {
-    addTask(tasks, setTasks, setEditingTask);
+    // Generate new task ID
+    const newTaskId = Math.max(0, ...tasks.map(t => t.id)) + 1;
+    const newTask: Task = {
+      id: newTaskId,
+      task: 'New Task',
+      location: 'Location',
+      priority: 'medium',
+      estimatedTime: '30 min',
+      points: 5
+    };
+    // Add to local state only
+    setTasks(prev => [...prev, newTask]);
+    // Enter editing mode
+    handleStartEditing(newTaskId);
+  };
+
+  const handleSaveTaskEdit = (taskId: number) => {
+    const edits = localTaskEdits[taskId];
+    if (edits) {
+      // Update local state first
+      setTasks(prev => prev.map(task =>
+        task.id === taskId ? { ...task, ...edits } : task
+      ));
+      // Sync to Firebase (updateTask expects string for value)
+      Object.entries(edits).forEach(([field, value]) => {
+        updateTask(taskId, field as keyof Task, String(value), setTasks);
+      });
+    }
+    setLocalTaskEdits(prev => {
+      const { [taskId]: removed, ...rest } = prev;
+      return rest;
+    });
+    setEditingTask(null);
+    setIsEditingTask(false);
+    editingTaskRef.current = null;
+  };
+
+  // Update handleCancelTaskEdit to remove unsaved new tasks
+  const handleCancelTaskEdit = (taskId: number) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (task && task.task === 'New Task') {
+      // Remove the unsaved task from local state
+      setTasks(prev => prev.filter(t => t.id !== taskId));
+    }
+    setLocalTaskEdits(prev => {
+      const { [taskId]: removed, ...rest } = prev;
+      return rest;
+    });
+    setEditingTask(null);
+    setIsEditingTask(false);
+    editingTaskRef.current = null;
   };
 
   const handleAddRole = () => {
@@ -201,6 +253,86 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
 
     handleUpdatePrepRecipe(id, field, newText);
   };
+
+  // Local editing state for tasks
+  const [localTaskEdits, setLocalTaskEdits] = useState<Record<number, Partial<Task>>>({});
+
+  const { 
+    isEditingTask,
+    setIsEditingTask,
+    editingTaskRef
+  } = useFirebaseData();
+
+  const [isEditingAnyTask, setIsEditingAnyTask] = useState(false);
+
+  const handleStartEditing = (taskId: number) => {
+    setEditingTask(taskId);
+    setIsEditingTask(true);
+    editingTaskRef.current = taskId;
+    // Initialize local edits with current task values
+    const task = tasks.find(t => t.id === taskId);
+    if (task) {
+      setLocalTaskEdits(prev => ({ ...prev, [taskId]: { ...task } }));
+    }
+  };
+
+  const handleTaskEditChange = (taskId: number, field: keyof Task, value: any) => {
+    setLocalTaskEdits(prev => ({
+      ...prev,
+      [taskId]: {
+        ...prev[taskId],
+        [field]: value,
+      },
+    }));
+  };
+
+  const handleSaveTaskEdit = (taskId: number) => {
+    const edits = localTaskEdits[taskId];
+    if (edits) {
+      // Update local state first
+      setTasks(prev => prev.map(task =>
+        task.id === taskId ? { ...task, ...edits } : task
+      ));
+      // Sync to Firebase (updateTask expects string for value)
+      Object.entries(edits).forEach(([field, value]) => {
+        updateTask(taskId, field as keyof Task, String(value), setTasks);
+      });
+    }
+    setLocalTaskEdits(prev => {
+      const { [taskId]: removed, ...rest } = prev;
+      return rest;
+    });
+    setEditingTask(null);
+    setIsEditingTask(false);
+    editingTaskRef.current = null;
+  };
+
+  // Update handleCancelTaskEdit to remove unsaved new tasks
+  const handleCancelTaskEdit = (taskId: number) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (task && task.task === 'New Task') {
+      // Remove the unsaved task from local state
+      setTasks(prev => prev.filter(t => t.id !== taskId));
+    }
+    setLocalTaskEdits(prev => {
+      const { [taskId]: removed, ...rest } = prev;
+      return rest;
+    });
+    setEditingTask(null);
+    setIsEditingTask(false);
+    editingTaskRef.current = null;
+  };
+
+  const getTaskEditValue = (task: Task, field: keyof Task) => {
+    return editingTask === task.id && localTaskEdits[task.id]?.[field] !== undefined
+      ? localTaskEdits[task.id]?.[field]
+      : task[field];
+  };
+
+  // Sync isEditingAnyTask to window for hooks.ts
+  useEffect(() => {
+    (window as any).isEditingAnyTask = isEditingAnyTask;
+  }, [isEditingAnyTask]);
 
   return (
     <div className="space-y-6">
@@ -596,20 +728,62 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                   <div className="md:col-span-2 space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Ingredients</label>
+                      <div className="mb-2 flex space-x-2">
+                        <button
+                          onClick={() => addFormattingToPrepRecipe(item.id, 'ingredients', 'bold')}
+                          className="px-2 py-1 bg-gray-100 rounded text-sm font-bold hover:bg-gray-200"
+                        >
+                          B
+                        </button>
+                        <button
+                          onClick={() => addFormattingToPrepRecipe(item.id, 'ingredients', 'italic')}
+                          className="px-2 py-1 bg-gray-100 rounded text-sm italic hover:bg-gray-200"
+                        >
+                          I
+                        </button>
+                        <button
+                          onClick={() => addFormattingToPrepRecipe(item.id, 'ingredients', 'bullet')}
+                          className="px-2 py-1 bg-gray-100 rounded text-sm hover:bg-gray-200"
+                        >
+                          •
+                        </button>
+                      </div>
                       <textarea
-                        value={newPrepRecipe.ingredients}
-                        onChange={(e) => setNewPrepRecipe(prev => ({ ...prev, ingredients: e.target.value }))}
-                        placeholder="• **1 cup** majoneesi&#10;• **3-4** valkosipulin kynttä"
+                        id={`ingredients-${item.id}`}
+                        value={item.recipe?.ingredients || ''}
+                        onChange={(e) => handleUpdatePrepRecipe(item.id, 'ingredients', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 h-24 font-mono text-sm"
+                        placeholder="• **1 cup** majoneesi&#10;• **3-4** valkosipulin kynttä"
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Instructions</label>
+                      <div className="mb-2 flex space-x-2">
+                        <button
+                          onClick={() => addFormattingToPrepRecipe(item.id, 'instructions', 'bold')}
+                          className="px-2 py-1 bg-gray-100 rounded text-sm font-bold hover:bg-gray-200"
+                        >
+                          B
+                        </button>
+                        <button
+                          onClick={() => addFormattingToPrepRecipe(item.id, 'instructions', 'italic')}
+                          className="px-2 py-1 bg-gray-100 rounded text-sm italic hover:bg-gray-200"
+                        >
+                          I
+                        </button>
+                        <button
+                          onClick={() => addFormattingToPrepRecipe(item.id, 'instructions', 'number')}
+                          className="px-2 py-1 bg-gray-100 rounded text-sm hover:bg-gray-200"
+                        >
+                          1.
+                        </button>
+                      </div>
                       <textarea
-                        value={newPrepRecipe.instructions}
-                        onChange={(e) => setNewPrepRecipe(prev => ({ ...prev, instructions: e.target.value }))}
-                        placeholder="1. **Sekoita**: Yhdistä majoneesi ja valkosipuli&#10;2. **Mausta**: Lisää sitruunamehu"
+                        id={`instructions-${item.id}`}
+                        value={item.recipe?.instructions || ''}
+                        onChange={(e) => handleUpdatePrepRecipe(item.id, 'instructions', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 h-24 font-mono text-sm"
+                        placeholder="1. **Sekoita**: Yhdistä majoneesi ja valkosipuli&#10;2. **Mausta**: Lisää sitruunamehu"
                       />
                     </div>
                   </div>
@@ -998,14 +1172,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
               </tr>
             </thead>
             <tbody>
-              {tasks.map(task => (
-                <tr key={task.id} className="hover:bg-gray-50">
+              {tasks.map((task, index) => (
+                <tr key={`task-${task.id}-${index}`} className="hover:bg-gray-50">
                   <td className="border border-gray-200 px-4 py-2">
                     {editingTask === task.id ? (
                       <input
                         type="text"
-                        value={task.task}
-                        onChange={(e) => updateTask(task.id, 'task', e.target.value, setTasks)}
+                        value={getTaskEditValue(task, 'task') as string}
+                        onChange={e => handleTaskEditChange(task.id, 'task', e.target.value)}
                         className="w-full px-2 py-1 border rounded"
                       />
                     ) : (
@@ -1016,8 +1190,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                     {editingTask === task.id ? (
                       <input
                         type="text"
-                        value={task.location}
-                        onChange={(e) => updateTask(task.id, 'location', e.target.value, setTasks)}
+                        value={getTaskEditValue(task, 'location') as string}
+                        onChange={e => handleTaskEditChange(task.id, 'location', e.target.value)}
                         className="w-full px-2 py-1 border rounded"
                       />
                     ) : (
@@ -1027,8 +1201,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                   <td className="border border-gray-200 px-4 py-2">
                     {editingTask === task.id ? (
                       <select
-                        value={task.priority}
-                        onChange={(e) => updateTask(task.id, 'priority', e.target.value, setTasks)}
+                        value={getTaskEditValue(task, 'priority') as string}
+                        onChange={e => handleTaskEditChange(task.id, 'priority', e.target.value)}
                         className="w-full px-2 py-1 border rounded"
                       >
                         <option value="low">Low</option>
@@ -1051,8 +1225,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                         type="number"
                         min="1"
                         max="100"
-                        value={task.points}
-                        onChange={(e) => updateTask(task.id, 'points', e.target.value, setTasks)}
+                        value={getTaskEditValue(task, 'points') as number}
+                        onChange={e => handleTaskEditChange(task.id, 'points', Number(e.target.value))}
                         className="w-full px-2 py-1 border rounded"
                       />
                     ) : (
@@ -1066,8 +1240,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                     {editingTask === task.id ? (
                       <input
                         type="text"
-                        value={task.estimatedTime}
-                        onChange={(e) => updateTask(task.id, 'estimatedTime', e.target.value, setTasks)}
+                        value={getTaskEditValue(task, 'estimatedTime') as string}
+                        onChange={e => handleTaskEditChange(task.id, 'estimatedTime', e.target.value)}
                         className="w-full px-2 py-1 border rounded"
                       />
                     ) : (
@@ -1077,15 +1251,23 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                   <td className="border border-gray-200 px-4 py-2">
                     <div className="flex gap-2 justify-center">
                       {editingTask === task.id ? (
-                        <button
-                          onClick={() => setEditingTask(null)}
-                          className="p-1 text-green-600 hover:text-green-800"
-                        >
-                          <Save className="w-4 h-4" />
-                        </button>
+                        <>
+                          <button
+                            onClick={() => handleSaveTaskEdit(task.id)}
+                            className="p-1 text-green-600 hover:text-green-800"
+                          >
+                            <Save className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleCancelTaskEdit(task.id)}
+                            className="p-1 text-gray-500 hover:text-gray-700"
+                          >
+                            Cancel
+                          </button>
+                        </>
                       ) : (
                         <button
-                          onClick={() => setEditingTask(task.id)}
+                          onClick={() => handleStartEditing(task.id)}
                           className="p-1 text-blue-600 hover:text-blue-800"
                         >
                           <Edit3 className="w-4 h-4" />

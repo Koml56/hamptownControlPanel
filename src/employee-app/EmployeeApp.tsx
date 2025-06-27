@@ -28,7 +28,7 @@ import SyncStatusIndicator from './SyncStatusIndicator';
 // Hooks and Functions
 import { useFirebaseData, useAuth, useTaskRealtimeSync } from './hooks';
 import { handleAdminLogin } from './adminFunctions';
-import { offlineQueue, wsManager, resolveTaskConflicts } from './taskOperations';
+import { offlineQueue, resolveTaskConflicts } from './taskOperations';
 import { applyEmployeeOperation, resolveEmployeeConflicts } from './employeeOperations';
 import type { SyncOperation } from './OperationManager';
 
@@ -221,7 +221,7 @@ const EmployeeApp: React.FC = () => {
   useEffect(() => {
     const handleOnline = () => {
       offlineQueue.processQueue(async (op) => {
-        wsManager.sendOperation(op, 'normal');
+        // wsManager.sendOperation(op, 'normal');
       });
     };
     window.addEventListener('online', handleOnline);

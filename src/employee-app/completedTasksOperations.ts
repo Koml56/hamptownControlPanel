@@ -1,7 +1,7 @@
 // completedTasksOperations.ts
 // Операційний CRUD для completedTasks через OperationManager
 import { OperationManager, SyncOperation } from './OperationManager';
-import { wsManager, offlineQueue } from './taskOperations';
+import { offlineQueue } from './taskOperations';
 
 const DEVICE_ID = (() => {
   let id = localStorage.getItem('deviceId');
@@ -20,9 +20,7 @@ export function addCompletedTask(
   setCompletedTasks: (tasks: Set<number>) => void
 ) {
   const op = opManager.createOperation('COMPLETE_TASK', { id: taskId }, 'completedTasks');
-  if (navigator.onLine) {
-    try { wsManager.sendOperation(op, 'critical'); } catch { offlineQueue.enqueue(op); }
-  } else { offlineQueue.enqueue(op); }
+  offlineQueue.enqueue(op);
   setCompletedTasks(new Set([...Array.from(completedTasks), taskId]));
 }
 
@@ -32,9 +30,7 @@ export function removeCompletedTask(
   setCompletedTasks: (tasks: Set<number>) => void
 ) {
   const op = opManager.createOperation('DELETE_ITEM', { id: taskId }, 'completedTasks');
-  if (navigator.onLine) {
-    try { wsManager.sendOperation(op, 'critical'); } catch { offlineQueue.enqueue(op); }
-  } else { offlineQueue.enqueue(op); }
+  offlineQueue.enqueue(op);
   setCompletedTasks(new Set(Array.from(completedTasks).filter(id => id !== taskId)));
 }
 

@@ -2,7 +2,6 @@
 // Операційний CRUD для задач через OperationManager
 import { OperationManager, SyncOperation } from './OperationManager';
 import { Task } from './types';
-import { WebSocketManager } from './WebSocketManager';
 import { OfflineQueue } from './OfflineQueue';
 
 const DEVICE_ID = (() => {
@@ -17,9 +16,6 @@ const DEVICE_ID = (() => {
 
 const opManager = new OperationManager(DEVICE_ID);
 
-// WebSocketManager для задач
-const WS_URL = 'wss://your-sync-server.example/ws'; // TODO: замінити на реальний URL
-export const wsManager = new WebSocketManager(WS_URL);
 export const offlineQueue = new OfflineQueue();
 
 export function addTaskOperation(tasks: Task[], task: Task): SyncOperation {
@@ -58,16 +54,4 @@ export function resolveTaskConflicts(ops: SyncOperation[]): SyncOperation[] {
 export function rollbackTaskOperations(ops: SyncOperation[], tasks: Task[]): Task[] {
   const newState = opManager.rollbackOperations(ops, { tasks });
   return newState.tasks;
-}
-
-export function sendTaskOperationWithOffline(op: SyncOperation, priority: 'critical' | 'normal' | 'background' = 'normal') {
-  if (navigator.onLine) {
-    try {
-      wsManager.sendOperation(op, priority);
-    } catch (e) {
-      offlineQueue.enqueue(op);
-    }
-  } else {
-    offlineQueue.enqueue(op);
-  }
 }
