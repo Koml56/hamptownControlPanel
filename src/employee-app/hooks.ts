@@ -95,8 +95,6 @@ export const useFirebaseData = () => {
   const lastSaveDataRef = useRef<string>('');
   const isInitializedRef = useRef<boolean>(false);
   const isSavingRef = useRef<boolean>(false);
-  const [isEditingTask, setIsEditingTask] = useState(false);
-  const editingTaskRef = useRef<number | null>(null);
 
   // FIXED: Enhanced quickSave with better error handling and completion status logging
   const quickSave = useCallback(async (field: string, data: any): Promise<boolean> => {
@@ -447,15 +445,8 @@ export const useFirebaseData = () => {
     // Tasks
     const tasksRef = ref(db, 'tasks');
     const handleTasks = (snapshot: any) => {
-      // Don't update if currently editing a task
-      if (isEditingTask || editingTaskRef.current !== null) {
-        console.log('⏸️ Skipping Firebase update - task editing in progress');
-        return;
-      }
       const data = snapshot.val() || [];
-      const newTasks = Array.isArray(data) ? data : Object.values(data);
-      setTasks(newTasks);
-      console.log('🔄 Firebase tasks updated:', newTasks.length);
+      setTasks(Array.isArray(data) ? data : Object.values(data));
     };
     onValue(tasksRef, handleTasks);
     // DailyData
@@ -564,12 +555,7 @@ export const useFirebaseData = () => {
     quickSave,
 
     // Додаємо applyTaskOperation для застосування операцій до задач
-    applyTaskSyncOperation,
-
-    // Editing state for tasks
-    isEditingTask,
-    setIsEditingTask,
-    editingTaskRef
+    applyTaskSyncOperation
   };
 };
 
@@ -606,6 +592,3 @@ export const useTaskRealtimeSync = (applyTaskSyncOperation: (op: SyncOperation) 
   // WebSocketManager removed: real-time sync handled by Firebase
   // If you need to add custom sync, use Firebase listeners here.
 };
-
-// Add a global editing flag for admin panel task editing
-(window as any).isEditingAnyTask = false;
