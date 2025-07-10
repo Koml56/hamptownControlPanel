@@ -37,7 +37,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   setTasks,
   setCustomRoles,
   setStoreItems,
-  setPrepItems
+  setPrepItems,
+  quickSave
 }) => {
   const [showRoleManagement, setShowRoleManagement] = useState(false);
   const [showStoreManagement, setShowStoreManagement] = useState(false);
@@ -137,8 +138,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     deleteStoreItem(storeItems, id, setStoreItems);
   };
 
-  // Prep management functions
-  const handleAddPrepItem = () => {
+  // --- Prep management functions ---
+  const handleAddPrepItem = async () => {
     if (newPrepName.trim() && newPrepTime.trim() && newPrepFrequency.trim()) {
       const newItem: PrepItem = {
         id: Math.max(...prepItems.map(item => item.id), 0) + 1,
@@ -150,7 +151,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
         frequency: parseInt(newPrepFrequency) || 1,
         recipe: newPrepHasRecipe ? newPrepRecipe : null
       };
-      setPrepItems(prev => [...prev, newItem]);
+      setPrepItems(prev => {
+        const updated = [...prev, newItem];
+        quickSave('prepItems', updated);
+        return updated;
+      });
       setNewPrepName('');
       setNewPrepCategory('majoneesit');
       setNewPrepTime('');
@@ -160,24 +165,36 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
+  // Only update local state on change, sync to Firebase on Save
   const handleUpdatePrepItem = (id: number, field: keyof PrepItem, value: any) => {
-    setPrepItems(prev => prev.map(item => 
-      item.id === id ? { ...item, [field]: value } : item
-    ));
+    setPrepItems(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
   };
 
   const handleUpdatePrepRecipe = (id: number, field: keyof Recipe, value: string) => {
-    setPrepItems(prev => prev.map(item => 
-      item.id === id ? { 
-        ...item, 
-        recipe: item.recipe ? { ...item.recipe, [field]: value } : { ingredients: '', instructions: '', [field]: value }
-      } : item
+    setPrepItems(prev => prev.map(item =>
+      item.id === id
+        ? { ...item, recipe: item.recipe ? { ...item.recipe, [field]: value } : { ingredients: '', instructions: '', [field]: value } }
+        : item
     ));
+  };
+
+  const handleSavePrepItem = (id: number) => {
+    setPrepItems(prev => {
+      const updated = prev.map(item => item.id === id ? { ...item } : item);
+      quickSave('prepItems', updated);
+      return updated;
+    });
+    setEditingPrepItem(null);
+    setShowRecipeEditor(null); // Hide recipe editor after save
   };
 
   const handleRemovePrepItem = (id: number) => {
     if (window.confirm('Are you sure you want to remove this prep item?')) {
-      setPrepItems(prev => prev.filter(item => item.id !== id));
+      setPrepItems(prev => {
+        const updated = prev.filter(item => item.id !== id);
+        quickSave('prepItems', updated);
+        return updated;
+      });
     }
   };
 
@@ -779,15 +796,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                             >
                               {item.hasRecipe ? '📖 Has Recipe' : 'No Recipe'}
                             </button>
-                            {item.hasRecipe && (
-                              <button
-                                onClick={() => setShowRecipeEditor(showRecipeEditor === item.id ? null : item.id)}
-                                className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs hover:bg-blue-200"
-                              >
-                                <Utensils className="w-3 h-3 inline mr-1" />
-                                Edit
-                              </button>
-                            )}
                           </div>
                         </div>
                       </div>
@@ -796,14 +804,21 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                       <div className="flex gap-2 ml-4">
                         {editingPrepItem === item.id ? (
                           <button
-                            onClick={() => setEditingPrepItem(null)}
+                            onClick={() => handleSavePrepItem(item.id)}
                             className="p-1 text-green-600 hover:text-green-800"
                           >
                             <Save className="w-4 h-4" />
                           </button>
                         ) : (
                           <button
-                            onClick={() => setEditingPrepItem(item.id)}
+                            onClick={() => {
+                              if (item.hasRecipe) {
+                                setShowRecipeEditor(showRecipeEditor === item.id ? null : item.id);
+                                setEditingPrepItem(item.id); // Also enter edit mode so Save button appears
+                              } else {
+                                setEditingPrepItem(item.id);
+                              }
+                            }}
                             className="p-1 text-blue-600 hover:text-blue-800"
                           >
                             <Edit3 className="w-4 h-4" />

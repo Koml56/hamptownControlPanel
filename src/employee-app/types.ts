@@ -131,4 +131,5 @@ export interface AdminPanelProps {
   setCustomRoles: (updater: (prev: string[]) => string[]) => void;
   setStoreItems: (updater: (prev: StoreItem[]) => StoreItem[]) => void;
   setPrepItems: (updater: (prev: PrepItem[]) => PrepItem[]) => void;
+  quickSave: (field: string, data: any) => Promise<any>;
 }

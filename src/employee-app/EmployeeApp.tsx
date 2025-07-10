@@ -238,13 +238,13 @@ const EmployeeApp: React.FC = () => {
   }, [connectionStatus, saveToFirebase]);
 
   // Enhanced setters that trigger save
-  const setEmployeesWithSave = useCallback((updater: (prev: Employee[]) => Employee[]) => {
-    setEmployees(updater);
+  const setEmployeesWithSave = useCallback((value: React.SetStateAction<Employee[]>) => {
+    setEmployees(value);
     handleDataChange();
   }, [setEmployees, handleDataChange]);
 
-  const setTasksWithSave = useCallback((updater: (prev: Task[]) => Task[]) => {
-    setTasks(updater);
+  const setTasksWithSave = useCallback((value: React.SetStateAction<Task[]>) => {
+    setTasks(value);
     handleDataChange();
   }, [setTasks, handleDataChange]);
 
@@ -263,13 +263,13 @@ const EmployeeApp: React.FC = () => {
     handleDataChange();
   }, [setTaskAssignments, handleDataChange]);
 
-  const setCustomRolesWithSave = useCallback((updater: (prev: string[]) => string[]) => {
-    setCustomRoles(updater);
+  const setCustomRolesWithSave = useCallback((value: React.SetStateAction<string[]>) => {
+    setCustomRoles(value);
     handleDataChange();
   }, [setCustomRoles, handleDataChange]);
 
-  const setStoreItemsWithSave = useCallback((updater: (prev: StoreItem[]) => StoreItem[]) => {
-    const newItems = typeof updater === 'function' ? updater(storeItems) : updater;
+  const setStoreItemsWithSave = useCallback((value: React.SetStateAction<StoreItem[]>) => {
+    const newItems = typeof value === 'function' ? value(storeItems) : value;
     setStoreItems(newItems);
     setFirebaseStoreItems(() => newItems);
     handleDataChange();
@@ -339,6 +339,161 @@ const EmployeeApp: React.FC = () => {
   };
 
   const currentEmployee = employees.find(emp => emp.id === currentUser.id);
+
+  // --- DAILY RESET LOGIC ---
+  // Save to Firebase FIRST, let real-time listeners handle state
+  useEffect(() => {
+    const performAutomaticDailyReset = async () => {
+      const today = getFormattedDate(new Date());
+      const lastResetDate = localStorage.getItem('lastTaskResetDate');
+      
+      console.log('🔍 Checking for automatic daily reset:', {
+        today,
+        lastResetDate,
+        needsReset: lastResetDate !== today,
+        completedTasksCount: completedTasks.size,
+        taskAssignmentsCount: Object.keys(taskAssignments).length
+      });
+      
+      // Check if it's a new day and we have tasks to reset
+      if (lastResetDate !== today && (completedTasks.size > 0 || Object.keys(taskAssignments).length > 0)) {
+        console.log('🌅 NEW DAY DETECTED: Performing automatic daily reset');
+        
+        // CRITICAL: Set reset date FIRST to prevent multiple resets
+        localStorage.setItem('lastTaskResetDate', today);
+        
+        try {
+          // FIXED: Save to Firebase FIRST - let real-time listeners update state
+          console.log('🔥 AUTOMATIC RESET: Saving cleared data to Firebase...');
+          
+          const saveResults = await Promise.all([
+            quickSave('completedTasks', []),
+            quickSave('taskAssignments', {})
+          ]);
+          
+          if (saveResults.every(result => result === true)) {
+            console.log('✅ AUTOMATIC RESET: Successfully saved cleared data to Firebase');
+            console.log('🔄 Real-time listeners will now update local state automatically');
+            
+            // Show reset notification after successful save
+            setShowDailyResetNotification(true);
+            setTimeout(() => {
+              setShowDailyResetNotification(false);
+            }, 8000);
+            
+            // Clear related localStorage flags
+            localStorage.removeItem('lastDailyResetNotification');
+            localStorage.removeItem('resetCheckedToday');
+            localStorage.removeItem('resetInProgress');
+            
+          } else {
+            console.error('❌ AUTOMATIC RESET: Failed to save to Firebase, reverting reset date');
+            localStorage.removeItem('lastTaskResetDate'); // Revert so it tries again
+          }
+          
+        } catch (error) {
+          console.error('❌ AUTOMATIC RESET: Error during reset:', error);
+          localStorage.removeItem('lastTaskResetDate'); // Revert so it tries again
+        }
+      }
+    };
+    
+    // Only run after initial load is complete and we have stable connection
+    if (!isLoading && connectionStatus === 'connected' && employees.length > 0) {
+      // Add small delay to ensure all data is loaded
+      const timer = setTimeout(() => {
+        performAutomaticDailyReset();
+      }, 2000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isLoading, connectionStatus, employees.length, completedTasks.size, Object.keys(taskAssignments).length, quickSave]);
+
+  // ADDITIONAL: Check for daily reset on visibility change (when user returns to app)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && !isLoading && connectionStatus === 'connected') {
+        const today = getFormattedDate(new Date());
+        const lastResetDate = localStorage.getItem('lastTaskResetDate');
+        
+        console.log('👁️ App became visible, checking for daily reset:', {
+          today,
+          lastResetDate,
+          needsReset: lastResetDate !== today
+        });
+        
+        // If it's a new day since last reset, trigger reset
+        if (lastResetDate !== today && (completedTasks.size > 0 || Object.keys(taskAssignments).length > 0)) {
+          console.log('🌅 VISIBILITY CHANGE: New day detected, triggering reset');
+          
+          // Use the same reset logic as above
+          setTimeout(async () => {
+            localStorage.setItem('lastTaskResetDate', today);
+            
+            try {
+              const saveResults = await Promise.all([
+                quickSave('completedTasks', []),
+                quickSave('taskAssignments', {})
+              ]);
+              
+              if (saveResults.every(result => result === true)) {
+                console.log('✅ VISIBILITY RESET: Successfully cleared tasks for new day');
+                setShowDailyResetNotification(true);
+                setTimeout(() => setShowDailyResetNotification(false), 8000);
+              }
+            } catch (error) {
+              console.error('❌ VISIBILITY RESET: Failed:', error);
+              localStorage.removeItem('lastTaskResetDate');
+            }
+          }, 1000);
+        }
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [isLoading, connectionStatus, completedTasks.size, Object.keys(taskAssignments).length, quickSave]);
+
+  // DEBUGGING: Add this temporary debug helper to see what's happening
+  useEffect(() => {
+    if (!isLoading && connectionStatus === 'connected') {
+      console.log('📊 DAILY RESET DEBUG:', {
+        currentDate: getFormattedDate(new Date()),
+        lastResetDate: localStorage.getItem('lastTaskResetDate'),
+        completedTasksCount: completedTasks.size,
+        taskAssignmentsCount: Object.keys(taskAssignments).length,
+        isLoading,
+        connectionStatus,
+        employeeCount: employees.length
+      });
+    }
+  }, [completedTasks.size, Object.keys(taskAssignments).length, isLoading, connectionStatus]);
+
+  // HELPER: Manual trigger for testing (you can call this from browser console)
+  // Add this to window for debugging
+  useEffect(() => {
+    (window as any).triggerDailyReset = async () => {
+      console.log('🧪 MANUAL TRIGGER: Forcing daily reset from console');
+      const today = getFormattedDate(new Date());
+      localStorage.setItem('lastTaskResetDate', today);
+      
+      try {
+        const results = await Promise.all([
+          quickSave('completedTasks', []),
+          quickSave('taskAssignments', {})
+        ]);
+        console.log('✅ Manual trigger results:', results);
+        return results;
+      } catch (error) {
+        console.error('❌ Manual trigger failed:', error);
+        return false;
+      }
+    };
+    
+    return () => {
+      delete (window as any).triggerDailyReset;
+    };
+  }, [quickSave]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -612,6 +767,7 @@ const EmployeeApp: React.FC = () => {
             setCustomRoles={setCustomRolesWithSave}
             setStoreItems={setStoreItemsWithSave}
             setPrepItems={setPrepItems}
+            quickSave={quickSave}
           />
         )}
 
