@@ -1,4 +1,4 @@
-// EmployeeApp.tsx - Updated with multi-device sync functionality
+// EmployeeApp.tsx - Updated with Restaurant Inventory tab integration
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Users, 
@@ -13,7 +13,8 @@ import {
   X, 
   Check, 
   ShoppingBag, 
-  ChefHat 
+  ChefHat,
+  UtensilsCrossed // New icon for inventory
 } from 'lucide-react';
 
 // Components
@@ -23,6 +24,7 @@ import Store from './Store';
 import AdminPanel from './AdminPanel';
 import DailyReports from './DailyReports';
 import PrepListPrototype from './PrepListPrototype';
+import RestaurantInventory from './inventory/RestaurantInventory'; // NEW: Inventory component
 import SyncStatusIndicator from './SyncStatusIndicator';
 
 // Hooks and Functions
@@ -36,6 +38,9 @@ import type { SyncOperation } from './OperationManager';
 import { getFormattedDate } from './utils';
 import { getDefaultStoreItems } from './defaultData';
 import type { ActiveTab, Employee, Task, DailyDataMap, TaskAssignments, StoreItem } from './types';
+
+// Extend ActiveTab type to include inventory
+type ExtendedActiveTab = ActiveTab | 'inventory';
 
 const EmployeeApp: React.FC = () => {
   // Firebase and Auth hooks with multi-device sync
@@ -66,7 +71,7 @@ const EmployeeApp: React.FC = () => {
     loadFromFirebase,
     saveToFirebase,
     quickSave,
-    applyTaskSyncOperation // <-- Додаємо цю функцію
+    applyTaskSyncOperation
   } = useFirebaseData();
 
   const {
@@ -79,27 +84,25 @@ const EmployeeApp: React.FC = () => {
 
   // UI State
   const [userMood, setUserMood] = useState(3);
-  const [activeTab, setActiveTab] = useState<ActiveTab>('mood');
+  const [activeTab, setActiveTab] = useState<ExtendedActiveTab>('mood'); // Updated type
   const [showUserSwitcher, setShowUserSwitcher] = useState(false);
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
   const [selectedDate, setSelectedDate] = useState(getFormattedDate(new Date()));
   const [storeItems, setStoreItems] = useState<StoreItem[]>(getDefaultStoreItems());
   const [showDailyResetNotification, setShowDailyResetNotification] = useState(false);
-  // Додаємо стейт для конфліктів
   const [conflictCount, setConflictCount] = useState(0);
 
-  // Стан для збереження історії операцій задач
+  // State for task operations history
   const [taskOperations, setTaskOperations] = useState<SyncOperation[]>([]);
-
-  // Стан для збереження історії операцій співробітників
+  // State for employee operations history
   const [employeeOperations, setEmployeeOperations] = useState<SyncOperation[]>([]);
 
   // Initialize on mount - with better control
   useEffect(() => {
     let mounted = true;
     const initializeApp = async () => {
-      if (mounted && employees.length === 0) { // Only load if we don't have data yet
+      if (mounted && employees.length === 0) {
         console.log('🚀 Initializing app...');
         await loadFromFirebase();
       }
@@ -110,7 +113,7 @@ const EmployeeApp: React.FC = () => {
     return () => {
       mounted = false;
     };
-  }, []); // Only run once on mount
+  }, []);
 
   // Set up periodic auto-save (every 5 minutes)
   useEffect(() => {
@@ -140,10 +143,6 @@ const EmployeeApp: React.FC = () => {
                    (completedTasks.size === 0 && Object.keys(taskAssignments).length === 0)
       });
       
-      // Show notification if:
-      // 1. A reset happened today (lastResetDate === today)
-      // 2. We haven't shown notification today (lastNotificationDate !== today)
-      // 3. Tasks are actually cleared (completedTasks.size === 0 AND taskAssignments is empty)
       if (lastResetDate === today && 
           lastNotificationDate !== today && 
           completedTasks.size === 0 &&
@@ -153,19 +152,17 @@ const EmployeeApp: React.FC = () => {
         setShowDailyResetNotification(true);
         localStorage.setItem('lastDailyResetNotification', today);
         
-        // Auto-hide notification after 8 seconds
         setTimeout(() => {
           setShowDailyResetNotification(false);
         }, 8000);
       }
     };
 
-    // Only check after initial load is complete and we have stable data
     if (!isLoading && connectionStatus === 'connected') {
-      const timer = setTimeout(checkDailyReset, 2000); // Wait 2 seconds for stability
+      const timer = setTimeout(checkDailyReset, 2000);
       return () => clearTimeout(timer);
     }
-  }, [completedTasks.size, taskAssignments, isLoading, connectionStatus]); // More specific dependencies
+  }, [completedTasks.size, taskAssignments, isLoading, connectionStatus]);
 
   // Update user mood when current user changes
   useEffect(() => {
@@ -182,40 +179,36 @@ const EmployeeApp: React.FC = () => {
     }
   }, [firebaseStoreItems]);
 
-  // Додаємо підрахунок конфліктів
+  // Calculate conflicts
   useEffect(() => {
     const conflicts = taskOperations.length - resolveTaskConflicts(taskOperations).length;
     setConflictCount(conflicts);
   }, [taskOperations]);
 
-  // Додаємо підрахунок конфліктів для співробітників
   useEffect(() => {
     const conflicts = employeeOperations.length - resolveEmployeeConflicts(employeeOperations).length;
     setConflictCount(prev => prev + conflicts);
   }, [employeeOperations]);
 
-  // Додаємо обробку вхідних операцій з WebSocket та локальних операцій
+  // Handle task operations
   const handleTaskOperation = useCallback((op: SyncOperation) => {
     setTaskOperations(prev => [...prev, op]);
     applyTaskSyncOperation(op);
   }, [applyTaskSyncOperation]);
 
-  // Підписка на WebSocket (оновлюємо useTaskRealtimeSync)
+  // Subscribe to WebSocket
   useTaskRealtimeSync(handleTaskOperation);
 
-  // Обгортка для локальних операцій (addTask, updateTask, removeTask)
+  // Handle local task operations
   const handleLocalTaskOperation = (op: SyncOperation) => {
     setTaskOperations(prev => [...prev, op]);
-    // applyTaskSyncOperation(op); // вже викликається через WebSocket
   };
 
-  // Додаємо обробку вхідних операцій співробітників
+  // Handle employee operations
   const handleEmployeeOperation = useCallback((op: SyncOperation) => {
     setEmployeeOperations(prev => [...prev, op]);
     applyEmployeeOperation(employees, op);
   }, [employees]);
-
-  // TODO: підписка на WebSocket для співробітників (аналогічно задачам)
 
   // Offline queue handler
   useEffect(() => {
@@ -275,7 +268,7 @@ const EmployeeApp: React.FC = () => {
     handleDataChange();
   }, [storeItems, setFirebaseStoreItems, handleDataChange]);
 
-  // FIXED: Manual reset function for testing (admin only) - Now clears BOTH completed tasks AND task assignments
+  // Manual reset function for testing (admin only)
   const handleManualReset = useCallback(() => {
     if (!isAdmin) return;
     
@@ -288,26 +281,21 @@ const EmployeeApp: React.FC = () => {
     
     const today = getFormattedDate(new Date());
     
-    // Clear all related localStorage flags
     localStorage.removeItem('resetInProgress');
     localStorage.removeItem('lastDailyResetNotification');
     localStorage.removeItem('resetCheckedToday');
     
-    // Perform the reset - BOTH completed tasks AND task assignments
     setCompletedTasks(new Set());
-    setTaskAssignments(() => ({})); // Clear all task assignments
+    setTaskAssignments(() => ({}));
     localStorage.setItem('lastTaskResetDate', today);
     
     console.log('✅ MANUAL RESET: Cleared both completed tasks AND task assignments');
-    console.log('📋 After manual reset: { completedTasks: Set(0), taskAssignments: {} }');
     
-    // Show notification
     setShowDailyResetNotification(true);
     setTimeout(() => {
       setShowDailyResetNotification(false);
     }, 8000);
     
-    // Save BOTH to Firebase
     setTimeout(() => {
       Promise.all([
         quickSave('completedTasks', []),
@@ -320,7 +308,7 @@ const EmployeeApp: React.FC = () => {
     }, 500);
   }, [isAdmin, setCompletedTasks, setTaskAssignments, quickSave, completedTasks, taskAssignments]);
 
-  // --- Admin Login Modal logic ---
+  // Admin Login Modal logic
   const handleAdminLoginSubmit = useCallback(() => {
     handleAdminLogin(adminPassword, setIsAdmin, setActiveTab, setAdminPassword);
     setShowAdminLogin(false);
@@ -340,8 +328,7 @@ const EmployeeApp: React.FC = () => {
 
   const currentEmployee = employees.find(emp => emp.id === currentUser.id);
 
-  // --- DAILY RESET LOGIC ---
-  // Save to Firebase FIRST, let real-time listeners handle state
+  // DAILY RESET LOGIC
   useEffect(() => {
     const performAutomaticDailyReset = async () => {
       const today = getFormattedDate(new Date());
@@ -355,15 +342,12 @@ const EmployeeApp: React.FC = () => {
         taskAssignmentsCount: Object.keys(taskAssignments).length
       });
       
-      // Check if it's a new day and we have tasks to reset
       if (lastResetDate !== today && (completedTasks.size > 0 || Object.keys(taskAssignments).length > 0)) {
         console.log('🌅 NEW DAY DETECTED: Performing automatic daily reset');
         
-        // CRITICAL: Set reset date FIRST to prevent multiple resets
         localStorage.setItem('lastTaskResetDate', today);
         
         try {
-          // FIXED: Save to Firebase FIRST - let real-time listeners update state
           console.log('🔥 AUTOMATIC RESET: Saving cleared data to Firebase...');
           
           const saveResults = await Promise.all([
@@ -375,32 +359,28 @@ const EmployeeApp: React.FC = () => {
             console.log('✅ AUTOMATIC RESET: Successfully saved cleared data to Firebase');
             console.log('🔄 Real-time listeners will now update local state automatically');
             
-            // Show reset notification after successful save
             setShowDailyResetNotification(true);
             setTimeout(() => {
               setShowDailyResetNotification(false);
             }, 8000);
             
-            // Clear related localStorage flags
             localStorage.removeItem('lastDailyResetNotification');
             localStorage.removeItem('resetCheckedToday');
             localStorage.removeItem('resetInProgress');
             
           } else {
             console.error('❌ AUTOMATIC RESET: Failed to save to Firebase, reverting reset date');
-            localStorage.removeItem('lastTaskResetDate'); // Revert so it tries again
+            localStorage.removeItem('lastTaskResetDate');
           }
           
         } catch (error) {
           console.error('❌ AUTOMATIC RESET: Error during reset:', error);
-          localStorage.removeItem('lastTaskResetDate'); // Revert so it tries again
+          localStorage.removeItem('lastTaskResetDate');
         }
       }
     };
     
-    // Only run after initial load is complete and we have stable connection
     if (!isLoading && connectionStatus === 'connected' && employees.length > 0) {
-      // Add small delay to ensure all data is loaded
       const timer = setTimeout(() => {
         performAutomaticDailyReset();
       }, 2000);
@@ -409,7 +389,7 @@ const EmployeeApp: React.FC = () => {
     }
   }, [isLoading, connectionStatus, employees.length, completedTasks.size, Object.keys(taskAssignments).length, quickSave]);
 
-  // ADDITIONAL: Check for daily reset on visibility change (when user returns to app)
+  // Check for daily reset on visibility change
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (!document.hidden && !isLoading && connectionStatus === 'connected') {
@@ -422,11 +402,9 @@ const EmployeeApp: React.FC = () => {
           needsReset: lastResetDate !== today
         });
         
-        // If it's a new day since last reset, trigger reset
         if (lastResetDate !== today && (completedTasks.size > 0 || Object.keys(taskAssignments).length > 0)) {
           console.log('🌅 VISIBILITY CHANGE: New day detected, triggering reset');
           
-          // Use the same reset logic as above
           setTimeout(async () => {
             localStorage.setItem('lastTaskResetDate', today);
             
@@ -454,7 +432,7 @@ const EmployeeApp: React.FC = () => {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [isLoading, connectionStatus, completedTasks.size, Object.keys(taskAssignments).length, quickSave]);
 
-  // DEBUGGING: Add this temporary debug helper to see what's happening
+  // Debug helper
   useEffect(() => {
     if (!isLoading && connectionStatus === 'connected') {
       console.log('📊 DAILY RESET DEBUG:', {
@@ -469,8 +447,7 @@ const EmployeeApp: React.FC = () => {
     }
   }, [completedTasks.size, Object.keys(taskAssignments).length, isLoading, connectionStatus]);
 
-  // HELPER: Manual trigger for testing (you can call this from browser console)
-  // Add this to window for debugging
+  // Manual trigger for testing
   useEffect(() => {
     (window as any).triggerDailyReset = async () => {
       console.log('🧪 MANUAL TRIGGER: Forcing daily reset from console');
@@ -615,6 +592,18 @@ const EmployeeApp: React.FC = () => {
             <ChefHat className="w-5 h-5 mx-auto mb-1" />
             <span className="text-sm">Prep List</span>
           </button>
+          {/* NEW: Restaurant Inventory Tab */}
+          <button
+            onClick={() => setActiveTab('inventory')}
+            className={`flex-shrink-0 py-3 px-4 text-center ${
+              activeTab === 'inventory' 
+                ? 'border-b-2 border-orange-500 text-orange-600 bg-orange-50' 
+                : 'text-gray-600 hover:text-gray-800'
+            }`}
+          >
+            <UtensilsCrossed className="w-5 h-5 mx-auto mb-1" />
+            <span className="text-sm">Restaurant Inventory</span>
+          </button>
           <button
             onClick={() => setActiveTab('store')}
             className={`flex-shrink-0 py-3 px-4 text-center ${
@@ -740,6 +729,14 @@ const EmployeeApp: React.FC = () => {
             setScheduledPreps={setScheduledPreps}
             setPrepSelections={setPrepSelections}
             quickSave={quickSave}
+          />
+        )}
+
+        {/* NEW: Restaurant Inventory Tab Content */}
+        {activeTab === 'inventory' && (
+          <RestaurantInventory
+            currentUser={currentUser}
+            connectionStatus={connectionStatus}
           />
         )}
 
