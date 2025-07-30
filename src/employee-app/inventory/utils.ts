@@ -121,7 +121,7 @@ export const parseExcelData = (json: any[][]): any[] => {
       unit: row[unitIdx] || '',
       cost: parseFloat(row[priceIdx]) || 0,
       costWithTax: parseFloat(row[priceTaxIdx]) || 0,
-      type: '', // Will be categorized later
+      type: '' as const, // Explicitly set as empty string
       frequency: 'database' as const
     }));
   
