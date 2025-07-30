@@ -25,7 +25,7 @@ export interface DatabaseItem {
   unit?: string;
   cost?: number;
   costWithTax?: number;
-  type?: InventoryCategory;
+  type?: InventoryCategory | string; // Allow any string for uncategorized items
   frequency: InventoryFrequency;
 }
 
