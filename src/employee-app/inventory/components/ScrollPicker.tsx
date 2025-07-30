@@ -21,6 +21,10 @@ const ScrollPicker: React.FC<ScrollPickerProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [startY, setStartY] = useState(0);
   const [startTranslateY, setStartTranslateY] = useState(0);
+  const [showInput, setShowInput] = useState(false);
+  const [inputValue, setInputValue] = useState('');
+  const [lastTap, setLastTap] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Generate values array
   const values: number[] = [];
@@ -54,6 +58,14 @@ const ScrollPicker: React.FC<ScrollPickerProps> = ({
     const minTranslateY = centerOffset - itemHeight * (values.length - 1);
     return Math.max(minTranslateY, Math.min(maxTranslateY, translateY));
   }, [values.length, containerHeight, itemHeight]);
+
+  // Focus input when it becomes visible
+  useEffect(() => {
+    if (showInput && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [showInput]);
 
   // Update position when value changes externally
   useEffect(() => {
@@ -121,12 +133,86 @@ const ScrollPicker: React.FC<ScrollPickerProps> = ({
     onChange(newValue);
   }, [isDragging, getValueFromTranslateY, getTranslateY, onChange]);
 
+  // Double-click/tap detection and manual input handling
+  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setInputValue(value.toString());
+    setShowInput(true);
+  }, [value]);
+
+  const handleTap = useCallback((e: React.TouchEvent) => {
+    const now = Date.now();
+    const timeDiff = now - lastTap;
+    
+    if (timeDiff < 300 && timeDiff > 0) {
+      // Double tap detected
+      e.preventDefault();
+      e.stopPropagation();
+      setInputValue(value.toString());
+      setShowInput(true);
+    }
+    
+    setLastTap(now);
+  }, [lastTap, value]);
+
+  const validateAndSetValue = useCallback((inputVal: string) => {
+    const numValue = parseFloat(inputVal);
+    
+    if (isNaN(numValue)) {
+      return false;
+    }
+    
+    // Clamp to min/max bounds
+    const clampedValue = Math.max(min, Math.min(max, numValue));
+    
+    // Find closest valid step value
+    const stepsFromMin = Math.round((clampedValue - min) / step);
+    const finalValue = min + (stepsFromMin * step);
+    
+    // Ensure the final value is in our values array
+    if (values.includes(finalValue)) {
+      onChange(finalValue);
+      return true;
+    }
+    
+    return false;
+  }, [min, max, step, values, onChange]);
+
+  const handleInputSubmit = useCallback(() => {
+    const success = validateAndSetValue(inputValue);
+    if (success) {
+      setShowInput(false);
+    }
+  }, [inputValue, validateAndSetValue]);
+
+  const handleInputCancel = useCallback(() => {
+    setShowInput(false);
+    setInputValue('');
+  }, []);
+
+  const handleInputKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleInputSubmit();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      handleInputCancel();
+    }
+  }, [handleInputSubmit, handleInputCancel]);
+
+  const handleInputBlur = useCallback(() => {
+    handleInputSubmit();
+  }, [handleInputSubmit]);
+
   // Mouse events
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (showInput) return; // Don't handle if input is visible
+    
     e.preventDefault();
     e.stopPropagation();
     handleStart(e.clientY, e.nativeEvent);
-  }, [handleStart]);
+  }, [handleStart, showInput]);
 
   // Global mouse event handlers
   useEffect(() => {
@@ -151,29 +237,37 @@ const ScrollPicker: React.FC<ScrollPickerProps> = ({
 
   // Touch events with proper prevention
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (showInput) return; // Don't handle if input is visible
+    
     e.preventDefault();
     e.stopPropagation();
     
     if (e.touches.length === 1) {
+      // Check for potential double tap
+      handleTap(e);
       handleStart(e.touches[0].clientY, e.nativeEvent);
     }
-  }, [handleStart]);
+  }, [handleStart, handleTap, showInput]);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (showInput) return; // Don't handle if input is visible
+    
     e.preventDefault();
     e.stopPropagation();
     
     if (e.touches.length === 1 && isDragging) {
       handleMove(e.touches[0].clientY, e.nativeEvent);
     }
-  }, [isDragging, handleMove]);
+  }, [isDragging, handleMove, showInput]);
 
   const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (showInput) return; // Don't handle if input is visible
+    
     e.preventDefault();
     e.stopPropagation();
     
     handleEnd(e.nativeEvent);
-  }, [handleEnd]);
+  }, [handleEnd, showInput]);
 
   // Prevent context menu on long press
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
@@ -196,6 +290,7 @@ const ScrollPicker: React.FC<ScrollPickerProps> = ({
           WebkitTouchCallout: 'none'
         }}
         onMouseDown={handleMouseDown}
+        onDoubleClick={handleDoubleClick}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -213,6 +308,30 @@ const ScrollPicker: React.FC<ScrollPickerProps> = ({
             height: `${itemHeight}px`
           }}
         />
+        
+        {/* Manual input field */}
+        {showInput && (
+          <div 
+            className="absolute left-0 right-0 z-20 flex items-center justify-center"
+            style={{ 
+              top: `${containerHeight / 2 - itemHeight / 2}px`,
+              height: `${itemHeight}px`
+            }}
+          >
+            <input
+              ref={inputRef}
+              type="number"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleInputKeyDown}
+              onBlur={handleInputBlur}
+              min={min}
+              max={max}
+              step={step}
+              className="w-20 h-8 text-center text-lg font-semibold border-2 border-blue-500 rounded bg-white text-black focus:outline-none focus:ring-2 focus:ring-blue-300"
+            />
+          </div>
+        )}
         
         {/* Values list */}
         <div 
@@ -253,6 +372,9 @@ const ScrollPicker: React.FC<ScrollPickerProps> = ({
       <div className="mt-2 text-center">
         <span className="text-sm text-gray-600">Selected: </span>
         <span className="font-semibold text-gray-800">{value}</span>
+        <div className="text-xs text-gray-500 mt-1">
+          Double-click or double-tap to enter value manually
+        </div>
       </div>
     </div>
   );
