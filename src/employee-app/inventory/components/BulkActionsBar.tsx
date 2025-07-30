@@ -15,9 +15,55 @@ const BulkActionsBar: React.FC<BulkActionsBarProps> = ({ onAssignCategory, onDel
   }
 
   return (
-    <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 z-50">
-      <div className="bg-white rounded-xl shadow-lg border p-4 min-w-96">
-        <div className="flex items-center justify-between">
+    <div className="fixed bottom-4 left-4 right-4 z-50 md:left-1/2 md:right-auto md:transform md:-translate-x-1/2">
+      <div className="bg-white rounded-xl shadow-lg border p-4 w-full md:min-w-96 md:w-auto">
+        {/* Mobile Layout - Stacked */}
+        <div className="block md:hidden space-y-3">
+          <div className="text-center">
+            <span className="text-sm font-medium text-gray-700">
+              {selectedItems.size} items selected
+            </span>
+          </div>
+          
+          <div className="grid grid-cols-3 gap-2">
+            <button 
+              onClick={onAssignCategory}
+              className="bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600 transition-colors flex items-center justify-center"
+            >
+              🔥 Daily
+            </button>
+            <button 
+              onClick={onAssignCategory}
+              className="bg-yellow-500 text-white px-2 py-1 rounded text-xs hover:bg-yellow-600 transition-colors flex items-center justify-center"
+            >
+              📅 Weekly
+            </button>
+            <button 
+              onClick={onAssignCategory}
+              className="bg-green-500 text-white px-2 py-1 rounded text-xs hover:bg-green-600 transition-colors flex items-center justify-center"
+            >
+              📦 Monthly
+            </button>
+          </div>
+          
+          <div className="flex space-x-2">
+            <button 
+              onClick={clearSelection}
+              className="flex-1 bg-gray-500 text-white px-3 py-2 rounded text-sm hover:bg-gray-600 transition-colors"
+            >
+              Clear
+            </button>
+            <button 
+              onClick={onDelete}
+              className="flex-1 bg-red-600 text-white px-3 py-2 rounded text-sm hover:bg-red-700 transition-colors"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+
+        {/* Desktop Layout - Horizontal */}
+        <div className="hidden md:flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <span className="text-sm font-medium text-gray-700">
               {selectedItems.size} items selected
