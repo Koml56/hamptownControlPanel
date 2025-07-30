@@ -11,7 +11,7 @@ import MonthlyView from './components/MonthlyView';
 import ReportsView from './components/ReportsView';
 import ToastContainer from './components/ToastContainer';
 
-// Integrated Header Component - Mobile Responsive
+// Simple Header Component - No background wrapper
 const InventoryHeader: React.FC = () => {
   const { dailyItems, weeklyItems, monthlyItems, databaseItems } = useInventory();
 
@@ -102,7 +102,7 @@ const InventoryHeader: React.FC = () => {
   );
 };
 
-// Integrated Tab Navigation Component - Mobile Scrollable
+// Simple Tab Navigation - No background wrapper
 const TabNavigation: React.FC = () => {
   const { currentTab, switchTab, dailyItems, weeklyItems, monthlyItems, databaseItems } = useInventory();
 
@@ -110,7 +110,6 @@ const TabNavigation: React.FC = () => {
     {
       id: 'daily' as const,
       label: 'Daily',
-      fullLabel: 'Daily Items',
       icon: Flame,
       count: dailyItems.length,
       color: 'red'
@@ -118,7 +117,6 @@ const TabNavigation: React.FC = () => {
     {
       id: 'weekly' as const,
       label: 'Weekly',
-      fullLabel: 'Weekly Items',
       icon: Calendar,
       count: weeklyItems.length,
       color: 'yellow'
@@ -126,7 +124,6 @@ const TabNavigation: React.FC = () => {
     {
       id: 'monthly' as const,
       label: 'Monthly',
-      fullLabel: 'Monthly Items',
       icon: Package,
       count: monthlyItems.length,
       color: 'green'
@@ -134,7 +131,6 @@ const TabNavigation: React.FC = () => {
     {
       id: 'database' as const,
       label: 'Database',
-      fullLabel: 'Items Database',
       icon: Database,
       count: databaseItems.length,
       color: 'blue'
@@ -142,7 +138,6 @@ const TabNavigation: React.FC = () => {
     {
       id: 'reports' as const,
       label: 'Analytics',
-      fullLabel: 'Analytics',
       icon: BarChart3,
       count: 0,
       color: 'purple'
@@ -151,7 +146,6 @@ const TabNavigation: React.FC = () => {
 
   return (
     <div className="bg-white rounded-xl shadow-sm mb-6 p-2">
-      {/* Horizontal Scrollable Tabs */}
       <div className="flex space-x-2 overflow-x-auto scrollbar-hide pb-2">
         {tabs.map((tab) => {
           const Icon = tab.icon;
@@ -203,6 +197,8 @@ const InventoryContent: React.FC = () => {
     }
   };
 
+  // CRITICAL: No wrapper divs, no background, no containers
+  // This should render exactly like MoodTracker, TaskManager, Store components
   return (
     <>
       <ToastContainer />
