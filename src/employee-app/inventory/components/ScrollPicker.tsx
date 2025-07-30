@@ -74,6 +74,9 @@ const ScrollPicker: React.FC<ScrollPickerProps> = ({
       setStartTranslateY(matrix.m42);
       listRef.current.style.transition = 'none';
     }
+
+    // Prevent body scroll on mobile
+    document.body.style.overflow = 'hidden';
   };
 
   // Handle mouse/touch move
@@ -92,6 +95,9 @@ const ScrollPicker: React.FC<ScrollPickerProps> = ({
     setIsDragging(false);
     listRef.current.style.transition = 'transform 0.3s ease-in-out';
     
+    // Restore body scroll
+    document.body.style.overflow = '';
+    
     // Snap to nearest value
     const style = window.getComputedStyle(listRef.current);
     const matrix = new DOMMatrix(style.transform);
@@ -106,16 +112,26 @@ const ScrollPicker: React.FC<ScrollPickerProps> = ({
   // Mouse events
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
+    e.stopPropagation(); // Prevent event bubbling
     handleStart(e.clientY);
   };
 
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => handleMove(e.clientY);
-    const handleMouseUp = () => handleEnd();
+    const handleMouseMove = (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      handleMove(e.clientY);
+    };
+    
+    const handleMouseUp = (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      handleEnd();
+    };
 
     if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
+      document.addEventListener('mousemove', handleMouseMove, { passive: false });
+      document.addEventListener('mouseup', handleMouseUp, { passive: false });
     }
 
     return () => {
@@ -124,14 +140,95 @@ const ScrollPicker: React.FC<ScrollPickerProps> = ({
     };
   }, [isDragging, startY, startTranslateY]);
 
-  // Touch events
+  // Touch events with proper scroll prevention
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length === 1) {
+      e.preventDefault();
+      e.stopPropagation();
       handleStart(e.touches[0].clientY);
     }
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 1 && isDragging) {
+      e.preventDefault();
+      e.stopPropagation();
+      handleMove(e.touches[0].clientY);
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    handleEnd();
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, []);
+
+  return (
+    <div className="relative">
+      <div 
+        ref={containerRef}
+        className="relative overflow-hidden bg-white border-2 border-gray-200 rounded-xl touch-none select-none"
+        style={{ height: `${containerHeight}px` }}
+        onMouseDown={handleMouseDown}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        {/* Gradient overlays */}
+        <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-white to-transparent pointer-events-none z-10" />
+        <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-white to-transparent pointer-events-none z-10" />
+        
+        {/* Center highlight */}
+        <div 
+          className="absolute left-0 right-0 border-t border-b border-gray-300 pointer-events-none z-10"
+          style={{ 
+            top: `${containerHeight / 2 - itemHeight / 2}px`,
+            height: `${itemHeight}px`
+          }}
+        />
+        
+        {/* Values list */}
+        <div 
+          ref={listRef}
+          className="absolute left-0 right-0 transition-transform duration-300 ease-in-out"
+          style={{ transform: `translateY(${getTranslateY(value)}px)` }}
+        >
+          {values.map((val, index) => {
+            const isActive = val === value;
+            return (
+              <div
+                key={val}
+                className={`flex items-center justify-center transition-all duration-200 user-select-none ${
+                  isActive 
+                    ? 'text-black font-semibold text-xl' 
+                    : 'text-gray-400 text-lg'
+                }`}
+                style={{ height: `${itemHeight}px` }}
+              >
+                {val}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      
+      {/* Value display */}
+      <div className="mt-2 text-center">
+        <span className="text-sm text-gray-600">Selected: </span>
+        <span className="font-semibold text-gray-800">{value}</span>
+      </div>
+    </div>
+  );
+};
+
+export default ScrollPicker; React.TouchEvent) => {
     if (e.touches.length === 1) {
       e.preventDefault();
       handleMove(e.touches[0].clientY);
