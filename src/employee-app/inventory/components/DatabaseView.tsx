@@ -158,7 +158,7 @@ const DatabaseView: React.FC = () => {
                   placeholder="Search database..." 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm w-48"
+                  className="pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm w-full sm:w-48 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
             </div>
