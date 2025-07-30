@@ -1,5 +1,5 @@
 // src/employee-app/inventory/components/ScrollPicker.tsx
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 
 interface ScrollPickerProps {
   value: number;
@@ -32,28 +32,28 @@ const ScrollPicker: React.FC<ScrollPickerProps> = ({
   const containerHeight = 192; // Total height of the picker
 
   // Calculate translate Y for a given value
-  const getTranslateY = (targetValue: number) => {
+  const getTranslateY = useCallback((targetValue: number) => {
     const index = values.indexOf(targetValue);
     if (index === -1) return 0;
     
     const centerOffset = containerHeight / 2 - itemHeight / 2;
     return centerOffset - index * itemHeight;
-  };
+  }, [values, containerHeight, itemHeight]);
 
   // Get value from translate Y
-  const getValueFromTranslateY = (translateY: number) => {
+  const getValueFromTranslateY = useCallback((translateY: number) => {
     const centerOffset = containerHeight / 2 - itemHeight / 2;
     const index = Math.round((centerOffset - translateY) / itemHeight);
     return values[Math.max(0, Math.min(index, values.length - 1))];
-  };
+  }, [values, containerHeight, itemHeight]);
 
   // Clamp translate Y to valid bounds
-  const clampTranslateY = (translateY: number) => {
+  const clampTranslateY = useCallback((translateY: number) => {
     const centerOffset = containerHeight / 2 - itemHeight / 2;
     const maxTranslateY = centerOffset;
     const minTranslateY = centerOffset - itemHeight * (values.length - 1);
     return Math.max(minTranslateY, Math.min(maxTranslateY, translateY));
-  };
+  }, [values.length, containerHeight, itemHeight]);
 
   // Update position when value changes externally
   useEffect(() => {
@@ -61,10 +61,16 @@ const ScrollPicker: React.FC<ScrollPickerProps> = ({
       const translateY = getTranslateY(value);
       listRef.current.style.transform = `translateY(${translateY}px)`;
     }
-  }, [value, isDragging]);
+  }, [value, isDragging, getTranslateY]);
 
   // Handle mouse/touch start
-  const handleStart = (clientY: number) => {
+  const handleStart = useCallback((clientY: number, event?: Event) => {
+    // Prevent default behavior and stop propagation
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    
     setIsDragging(true);
     setStartY(clientY);
     
@@ -74,20 +80,32 @@ const ScrollPicker: React.FC<ScrollPickerProps> = ({
       setStartTranslateY(matrix.m42);
       listRef.current.style.transition = 'none';
     }
-  };
+  }, []);
 
   // Handle mouse/touch move
-  const handleMove = (clientY: number) => {
+  const handleMove = useCallback((clientY: number, event?: Event) => {
     if (!isDragging || !listRef.current) return;
+    
+    // Prevent default behavior and stop propagation
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
     
     const deltaY = clientY - startY;
     const newTranslateY = clampTranslateY(startTranslateY + deltaY);
     listRef.current.style.transform = `translateY(${newTranslateY}px)`;
-  };
+  }, [isDragging, startY, startTranslateY, clampTranslateY]);
 
   // Handle mouse/touch end
-  const handleEnd = () => {
+  const handleEnd = useCallback((event?: Event) => {
     if (!isDragging || !listRef.current) return;
+    
+    // Prevent default behavior and stop propagation
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
     
     setIsDragging(false);
     listRef.current.style.transition = 'transform 0.3s ease-in-out';
@@ -101,57 +119,92 @@ const ScrollPicker: React.FC<ScrollPickerProps> = ({
     
     listRef.current.style.transform = `translateY(${snapTranslateY}px)`;
     onChange(newValue);
-  };
+  }, [isDragging, getValueFromTranslateY, getTranslateY, onChange]);
 
   // Mouse events
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
-    handleStart(e.clientY);
-  };
+    e.stopPropagation();
+    handleStart(e.clientY, e.nativeEvent);
+  }, [handleStart]);
 
+  // Global mouse event handlers
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => handleMove(e.clientY);
-    const handleMouseUp = () => handleEnd();
+    const handleMouseMove = (e: MouseEvent) => {
+      handleMove(e.clientY, e);
+    };
+    
+    const handleMouseUp = (e: MouseEvent) => {
+      handleEnd(e);
+    };
 
     if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
+      document.addEventListener('mousemove', handleMouseMove, { passive: false });
+      document.addEventListener('mouseup', handleMouseUp, { passive: false });
     }
 
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, startY, startTranslateY]);
+  }, [isDragging, handleMove, handleEnd]);
 
-  // Touch events
-  const handleTouchStart = (e: React.TouchEvent) => {
+  // Touch events with proper prevention
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
     if (e.touches.length === 1) {
-      handleStart(e.touches[0].clientY);
+      handleStart(e.touches[0].clientY, e.nativeEvent);
     }
-  };
+  }, [handleStart]);
 
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (e.touches.length === 1) {
-      e.preventDefault();
-      handleMove(e.touches[0].clientY);
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (e.touches.length === 1 && isDragging) {
+      handleMove(e.touches[0].clientY, e.nativeEvent);
     }
-  };
+  }, [isDragging, handleMove]);
 
-  const handleTouchEnd = () => {
-    handleEnd();
-  };
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    handleEnd(e.nativeEvent);
+  }, [handleEnd]);
+
+  // Prevent context menu on long press
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  // Prevent selection
+  const handleSelectStart = useCallback((e: React.SyntheticEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
 
   return (
     <div className="relative">
       <div 
         ref={containerRef}
-        className="relative h-48 overflow-hidden bg-white border-2 border-gray-200 rounded-xl"
-        style={{ height: `${containerHeight}px` }}
+        className="relative h-48 overflow-hidden bg-white border-2 border-gray-200 rounded-xl touch-none select-none"
+        style={{ 
+          height: `${containerHeight}px`,
+          touchAction: 'none',
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
+          WebkitTouchCallout: 'none'
+        }}
         onMouseDown={handleMouseDown}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
+        onContextMenu={handleContextMenu}
+        onSelectStart={handleSelectStart}
       >
         {/* Gradient overlays */}
         <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-white to-transparent pointer-events-none z-10" />
@@ -169,20 +222,30 @@ const ScrollPicker: React.FC<ScrollPickerProps> = ({
         {/* Values list */}
         <div 
           ref={listRef}
-          className="absolute left-0 right-0 transition-transform duration-300 ease-in-out"
-          style={{ transform: `translateY(${getTranslateY(value)}px)` }}
+          className="absolute left-0 right-0 transition-transform duration-300 ease-in-out touch-none select-none"
+          style={{ 
+            transform: `translateY(${getTranslateY(value)}px)`,
+            touchAction: 'none',
+            userSelect: 'none',
+            WebkitUserSelect: 'none'
+          }}
         >
           {values.map((val, index) => {
             const isActive = val === value;
             return (
               <div
                 key={val}
-                className={`flex items-center justify-center transition-all duration-200 ${
+                className={`flex items-center justify-center transition-all duration-200 touch-none select-none ${
                   isActive 
                     ? 'text-black font-semibold text-xl' 
                     : 'text-gray-400 text-lg'
                 }`}
-                style={{ height: `${itemHeight}px` }}
+                style={{ 
+                  height: `${itemHeight}px`,
+                  touchAction: 'none',
+                  userSelect: 'none',
+                  WebkitUserSelect: 'none'
+                }}
               >
                 {val}
               </div>
