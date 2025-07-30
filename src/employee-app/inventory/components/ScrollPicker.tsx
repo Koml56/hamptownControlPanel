@@ -181,11 +181,7 @@ const ScrollPicker: React.FC<ScrollPickerProps> = ({
     e.stopPropagation();
   }, []);
 
-  // Prevent selection
-  const handleSelectStart = useCallback((e: React.SyntheticEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  }, []);
+  // Note: Text selection is prevented via CSS properties instead of onSelectStart
 
   return (
     <div className="relative">
@@ -204,7 +200,6 @@ const ScrollPicker: React.FC<ScrollPickerProps> = ({
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onContextMenu={handleContextMenu}
-        onSelectStart={handleSelectStart}
       >
         {/* Gradient overlays */}
         <div className="absolute top-0 left-0 right-0 h-16 bg-gradient-to-b from-white to-transparent pointer-events-none z-10" />
