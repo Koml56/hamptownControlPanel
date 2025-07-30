@@ -1,5 +1,5 @@
 // src/employee-app/inventory/components/index.ts
-// Export only the components that exist as separate files
+// Export only components that exist as separate files
 
 export { default as ItemCard } from './ItemCard';
 export { default as DatabaseView } from './DatabaseView';
@@ -15,6 +15,3 @@ export { default as WasteModal } from './WasteModal';
 export { default as BulkActionsBar } from './BulkActionsBar';
 export { default as ScrollPicker } from './ScrollPicker';
 export { default as ToastContainer } from './ToastContainer';
-
-// Note: InventoryHeader and TabNavigation are now integrated 
-// directly into the RestaurantInventory.tsx component
