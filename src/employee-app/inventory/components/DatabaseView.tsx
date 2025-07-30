@@ -1,6 +1,6 @@
 // src/employee-app/inventory/components/DatabaseView.tsx
 import React, { useState } from 'react';
-import { Upload, Plus, Download, Search, Filter } from 'lucide-react';
+import { Upload, Plus, Download, Search, Filter, AlertTriangle } from 'lucide-react';
 import { useInventory } from '../InventoryContext';
 import { getCategoryIcon } from '../utils';
 import ImportModal from './ImportModal';
@@ -21,6 +21,7 @@ const DatabaseView: React.FC = () => {
   const [showImportModal, setShowImportModal] = useState(false);
   const [showManualModal, setShowManualModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [filterType, setFilterType] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectAll, setSelectAll] = useState(false);
@@ -47,6 +48,16 @@ const DatabaseView: React.FC = () => {
       });
     }
     setSelectAll(!selectAll);
+  };
+
+  const handleDeleteClick = () => {
+    if (selectedItems.size === 0) return;
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = () => {
+    deleteItems(Array.from(selectedItems));
+    setShowDeleteConfirm(false);
   };
 
   const handleExport = () => {
@@ -218,13 +229,45 @@ const DatabaseView: React.FC = () => {
       {/* Bulk Actions Bar */}
       <BulkActionsBar 
         onAssignCategory={() => setShowCategoryModal(true)}
-        onDelete={() => {
-          if (selectedItems.size === 0) return;
-          if (confirm(`Are you sure you want to delete ${selectedItems.size} selected items?`)) {
-            deleteItems(Array.from(selectedItems));
-          }
-        }}
+        onDelete={handleDeleteClick}
       />
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
+            <div className="flex items-center mb-4">
+              <div className="p-3 bg-red-100 rounded-lg mr-4">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800">Confirm Deletion</h3>
+                <p className="text-gray-600">This action cannot be undone.</p>
+              </div>
+            </div>
+            
+            <p className="text-gray-700 mb-6">
+              Are you sure you want to delete <span className="font-semibold">{selectedItems.size}</span> selected items? 
+              This will permanently remove them from the database.
+            </p>
+            
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+              >
+                Delete Items
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modals */}
       {showImportModal && <ImportModal onClose={() => setShowImportModal(false)} />}
