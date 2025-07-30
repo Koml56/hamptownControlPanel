@@ -42,7 +42,7 @@ const DailyView: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Quick Actions */}
-      <div className="bg-white rounded-xl shadow-sm p-6">
+      <div className="bg-white rounded-xl shadow-sm p-4 md:p-6">
         <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
           <span className="mr-2">🔥</span>
           Daily High-Usage Items - <span className="text-red-600">{formatDate(new Date())}</span>
@@ -69,14 +69,17 @@ const DailyView: React.FC = () => {
 
       {/* Daily Items Grid */}
       <div className="bg-white rounded-xl shadow-sm">
-        <div className="p-6 border-b">
-          <div className="flex items-center justify-between">
+        <div className="p-4 md:p-6 border-b">
+          {/* Mobile-First Layout */}
+          <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-800">Daily Usage Items</h3>
-            <div className="flex items-center space-x-4">
+            
+            {/* Mobile: Stacked Filters */}
+            <div className="flex flex-col space-y-3 md:hidden">
               <select 
                 value={typeFilter}
                 onChange={(e) => setTypeFilter(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="all">All Types</option>
                 <option value="tukku">🏪 Tukku (Wholesale)</option>
@@ -86,6 +89,7 @@ const DailyView: React.FC = () => {
                 <option value="meat">🥩 Meat & Fish</option>
                 <option value="dairy">🥛 Dairy</option>
               </select>
+              
               <div className="relative">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                 <input 
@@ -93,33 +97,87 @@ const DailyView: React.FC = () => {
                   placeholder="Search daily items..." 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm w-48"
+                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
             </div>
+
+            {/* Desktop: Horizontal Filters */}
+            <div className="hidden md:flex md:items-center md:justify-between">
+              <div className="flex items-center space-x-4">
+                <select 
+                  value={typeFilter}
+                  onChange={(e) => setTypeFilter(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="all">All Types</option>
+                  <option value="tukku">🏪 Tukku (Wholesale)</option>
+                  <option value="beverages">🥤 Beverages</option>
+                  <option value="packaging">📦 Packaging</option>
+                  <option value="produce">🥬 Produce</option>
+                  <option value="meat">🥩 Meat & Fish</option>
+                  <option value="dairy">🥛 Dairy</option>
+                </select>
+                
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <input 
+                    type="text" 
+                    placeholder="Search daily items..." 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm w-48 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Results Summary */}
+            {(searchQuery || typeFilter !== 'all') && (
+              <div className="text-sm text-gray-600">
+                Showing {filteredItems.length} of {dailyItems.length} daily items
+                {searchQuery && ` matching "${searchQuery}"`}
+                {typeFilter !== 'all' && ` in ${typeFilter} category`}
+              </div>
+            )}
           </div>
         </div>
         
-        <div className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredItems.map(item => (
-              <ItemCard
-                key={item.id}
-                item={item}
-                onUpdateCount={handleUpdateCount}
-                onReportWaste={handleReportWaste}
-              />
-            ))}
-          </div>
+        <div className="p-4 md:p-6">
+          {filteredItems.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              <div className="text-4xl mb-4">🔥</div>
+              <h3 className="text-lg font-medium mb-2">
+                {searchQuery || typeFilter !== 'all' ? 'No items match your filters' : 'No daily items yet'}
+              </h3>
+              <p className="text-sm">
+                {searchQuery || typeFilter !== 'all' 
+                  ? 'Try adjusting your search or filter criteria'
+                  : 'Add items from the database to start tracking daily inventory'
+                }
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredItems.map(item => (
+                <ItemCard
+                  key={item.id}
+                  item={item}
+                  onUpdateCount={handleUpdateCount}
+                  onReportWaste={handleReportWaste}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
       {/* Today's Activity */}
       <div className="bg-white rounded-xl shadow-sm">
-        <div className="p-6 border-b">
+        <div className="p-4 md:p-6 border-b">
           <h3 className="text-lg font-semibold text-gray-800">Today's Activity</h3>
         </div>
-        <div className="p-6">
+        <div className="p-4 md:p-6">
           <div className="space-y-3">
             {todayActivity.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
@@ -163,6 +221,37 @@ const DailyView: React.FC = () => {
                   </div>
                 );
               })
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Modals */}
+      {showCountModal && (
+        <CountModal 
+          frequency="daily"
+          selectedItemId={selectedItemId}
+          onClose={() => {
+            setShowCountModal(false);
+            setSelectedItemId(null);
+          }} 
+        />
+      )}
+      {showWasteModal && (
+        <WasteModal 
+          frequency="daily"
+          selectedItemId={selectedItemId}
+          onClose={() => {
+            setShowWasteModal(false);
+            setSelectedItemId(null);
+          }} 
+        />
+      )}
+    </div>
+  );
+};
+
+export default DailyView;
             )}
           </div>
         </div>
