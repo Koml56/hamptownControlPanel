@@ -204,15 +204,12 @@ const InventoryContent: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-2 md:p-4">
+    <>
       <ToastContainer />
-      
-      <div className="max-w-7xl mx-auto">
-        <InventoryHeader />
-        <TabNavigation />
-        {renderCurrentView()}
-      </div>
-    </div>
+      <InventoryHeader />
+      <TabNavigation />
+      {renderCurrentView()}
+    </>
   );
 };
 
