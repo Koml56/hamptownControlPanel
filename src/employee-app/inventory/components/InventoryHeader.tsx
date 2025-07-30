@@ -19,7 +19,7 @@ const InventoryHeader: React.FC = () => {
       <div className="flex items-center justify-between">
         <div className="flex items-center">
           <div className="bg-orange-500 p-3 rounded-lg mr-4">
-            <ChefHat className="text-white text-2xl w-8 h-8" />
+            <ChefHat className="text-white w-8 h-8" />
           </div>
           <div>
             <h1 className="text-2xl font-bold text-gray-800">Restaurant Inventory</h1>
