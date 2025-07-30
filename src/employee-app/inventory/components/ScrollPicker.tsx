@@ -23,7 +23,7 @@ const ScrollPicker: React.FC<ScrollPickerProps> = ({
   const [startTranslateY, setStartTranslateY] = useState(0);
 
   // Generate values array
-  const values = [];
+  const values: number[] = [];
   for (let i = min; i <= max; i += step) {
     values.push(i);
   }
