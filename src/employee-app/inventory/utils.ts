@@ -1,8 +1,11 @@
 // src/employee-app/inventory/utils.ts
 import type { InventoryCategory, StockStatus, InventoryFrequency } from './types';
 
-export const getCategoryIcon = (category: InventoryCategory): string => {
-  switch (category) {
+export const getCategoryIcon = (category: InventoryCategory | string | undefined): string => {
+  if (!category) return '❓';
+  
+  // Handle known categories
+  switch (category as InventoryCategory) {
     case 'produce': return '🥬';
     case 'meat': return '🥩';
     case 'dairy': return '🥛';
@@ -15,12 +18,18 @@ export const getCategoryIcon = (category: InventoryCategory): string => {
     case 'supplies': return '📦';
     case 'packaging': return '📦';
     case 'tukku': return '🏪';
-    default: return '❓';
+    case 'uncategorized': return '❓';
+    default: 
+      // Handle unknown string categories
+      return '📋';
   }
 };
 
-export const getCategoryColor = (category: InventoryCategory): string => {
-  switch (category) {
+export const getCategoryColor = (category: InventoryCategory | string | undefined): string => {
+  if (!category) return 'gray';
+  
+  // Handle known categories
+  switch (category as InventoryCategory) {
     case 'produce': return 'green';
     case 'meat': return 'red';
     case 'dairy': return 'blue';
@@ -33,7 +42,10 @@ export const getCategoryColor = (category: InventoryCategory): string => {
     case 'supplies': return 'gray';
     case 'packaging': return 'gray';
     case 'tukku': return 'indigo';
-    default: return 'gray';
+    case 'uncategorized': return 'gray';
+    default: 
+      // Handle unknown string categories
+      return 'slate';
   }
 };
 
