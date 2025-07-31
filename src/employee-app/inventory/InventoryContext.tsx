@@ -170,7 +170,8 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
     const newItem: DatabaseItem = {
       ...item,
       id: generateId(),
-      frequency: 'database'
+      frequency: 'database',
+      isAssigned: false
     };
     
     setDatabaseItems(prev => [...prev, newItem]);
@@ -185,7 +186,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
     });
   }, [addActivityEntry]);
 
-  // Assign items to category
+  // Assign items to category - FIXED: Keep items in database and track assignment
   const assignToCategory = useCallback((
     itemIds: (number | string)[],
     frequency: InventoryFrequency,
@@ -194,34 +195,103 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
     initialStock: number
   ) => {
     const selectedItemsData = databaseItems.filter(item => itemIds.includes(item.id));
+    console.log('Assigning items:', selectedItemsData.length, 'to', frequency, category);
     
-    selectedItemsData.forEach(item => {
-      const newItem: InventoryItem = {
-        id: generateId(),
-        name: item.name,
-        category: category,
-        currentStock: initialStock,
-        minLevel: minLevel,
-        unit: item.unit || 'pieces',
-        lastUsed: new Date().toISOString().split('T')[0],
-        cost: item.cost || 0,
-        ean: item.ean || ''
-      };
-      
-      const items = getItemsByFrequency(frequency);
-      setItemsByFrequency(frequency, [...items, newItem]);
-    });
+    // Create inventory items for each selected database item
+    const newInventoryItems: InventoryItem[] = selectedItemsData.map(item => ({
+      id: generateId(),
+      name: item.name,
+      category: category,
+      currentStock: initialStock,
+      minLevel: minLevel,
+      unit: item.unit || 'pieces',
+      lastUsed: new Date().toISOString().split('T')[0],
+      cost: item.cost || 0,
+      ean: item.ean || '',
+      databaseId: item.id // Link back to database item
+    }));
+
+    // Add to the appropriate frequency list
+    const currentItems = getItemsByFrequency(frequency);
+    setItemsByFrequency(frequency, [...currentItems, ...newInventoryItems]);
     
-    // Remove from database
-    setDatabaseItems(prev => prev.filter(item => !itemIds.includes(item.id)));
+    // Update database items to show assignment status - DON'T REMOVE THEM
+    setDatabaseItems(prev => prev.map(item => 
+      itemIds.includes(item.id) 
+        ? { 
+            ...item, 
+            isAssigned: true,
+            assignedTo: frequency,
+            assignedCategory: category,
+            assignedDate: new Date().toISOString().split('T')[0]
+          }
+        : item
+    ));
+    
     setSelectedItems(new Set());
     
-    showToast(`Assigned ${selectedItemsData.length} items to ${frequency} category`);
+    showToast(`Successfully assigned ${selectedItemsData.length} items to ${frequency} - ${category}`);
+    
+    // Add activity log entry
+    addActivityEntry({
+      type: 'manual_add',
+      item: `${selectedItemsData.length} items`,
+      quantity: selectedItemsData.length,
+      unit: 'items',
+      employee: 'Current User',
+      notes: `Assigned to ${frequency} - ${category}`
+    });
+  }, [databaseItems, addActivityEntry]);
+
+  // Unassign item from category - brings it back to unassigned status
+  const unassignFromCategory = useCallback((itemId: number | string) => {
+    // Find the database item
+    const dbItem = databaseItems.find(item => item.id === itemId);
+    if (!dbItem) {
+      showToast('Database item not found!');
+      return;
+    }
+
+    if (!dbItem.isAssigned) {
+      showToast('Item is not currently assigned!');
+      return;
+    }
+
+    // Remove from inventory lists
+    ['daily', 'weekly', 'monthly'].forEach(freq => {
+      const items = getItemsByFrequency(freq as InventoryFrequency);
+      const updatedItems = items.filter(item => item.databaseId !== itemId);
+      setItemsByFrequency(freq as InventoryFrequency, updatedItems);
+    });
+
+    // Update database item to show unassigned status
+    setDatabaseItems(prev => prev.map(item => 
+      item.id === itemId 
+        ? { 
+            ...item, 
+            isAssigned: false,
+            assignedTo: undefined,
+            assignedCategory: undefined,
+            assignedDate: undefined
+          }
+        : item
+    ));
+
+    showToast(`Successfully unassigned ${dbItem.name} from inventory`);
   }, [databaseItems]);
 
-  // Delete items
+  // Delete items from database
   const deleteItems = useCallback((itemIds: (number | string)[]) => {
     if (itemIds.length === 0) return;
+    
+    // Also remove from inventory lists if assigned
+    itemIds.forEach(itemId => {
+      ['daily', 'weekly', 'monthly'].forEach(freq => {
+        const items = getItemsByFrequency(freq as InventoryFrequency);
+        const updatedItems = items.filter(item => item.databaseId !== itemId);
+        setItemsByFrequency(freq as InventoryFrequency, updatedItems);
+      });
+    });
     
     setDatabaseItems(prev => prev.filter(item => !itemIds.includes(item.id)));
     setSelectedItems(new Set());
@@ -276,6 +346,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
     importFromExcel,
     addManualItem,
     assignToCategory,
+    unassignFromCategory,
     deleteItems,
     toggleItemSelection,
     clearSelection,
