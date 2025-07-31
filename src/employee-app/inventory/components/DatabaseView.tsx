@@ -198,7 +198,8 @@ const DatabaseView: React.FC = () => {
 
   const handleItemClick = (item: DatabaseItem, event: React.MouseEvent) => {
     // Prevent opening edit modal when clicking checkbox
-    if ((event.target as HTMLElement).type === 'checkbox') {
+    const target = event.target as HTMLElement;
+    if (target.tagName === 'INPUT' && (target as HTMLInputElement).type === 'checkbox') {
       return;
     }
     setEditingItem(item);
