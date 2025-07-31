@@ -9,8 +9,8 @@ const ReportsView: React.FC = () => {
 
   // Calculate statistics
   const allItems = [...dailyItems, ...weeklyItems, ...monthlyItems];
-  const criticalItems = allItems.filter(item => getStockStatus(item) === 'critical');
-  const lowStockItems = allItems.filter(item => getStockStatus(item) === 'low');
+  const criticalItems = allItems.filter(item => getStockStatus(item).status === 'critical');
+  const lowStockItems = allItems.filter(item => getStockStatus(item).status === 'low');
   const totalValue = allItems.reduce((sum, item) => sum + (item.cost * item.currentStock), 0);
   
   // Activity statistics
@@ -65,7 +65,7 @@ const ReportsView: React.FC = () => {
               <p className="text-sm font-medium text-gray-600">Critical Items</p>
               <p className="text-2xl font-bold text-red-600">{criticalItems.length}</p>
               <p className="text-xs text-red-500 mt-1">
-                {criticalItems.length > 0 ? 'Immediate attention required' : 'All items adequately stocked'}
+                {criticalItems.length > 0 ? 'Immediate attention required' : 'All items properly stocked'}
               </p>
             </div>
             <div className="p-3 bg-red-100 rounded-lg">
@@ -77,11 +77,9 @@ const ReportsView: React.FC = () => {
         <div className="bg-white rounded-xl shadow-sm p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Total Inventory Value</p>
+              <p className="text-sm font-medium text-gray-600">Inventory Value</p>
               <p className="text-2xl font-bold text-green-600">€{totalValue.toFixed(2)}</p>
-              <p className="text-xs text-green-500 mt-1">
-                Current stock valuation
-              </p>
+              <p className="text-xs text-gray-500 mt-1">Current stock value</p>
             </div>
             <div className="p-3 bg-green-100 rounded-lg">
               <DollarSign className="w-6 h-6 text-green-600" />
@@ -94,9 +92,7 @@ const ReportsView: React.FC = () => {
             <div>
               <p className="text-sm font-medium text-gray-600">Today's Waste</p>
               <p className="text-2xl font-bold text-orange-600">{wasteToday}</p>
-              <p className="text-xs text-orange-500 mt-1">
-                Value: €{totalWasteValue.toFixed(2)}
-              </p>
+              <p className="text-xs text-gray-500 mt-1">Items wasted today</p>
             </div>
             <div className="p-3 bg-orange-100 rounded-lg">
               <TrendingUp className="w-6 h-6 text-orange-600" />
@@ -105,8 +101,8 @@ const ReportsView: React.FC = () => {
         </div>
       </div>
 
-      {/* Stock Status Overview */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Stock Status Breakdown */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl shadow-sm p-6">
           <h3 className="text-lg font-semibold text-gray-800 mb-4">Stock Status Distribution</h3>
           <div className="space-y-4">
@@ -116,7 +112,7 @@ const ReportsView: React.FC = () => {
                 <span className="text-sm text-gray-600">Normal Stock</span>
               </div>
               <span className="font-semibold text-green-600">
-                {allItems.filter(item => getStockStatus(item) === 'normal').length}
+                {allItems.filter(item => getStockStatus(item).status === 'normal').length}
               </span>
             </div>
             <div className="flex items-center justify-between">
@@ -159,35 +155,20 @@ const ReportsView: React.FC = () => {
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center">
-                <span className="text-lg mr-2">➕</span>
-                <span className="text-sm text-gray-600">Items Added</span>
+                <span className="text-lg mr-2">💰</span>
+                <span className="text-sm text-gray-600">Waste Value</span>
+              </div>
+              <span className="font-semibold text-red-600">€{totalWasteValue.toFixed(2)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <span className="text-lg mr-2">📥</span>
+                <span className="text-sm text-gray-600">Manual Adds</span>
               </div>
               <span className="font-semibold text-green-600">
-                {todayActivity.filter(a => a.type === 'manual_add' || a.type === 'import').length}
+                {todayActivity.filter(a => a.type === 'manual_add').length}
               </span>
             </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">Top Categories by Value</h3>
-          <div className="space-y-3">
-            {Object.entries(
-              allItems.reduce((acc, item) => {
-                const category = item.category;
-                const value = item.cost * item.currentStock;
-                acc[category] = (acc[category] || 0) + value;
-                return acc;
-              }, {} as Record<string, number>)
-            )
-              .sort(([, a], [, b]) => b - a)
-              .slice(0, 5)
-              .map(([category, value]) => (
-                <div key={category} className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600 capitalize">{category}</span>
-                  <span className="font-semibold text-gray-800">€{value.toFixed(2)}</span>
-                </div>
-              ))}
           </div>
         </div>
       </div>
@@ -228,63 +209,37 @@ const ReportsView: React.FC = () => {
         </div>
         <div className="p-6">
           {activityLog.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <div className="text-3xl mb-2">📋</div>
-              <p>No activity recorded yet</p>
-              <p className="text-sm">Start tracking inventory to see activity here</p>
+            <div className="text-center py-8">
+              <div className="text-gray-400 text-4xl mb-2">📋</div>
+              <p className="text-gray-500">No activity recorded yet</p>
+              <p className="text-sm text-gray-400">Start by updating item counts or reporting waste</p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {activityLog.slice(0, 15).map(activity => {
-                let typeIcon, typeColor, typeText;
-                
-                switch(activity.type) {
-                  case 'count_update':
-                    typeIcon = '📝'; typeColor = 'blue'; typeText = 'Count Updated';
-                    break;
-                  case 'waste':
-                    typeIcon = '🗑️'; typeColor = 'red'; typeText = 'Waste Reported';
-                    break;
-                  case 'import':
-                    typeIcon = '📊'; typeColor = 'green'; typeText = 'Excel Import';
-                    break;
-                  case 'manual_add':
-                    typeIcon = '➕'; typeColor = 'purple'; typeText = 'Manual Add';
-                    break;
-                  default:
-                    typeIcon = '📦'; typeColor = 'gray'; typeText = 'Activity';
-                }
-                
-                return (
-                  <div key={activity.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                    <div className="flex items-center">
-                      <div className={`bg-${typeColor}-100 p-2 rounded-lg mr-4`}>
-                        <span className="text-lg">{typeIcon}</span>
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {activityLog.slice(0, 20).map(entry => (
+                <div key={entry.id} className="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center">
+                    <span className="text-lg mr-3">
+                      {entry.type === 'count_update' ? '📝' : 
+                       entry.type === 'waste' ? '🗑️' : 
+                       entry.type === 'import' ? '📥' : '➕'}
+                    </span>
+                    <div>
+                      <div className="font-medium text-gray-800">{entry.item}</div>
+                      <div className="text-sm text-gray-600">
+                        {entry.type === 'count_update' && `Updated count to ${entry.quantity} ${entry.unit}`}
+                        {entry.type === 'waste' && `Wasted ${entry.quantity} ${entry.unit} - ${entry.reason}`}
+                        {entry.type === 'import' && `Imported ${entry.quantity} ${entry.unit}`}
+                        {entry.type === 'manual_add' && `Added to database`}
                       </div>
-                      <div>
-                        <div className="font-medium text-gray-800">{typeText}: {activity.item}</div>
-                        <div className="text-sm text-gray-600">
-                          {activity.employee} • {activity.timestamp}
-                          {activity.notes && ` • ${activity.notes}`}
-                          {activity.reason && ` (${activity.reason})`}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-bold text-gray-700">{activity.quantity} {activity.unit}</div>
-                      <div className="text-xs text-gray-500 capitalize">{activity.type.replace('_', ' ')}</div>
                     </div>
                   </div>
-                );
-              })}
-              
-              {activityLog.length > 15 && (
-                <div className="text-center pt-4">
-                  <p className="text-sm text-gray-500">
-                    Showing latest 15 activities. Total: {activityLog.length} records.
-                  </p>
+                  <div className="text-right">
+                    <div className="text-sm text-gray-500">{entry.employee}</div>
+                    <div className="text-xs text-gray-400">{entry.timestamp}</div>
+                  </div>
                 </div>
-              )}
+              ))}
             </div>
           )}
         </div>
