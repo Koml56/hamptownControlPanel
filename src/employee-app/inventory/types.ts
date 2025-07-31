@@ -16,6 +16,7 @@ export interface InventoryItem {
   cost: number;
   ean?: string;
   frequency?: InventoryFrequency;
+  databaseId?: number | string; // Link to original database item
 }
 
 export interface DatabaseItem {
@@ -27,6 +28,11 @@ export interface DatabaseItem {
   costWithTax?: number;
   type?: InventoryCategory | string; // Allow any string for uncategorized items
   frequency: InventoryFrequency;
+  // Assignment tracking
+  assignedTo?: InventoryFrequency; // Which frequency it's assigned to (daily/weekly/monthly)
+  assignedCategory?: InventoryCategory; // Which category it's assigned to
+  assignedDate?: string; // When it was assigned
+  isAssigned?: boolean; // Whether it's currently assigned to any inventory list
 }
 
 export interface ActivityLogEntry {
@@ -70,6 +76,7 @@ export interface InventoryContextType {
   importFromExcel: (data: any[]) => void;
   addManualItem: (item: Omit<DatabaseItem, 'id' | 'frequency'>) => void;
   assignToCategory: (itemIds: (number | string)[], frequency: InventoryFrequency, category: InventoryCategory, minLevel: number, initialStock: number) => void;
+  unassignFromCategory: (itemId: number | string) => void;
   deleteItems: (itemIds: (number | string)[]) => void;
   toggleItemSelection: (itemId: number | string) => void;
   clearSelection: () => void;
