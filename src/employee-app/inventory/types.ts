@@ -77,6 +77,7 @@ export interface InventoryContextType {
   addManualItem: (item: Omit<DatabaseItem, 'id' | 'frequency'>) => void;
   assignToCategory: (itemIds: (number | string)[], frequency: InventoryFrequency, category: InventoryCategory, minLevel: number, initialStock: number) => void;
   unassignFromCategory: (itemId: number | string) => void;
+  cleanupDuplicates: () => void;
   deleteItems: (itemIds: (number | string)[]) => void;
   toggleItemSelection: (itemId: number | string) => void;
   clearSelection: () => void;
