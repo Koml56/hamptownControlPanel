@@ -362,8 +362,8 @@ const ImportModal: React.FC<ImportModalProps> = ({ onClose }) => {
                     <div className="text-xs text-gray-500 space-y-1 mt-1">
                       {item.ean && <div>EAN: {item.ean}</div>}
                       {item.unit && <div>Unit: {item.unit}</div>}
-                      {item.cost > 0 && <div>Price: €{item.cost.toFixed(2)}</div>}
-                      {item.costWithTax > 0 && <div>Price (tax): €{item.costWithTax.toFixed(2)}</div>}
+                      {item.cost && item.cost > 0 && <div>Price: €{item.cost.toFixed(2)}</div>}
+                      {item.costWithTax && item.costWithTax > 0 && <div>Price (tax): €{item.costWithTax.toFixed(2)}</div>}
                     </div>
                   </div>
                 ))}
