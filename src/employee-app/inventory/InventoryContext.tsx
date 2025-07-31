@@ -186,7 +186,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
     });
   }, [addActivityEntry]);
 
-  // Assign items to category - FIXED: Keep items in database and track assignment
+  // Assign items to category - FIXED: Handle existing assignments without duplicating
   const assignToCategory = useCallback((
     itemIds: (number | string)[],
     frequency: InventoryFrequency,
@@ -197,25 +197,78 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
     const selectedItemsData = databaseItems.filter(item => itemIds.includes(item.id));
     console.log('Assigning items:', selectedItemsData.length, 'to', frequency, category);
     
-    // Create inventory items for each selected database item
-    const newInventoryItems: InventoryItem[] = selectedItemsData.map(item => ({
-      id: generateId(),
-      name: item.name,
-      category: category,
-      currentStock: initialStock,
-      minLevel: minLevel,
-      unit: item.unit || 'pieces',
-      lastUsed: new Date().toISOString().split('T')[0],
-      cost: item.cost || 0,
-      ean: item.ean || '',
-      databaseId: item.id // Link back to database item
-    }));
-
-    // Add to the appropriate frequency list
-    const currentItems = getItemsByFrequency(frequency);
-    setItemsByFrequency(frequency, [...currentItems, ...newInventoryItems]);
+    selectedItemsData.forEach(dbItem => {
+      // If item is already assigned, we need to handle it differently
+      if (dbItem.isAssigned) {
+        // Find existing inventory item(s) linked to this database item
+        const allFrequencies: InventoryFrequency[] = ['daily', 'weekly', 'monthly'];
+        
+        allFrequencies.forEach(freq => {
+          const items = getItemsByFrequency(freq);
+          const existingItems = items.filter(item => item.databaseId === dbItem.id);
+          
+          if (existingItems.length > 0) {
+            if (freq === frequency) {
+              // Update existing item in the same frequency
+              const updatedItems = items.map(item => 
+                item.databaseId === dbItem.id 
+                  ? { 
+                      ...item, 
+                      category: category,
+                      minLevel: minLevel,
+                      currentStock: initialStock,
+                      lastUsed: new Date().toISOString().split('T')[0]
+                    }
+                  : item
+              );
+              setItemsByFrequency(freq, updatedItems);
+            } else {
+              // Remove from different frequency (moving to new frequency)
+              const filteredItems = items.filter(item => item.databaseId !== dbItem.id);
+              setItemsByFrequency(freq, filteredItems);
+            }
+          }
+        });
+        
+        // If moving to a different frequency, add to new frequency
+        if (dbItem.assignedTo !== frequency) {
+          const newInventoryItem: InventoryItem = {
+            id: generateId(),
+            name: dbItem.name,
+            category: category,
+            currentStock: initialStock,
+            minLevel: minLevel,
+            unit: dbItem.unit || 'pieces',
+            lastUsed: new Date().toISOString().split('T')[0],
+            cost: dbItem.cost || 0,
+            ean: dbItem.ean || '',
+            databaseId: dbItem.id
+          };
+          
+          const currentItems = getItemsByFrequency(frequency);
+          setItemsByFrequency(frequency, [...currentItems, newInventoryItem]);
+        }
+      } else {
+        // Item not assigned yet, create new inventory item
+        const newInventoryItem: InventoryItem = {
+          id: generateId(),
+          name: dbItem.name,
+          category: category,
+          currentStock: initialStock,
+          minLevel: minLevel,
+          unit: dbItem.unit || 'pieces',
+          lastUsed: new Date().toISOString().split('T')[0],
+          cost: dbItem.cost || 0,
+          ean: dbItem.ean || '',
+          databaseId: dbItem.id
+        };
+        
+        const currentItems = getItemsByFrequency(frequency);
+        setItemsByFrequency(frequency, [...currentItems, newInventoryItem]);
+      }
+    });
     
-    // Update database items to show assignment status - DON'T REMOVE THEM
+    // Update database items to show assignment status
     setDatabaseItems(prev => prev.map(item => 
       itemIds.includes(item.id) 
         ? { 
@@ -230,7 +283,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
     
     setSelectedItems(new Set());
     
-    showToast(`Successfully assigned ${selectedItemsData.length} items to ${frequency} - ${category}`);
+    showToast(`Successfully ${selectedItemsData.some(item => item.isAssigned) ? 'updated' : 'assigned'} ${selectedItemsData.length} items to ${frequency} - ${category}`);
     
     // Add activity log entry
     addActivityEntry({
@@ -239,11 +292,11 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
       quantity: selectedItemsData.length,
       unit: 'items',
       employee: 'Current User',
-      notes: `Assigned to ${frequency} - ${category}`
+      notes: `${selectedItemsData.some(item => item.isAssigned) ? 'Updated assignment to' : 'Assigned to'} ${frequency} - ${category}`
     });
   }, [databaseItems, addActivityEntry]);
 
-  // Unassign item from category - brings it back to unassigned status
+  // Unassign item from category - brings it back to unassigned status and removes ALL duplicates
   const unassignFromCategory = useCallback((itemId: number | string) => {
     // Find the database item
     const dbItem = databaseItems.find(item => item.id === itemId);
@@ -257,11 +310,16 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
       return;
     }
 
-    // Remove from inventory lists
+    // Remove ALL instances from inventory lists (including duplicates)
     ['daily', 'weekly', 'monthly'].forEach(freq => {
       const items = getItemsByFrequency(freq as InventoryFrequency);
       const updatedItems = items.filter(item => item.databaseId !== itemId);
-      setItemsByFrequency(freq as InventoryFrequency, updatedItems);
+      
+      // Only update if there were changes
+      if (updatedItems.length !== items.length) {
+        setItemsByFrequency(freq as InventoryFrequency, updatedItems);
+        console.log(`Removed ${items.length - updatedItems.length} duplicate(s) from ${freq}`);
+      }
     });
 
     // Update database item to show unassigned status
@@ -277,7 +335,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
         : item
     ));
 
-    showToast(`Successfully unassigned ${dbItem.name} from inventory`);
+    showToast(`Successfully unassigned ${dbItem.name} from inventory (removed all duplicates)`);
   }, [databaseItems]);
 
   // Delete items from database
@@ -316,6 +374,35 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
     setSelectedItems(new Set());
   }, []);
 
+  // Clean up duplicate items - removes duplicate assignments based on databaseId
+  const cleanupDuplicates = useCallback(() => {
+    let totalCleaned = 0;
+    
+    ['daily', 'weekly', 'monthly'].forEach(freq => {
+      const items = getItemsByFrequency(freq as InventoryFrequency);
+      const seen = new Set<number | string>();
+      const uniqueItems = items.filter(item => {
+        if (item.databaseId && seen.has(item.databaseId)) {
+          totalCleaned++;
+          return false; // Remove duplicate
+        }
+        if (item.databaseId) {
+          seen.add(item.databaseId);
+        }
+        return true; // Keep unique item
+      });
+      
+      if (uniqueItems.length !== items.length) {
+        setItemsByFrequency(freq as InventoryFrequency, uniqueItems);
+        console.log(`Cleaned ${items.length - uniqueItems.length} duplicates from ${freq}`);
+      }
+    });
+    
+    if (totalCleaned > 0) {
+      showToast(`Cleaned up ${totalCleaned} duplicate items from inventory`);
+    }
+  }, []);
+
   // Switch tab
   const switchTab = useCallback((tab: InventoryFrequency | 'reports') => {
     setCurrentTab(tab);
@@ -347,6 +434,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
     addManualItem,
     assignToCategory,
     unassignFromCategory,
+    cleanupDuplicates,
     deleteItems,
     toggleItemSelection,
     clearSelection,
