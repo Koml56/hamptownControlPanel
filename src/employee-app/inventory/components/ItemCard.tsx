@@ -17,7 +17,8 @@ const ItemCard: React.FC<ItemCardProps> = ({
   onReportWaste, 
   showQuickActions = true 
 }) => {
-  const status = getStockStatus(item);
+  const stockStatus = getStockStatus(item);
+  const status = stockStatus.status;
   
   const getStatusClasses = () => {
     switch (status) {
@@ -73,36 +74,48 @@ const ItemCard: React.FC<ItemCardProps> = ({
         </div>
         <div>
           <div className="text-xs text-gray-500 mb-1">Min Level</div>
-          <div className="text-lg font-medium text-gray-700">{item.minLevel} {item.unit}</div>
+          <div className="text-lg font-medium text-gray-700">
+            {item.minLevel} {item.unit}
+          </div>
         </div>
       </div>
-      
-      {/* Quick Actions */}
+
+      {/* Additional Info */}
+      <div className="grid grid-cols-2 gap-4 mb-4 text-xs text-gray-600">
+        <div>
+          <span className="font-medium">Cost:</span> €{item.cost.toFixed(2)}
+        </div>
+        <div>
+          <span className="font-medium">Last Used:</span> {item.lastUsed}
+        </div>
+      </div>
+
+      {/* EAN Code if available */}
+      {item.ean && (
+        <div className="mb-4 text-xs text-gray-500">
+          <span className="font-medium">EAN:</span> {item.ean}
+        </div>
+      )}
+
+      {/* Action Buttons */}
       {showQuickActions && (
         <div className="flex gap-2">
-          <button 
+          <button
             onClick={() => onUpdateCount(item.id)}
-            className="flex-1 bg-blue-500 text-white px-3 py-2 rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium flex items-center justify-center"
+            className="flex-1 flex items-center justify-center px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm"
           >
             <Edit3 className="w-4 h-4 mr-1" />
             Update Count
           </button>
-          <button 
+          <button
             onClick={() => onReportWaste(item.id)}
-            className="bg-orange-500 text-white px-3 py-2 rounded-lg hover:bg-orange-600 transition-colors text-sm flex items-center justify-center"
+            className="flex-1 flex items-center justify-center px-3 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors text-sm"
           >
-            <Trash2 className="w-4 h-4" />
+            <Trash2 className="w-4 h-4 mr-1" />
+            Report Waste
           </button>
         </div>
       )}
-      
-      {/* Footer */}
-      <div className="mt-3 pt-3 border-t border-gray-200">
-        <div className="flex justify-between text-xs text-gray-500">
-          <span>Last updated: {item.lastUsed}</span>
-          <span>€{item.cost.toFixed(2)}/{item.unit}</span>
-        </div>
-      </div>
     </div>
   );
 };
