@@ -49,12 +49,12 @@ export const getCategoryColor = (category: InventoryCategory | string | undefine
   }
 };
 
-export const getStockStatus = (currentStock: number, minLevel: number): { status: StockStatus; color: string } => {
-  if (currentStock === 0) {
+export const getStockStatus = (item: { currentStock: number; minLevel: number }): { status: StockStatus; color: string } => {
+  if (item.currentStock === 0) {
     return { status: 'critical', color: 'red' };
-  } else if (currentStock <= minLevel * 0.5) {
+  } else if (item.currentStock <= item.minLevel * 0.5) {
     return { status: 'critical', color: 'red' };
-  } else if (currentStock <= minLevel) {
+  } else if (item.currentStock <= item.minLevel) {
     return { status: 'low', color: 'yellow' };
   }
   return { status: 'normal', color: 'green' };
