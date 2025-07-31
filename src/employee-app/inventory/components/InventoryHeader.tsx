@@ -9,9 +9,9 @@ const InventoryHeader: React.FC = () => {
 
   // Calculate stock statistics
   const allItems = [...dailyItems, ...weeklyItems, ...monthlyItems];
-  const criticalCount = allItems.filter(item => getStockStatus(item) === 'critical').length;
-  const lowStockCount = allItems.filter(item => getStockStatus(item) === 'low').length;
-  const wellStockedCount = allItems.filter(item => getStockStatus(item) === 'normal').length;
+  const criticalCount = allItems.filter(item => getStockStatus(item).status === 'critical').length;
+  const lowStockCount = allItems.filter(item => getStockStatus(item).status === 'low').length;
+  const wellStockedCount = allItems.filter(item => getStockStatus(item).status === 'normal').length;
   const databaseCount = databaseItems.length;
 
   return (
