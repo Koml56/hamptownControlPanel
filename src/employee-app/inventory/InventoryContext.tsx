@@ -26,33 +26,14 @@ interface InventoryProviderProps {
   children: React.ReactNode;
 }
 
-// Sample initial data
-const initialDailyItems: InventoryItem[] = [
-  { id: 1, name: "Fresh Lettuce", category: "produce", currentStock: 12, minLevel: 8, unit: "heads", lastUsed: "2024-07-28", cost: 2.50 },
-  { id: 2, name: "Ground Beef", category: "meat", currentStock: 8, minLevel: 15, unit: "lbs", lastUsed: "2024-07-28", cost: 6.99 },
-  { id: 3, name: "Milk", category: "dairy", currentStock: 4, minLevel: 6, unit: "gallons", lastUsed: "2024-07-28", cost: 4.25 },
-  { id: 4, name: "Bread Rolls", category: "bread", currentStock: 2, minLevel: 5, unit: "dozens", lastUsed: "2024-07-28", cost: 3.50 },
-  { id: 5, name: "Coca Cola", category: "beverages", currentStock: 15, minLevel: 10, unit: "cases", lastUsed: "2024-07-28", cost: 12.99 }
-];
-
-const initialWeeklyItems: InventoryItem[] = [
-  { id: 9, name: "Olive Oil", category: "cooking", currentStock: 8, minLevel: 4, unit: "bottles", lastUsed: "2024-07-25", cost: 12.99 },
-  { id: 10, name: "Flour", category: "baking", currentStock: 25, minLevel: 10, unit: "lbs", lastUsed: "2024-07-26", cost: 8.50 },
-  { id: 11, name: "Rice", category: "grains", currentStock: 45, minLevel: 20, unit: "lbs", lastUsed: "2024-07-24", cost: 15.99 }
-];
-
-const initialMonthlyItems: InventoryItem[] = [
-  { id: 14, name: "Dish Soap", category: "cleaning", currentStock: 8, minLevel: 3, unit: "bottles", lastUsed: "2024-07-01", cost: 4.99 },
-  { id: 15, name: "Paper Towels", category: "supplies", currentStock: 24, minLevel: 12, unit: "rolls", lastUsed: "2024-07-01", cost: 2.25 }
-];
-
-const initialActivityLog: ActivityLogEntry[] = [
-  { id: 1, type: "count_update", item: "Ground Beef", quantity: 8, unit: "lbs", employee: "John Smith", timestamp: "2024-07-28 11:30", notes: "End of day count" },
-  { id: 2, type: "waste", item: "Lettuce", quantity: 2, unit: "heads", employee: "Sarah Johnson", timestamp: "2024-07-28 10:15", notes: "Wilted overnight", reason: "expired" }
-];
+// Empty initial data - no default items
+const initialDailyItems: InventoryItem[] = [];
+const initialWeeklyItems: InventoryItem[] = [];
+const initialMonthlyItems: InventoryItem[] = [];
+const initialActivityLog: ActivityLogEntry[] = [];
 
 export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }) => {
-  // State
+  // State - All start with empty arrays
   const [dailyItems, setDailyItems] = useState<InventoryItem[]>(initialDailyItems);
   const [weeklyItems, setWeeklyItems] = useState<InventoryItem[]>(initialWeeklyItems);
   const [monthlyItems, setMonthlyItems] = useState<InventoryItem[]>(initialMonthlyItems);
