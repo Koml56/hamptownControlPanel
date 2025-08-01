@@ -48,6 +48,21 @@ const EmployeeApp: React.FC = () => {
   if (!firebaseMeta.current) {
     firebaseMeta.current = new (require('./firebaseService').FirebaseService)();
   }
+  // Real-time cleaning tasks sync
+  useEffect(() => {
+    if (!firebaseMeta.current) return;
+    const unsubscribeCompleted = firebaseMeta.current.onCompletedTasksChange((newCompleted: number[] | Set<number>) => {
+      // Accept both array and Set
+      setCompletedTasks(new Set(Array.isArray(newCompleted) ? newCompleted : Array.from(newCompleted)));
+    });
+    const unsubscribeAssignments = firebaseMeta.current.onTaskAssignmentsChange((newAssignments: any) => {
+      setTaskAssignments(() => newAssignments || {});
+    });
+    return () => {
+      if (unsubscribeCompleted) unsubscribeCompleted();
+      if (unsubscribeAssignments) unsubscribeAssignments();
+    };
+  }, []);
   // Firebase and Auth hooks with multi-device sync
   const {
     isLoading,
@@ -121,15 +136,36 @@ const EmployeeApp: React.FC = () => {
   }, []);
 
   // Set up periodic auto-save (every 5 minutes)
+  // Set up periodic auto-save (every 5 minutes) with logging for cleaning tasks
   useEffect(() => {
-    const interval = setInterval(() => {
+    const interval = setInterval(async () => {
       if (connectionStatus === 'connected' && !isLoading) {
-        saveToFirebase();
+        console.log('🧹 [AUTO-SAVE] Cleaning tasks: Initiating periodic auto-save...');
+        try {
+          await saveToFirebase();
+          // Verification: reload and compare
+          const verify = async () => {
+            const data = await firebaseMeta.current.getCleaningTasksData?.();
+            if (data) {
+              const completedMatch = Array.from(completedTasks).every(t => data.completedTasks?.includes?.(t));
+              const assignmentsMatch = JSON.stringify(taskAssignments) === JSON.stringify(data.taskAssignments);
+              if (completedMatch && assignmentsMatch) {
+                console.log('✅ [AUTO-SAVE] Cleaning tasks verified after save.');
+              } else {
+                console.warn('⚠️ [AUTO-SAVE] Cleaning tasks verification failed.', { completedMatch, assignmentsMatch, data });
+              }
+            } else {
+              console.warn('⚠️ [AUTO-SAVE] Cleaning tasks verification: No data returned.');
+            }
+          };
+          verify();
+        } catch (err) {
+          console.error('❌ [AUTO-SAVE] Cleaning tasks save failed:', err);
+        }
       }
     }, 300000); // 5 minutes
-    
     return () => clearInterval(interval);
-  }, [connectionStatus, isLoading, saveToFirebase]);
+  }, [connectionStatus, isLoading, saveToFirebase, completedTasks, taskAssignments]);
 
   // Check for daily reset notification - improved logic with better debouncing
   useEffect(() => {
@@ -251,15 +287,59 @@ const EmployeeApp: React.FC = () => {
     handleDataChange();
   }, [setDailyData, handleDataChange]);
 
-  const setCompletedTasksWithSave = useCallback((tasks: Set<number>) => {
-    setCompletedTasks(tasks);
-    handleDataChange();
-  }, [setCompletedTasks, handleDataChange]);
+  // Enhanced setters for cleaning tasks with logging and verification
+  // Critical QuickSave flow for completedTasks (instant, confirmed, verified)
+  const setCompletedTasksWithSave = useCallback(async (tasks: Set<number>) => {
+    console.log('🔥 [CRITICAL-SAVE] Cleaning tasks: About to save completedTasks:', Array.from(tasks));
+    try {
+      const result = await quickSave('completedTasks', Array.from(tasks));
+      if (result === true) {
+        console.log('🔒 [CRITICAL-SAVE] CompletedTasks QuickSave confirmed by Firebase.');
+        setCompletedTasks(tasks);
+        // Verification
+        const data = await firebaseMeta.current.getCleaningTasksData?.();
+        if (data) {
+          const completedMatch = Array.from(tasks).every(t => data.completedTasks?.includes?.(t));
+          if (completedMatch) {
+            console.log('✅ [CRITICAL-SAVE] Completed tasks successfully verified in Firebase.');
+          } else {
+            console.warn('⚠️ [CRITICAL-SAVE] Completed tasks verification failed.', { tasks, data });
+          }
+        }
+      } else {
+        console.error('❌ [CRITICAL-SAVE] CompletedTasks QuickSave failed:', result);
+      }
+    } catch (err) {
+      console.error('❌ [CRITICAL-SAVE] CompletedTasks QuickSave error:', err);
+    }
+  }, [quickSave, setCompletedTasks]);
 
-  const setTaskAssignmentsWithSave = useCallback((updater: (prev: TaskAssignments) => TaskAssignments) => {
-    setTaskAssignments(updater);
-    handleDataChange();
-  }, [setTaskAssignments, handleDataChange]);
+  // Critical QuickSave flow for taskAssignments (instant, confirmed, verified)
+  const setTaskAssignmentsWithSave = useCallback(async (updater: (prev: TaskAssignments) => TaskAssignments) => {
+    const newAssignments = typeof updater === 'function' ? updater({ ...taskAssignments }) : updater;
+    console.log('🔥 [CRITICAL-SAVE] Cleaning tasks: About to save taskAssignments:', newAssignments);
+    try {
+      const result = await quickSave('taskAssignments', newAssignments);
+      if (result === true) {
+        console.log('🔒 [CRITICAL-SAVE] TaskAssignments QuickSave confirmed by Firebase.');
+        setTaskAssignments(() => newAssignments);
+        // Verification
+        const data = await firebaseMeta.current.getCleaningTasksData?.();
+        if (data) {
+          const assignmentsMatch = JSON.stringify(newAssignments) === JSON.stringify(data.taskAssignments);
+          if (assignmentsMatch) {
+            console.log('✅ [CRITICAL-SAVE] Task assignments successfully verified in Firebase.');
+          } else {
+            console.warn('⚠️ [CRITICAL-SAVE] Task assignments verification failed.', { newAssignments, data });
+          }
+        }
+      } else {
+        console.error('❌ [CRITICAL-SAVE] TaskAssignments QuickSave failed:', result);
+      }
+    } catch (err) {
+      console.error('❌ [CRITICAL-SAVE] TaskAssignments QuickSave error:', err);
+    }
+  }, [quickSave, setTaskAssignments, taskAssignments]);
 
   const setCustomRolesWithSave = useCallback((value: React.SetStateAction<string[]>) => {
     setCustomRoles(value);
