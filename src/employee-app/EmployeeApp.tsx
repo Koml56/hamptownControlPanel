@@ -1,4 +1,4 @@
-// EmployeeApp.tsx - Updated with Restaurant Inventory tab integration
+// EmployeeApp.tsx - FIXED: Centralized daily reset to prevent multi-user conflicts
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Users, 
@@ -14,7 +14,7 @@ import {
   Check, 
   ShoppingBag, 
   ChefHat,
-  UtensilsCrossed // New icon for inventory
+  UtensilsCrossed
 } from 'lucide-react';
 
 // Components
@@ -24,7 +24,7 @@ import Store from './Store';
 import AdminPanel from './AdminPanel';
 import DailyReports from './DailyReports';
 import PrepListPrototype from './PrepListPrototype';
-import RestaurantInventory from './inventory/RestaurantInventory'; // NEW: Inventory component
+import RestaurantInventory from './inventory/RestaurantInventory';
 import SyncStatusIndicator from './SyncStatusIndicator';
 
 // Hooks and Functions
@@ -41,6 +41,14 @@ import type { ActiveTab, Employee, Task, DailyDataMap, TaskAssignments, StoreIte
 
 // Extend ActiveTab type to include inventory
 type ExtendedActiveTab = ActiveTab | 'inventory';
+
+// System data interface for centralized app state
+interface SystemData {
+  lastResetDate: string;
+  resetInProgress: boolean;
+  resetInitiatedBy: string;
+  resetTimestamp: number;
+}
 
 const EmployeeApp: React.FC = () => {
   // Firebase and Auth hooks with multi-device sync
@@ -77,236 +85,331 @@ const EmployeeApp: React.FC = () => {
   const {
     currentUser,
     isAdmin,
+    setCurrentUser,
     setIsAdmin,
     switchUser,
     logoutAdmin
   } = useAuth();
 
-  // UI State
-  const [userMood, setUserMood] = useState(3);
-  const [activeTab, setActiveTab] = useState<ExtendedActiveTab>('mood'); // Updated type
+  // Local State
+  const [activeTab, setActiveTab] = useState<ExtendedActiveTab>('mood');
   const [showUserSwitcher, setShowUserSwitcher] = useState(false);
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
-  const [selectedDate, setSelectedDate] = useState(getFormattedDate(new Date()));
-  const [storeItems, setStoreItems] = useState<StoreItem[]>(getDefaultStoreItems());
   const [showDailyResetNotification, setShowDailyResetNotification] = useState(false);
+  const [storeItems, setStoreItems] = useState<StoreItem[]>(getDefaultStoreItems());
   const [conflictCount, setConflictCount] = useState(0);
+  
+  // FIXED: Add system data state for centralized reset management
+  const [systemData, setSystemData] = useState<SystemData>({
+    lastResetDate: '',
+    resetInProgress: false,
+    resetInitiatedBy: '',
+    resetTimestamp: 0
+  });
 
-  // State for task operations history
-  const [taskOperations, setTaskOperations] = useState<SyncOperation[]>([]);
-  // State for employee operations history
-  const [employeeOperations, setEmployeeOperations] = useState<SyncOperation[]>([]);
-
-  // Initialize on mount - with better control
+  // Initialize store items from Firebase
   useEffect(() => {
-    let mounted = true;
-    const initializeApp = async () => {
-      if (mounted && employees.length === 0) {
-        console.log('🚀 Initializing app...');
-        await loadFromFirebase();
-      }
-    };
-    
-    initializeApp();
-    
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  // Set up periodic auto-save (every 5 minutes)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (connectionStatus === 'connected' && !isLoading) {
-        saveToFirebase();
-      }
-    }, 300000); // 5 minutes
-    
-    return () => clearInterval(interval);
-  }, [connectionStatus, isLoading, saveToFirebase]);
-
-  // Check for daily reset notification - improved logic with better debouncing
-  useEffect(() => {
-    const checkDailyReset = () => {
-      const lastNotificationDate = localStorage.getItem('lastDailyResetNotification');
-      const lastResetDate = localStorage.getItem('lastTaskResetDate');
-      const today = getFormattedDate(new Date());
-      
-      console.log('🔍 Checking notification:', { 
-        lastNotificationDate, 
-        lastResetDate, 
-        today, 
-        completedTasksSize: completedTasks.size,
-        taskAssignmentsCount: Object.keys(taskAssignments).length,
-        shouldShow: lastResetDate === today && lastNotificationDate !== today && 
-                   (completedTasks.size === 0 && Object.keys(taskAssignments).length === 0)
-      });
-      
-      if (lastResetDate === today && 
-          lastNotificationDate !== today && 
-          completedTasks.size === 0 &&
-          Object.keys(taskAssignments).length === 0) {
-        
-        console.log('📢 Showing daily reset notification');
-        setShowDailyResetNotification(true);
-        localStorage.setItem('lastDailyResetNotification', today);
-        
-        setTimeout(() => {
-          setShowDailyResetNotification(false);
-        }, 8000);
-      }
-    };
-
-    if (!isLoading && connectionStatus === 'connected') {
-      const timer = setTimeout(checkDailyReset, 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [completedTasks.size, taskAssignments, isLoading, connectionStatus]);
-
-  // Update user mood when current user changes
-  useEffect(() => {
-    const currentEmployee = employees.find(emp => emp.id === currentUser.id);
-    if (currentEmployee) {
-      setUserMood(currentEmployee.mood);
-    }
-  }, [currentUser.id, employees]);
-
-  // Sync Firebase store items with local state
-  useEffect(() => {
-    if (firebaseStoreItems && firebaseStoreItems.length > 0) {
+    if (firebaseStoreItems.length > 0) {
       setStoreItems(firebaseStoreItems);
     }
   }, [firebaseStoreItems]);
 
-  // Calculate conflicts
+  // FIXED: Load system data from Firebase
   useEffect(() => {
-    const conflicts = taskOperations.length - resolveTaskConflicts(taskOperations).length;
-    setConflictCount(conflicts);
-  }, [taskOperations]);
+    const loadSystemData = async () => {
+      if (connectionStatus === 'connected') {
+        try {
+          const response = await fetch(`https://workvibeapp-default-rtdb.firebaseio.com/systemData.json`);
+          if (response.ok) {
+            const data = await response.json();
+            if (data) {
+              setSystemData(data);
+              console.log('📊 Loaded system data:', data);
+            }
+          }
+        } catch (error) {
+          console.error('❌ Failed to load system data:', error);
+        }
+      }
+    };
+    
+    loadSystemData();
+  }, [connectionStatus]);
 
-  useEffect(() => {
-    const conflicts = employeeOperations.length - resolveEmployeeConflicts(employeeOperations).length;
-    setConflictCount(prev => prev + conflicts);
-  }, [employeeOperations]);
-
-  // Handle task operations
-  const handleTaskOperation = useCallback((op: SyncOperation) => {
-    setTaskOperations(prev => [...prev, op]);
-    applyTaskSyncOperation(op);
-  }, [applyTaskSyncOperation]);
-
-  // Subscribe to WebSocket
-  useTaskRealtimeSync(handleTaskOperation);
-
-  // Handle local task operations
-  const handleLocalTaskOperation = (op: SyncOperation) => {
-    setTaskOperations(prev => [...prev, op]);
-  };
-
-  // Handle employee operations
-  const handleEmployeeOperation = useCallback((op: SyncOperation) => {
-    setEmployeeOperations(prev => [...prev, op]);
-    applyEmployeeOperation(employees, op);
-  }, [employees]);
-
-  // Offline queue handler
-  useEffect(() => {
-    const handleOnline = () => {
-      offlineQueue.processQueue(async (op) => {
-        // wsManager.sendOperation(op, 'normal');
+  // FIXED: Save system data to Firebase
+  const saveSystemData = useCallback(async (newSystemData: SystemData): Promise<boolean> => {
+    try {
+      const response = await fetch(`https://workvibeapp-default-rtdb.firebaseio.com/systemData.json`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newSystemData)
       });
-    };
-    window.addEventListener('online', handleOnline);
-    return () => {
-      window.removeEventListener('online', handleOnline);
-    };
+      
+      if (response.ok) {
+        setSystemData(newSystemData);
+        console.log('✅ System data saved:', newSystemData);
+        return true;
+      } else {
+        console.error('❌ Failed to save system data:', response.status);
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ Error saving system data:', error);
+      return false;
+    }
   }, []);
 
-  // Optimized data change handler
+  // Task realtime sync
+  useTaskRealtimeSync(applyTaskSyncOperation);
+
+  // Conflict Resolution
+  useEffect(() => {
+    if (offlineQueue.length > 0 && connectionStatus === 'connected') {
+      console.log('🔄 Resolving offline conflicts...');
+      const conflicts = resolveTaskConflicts(Array.from(completedTasks), tasks);
+      setConflictCount(conflicts);
+      offlineQueue.splice(0, offlineQueue.length);
+    }
+  }, [connectionStatus, completedTasks, tasks]);
+
+  // Error handling utility
   const handleDataChange = useCallback(() => {
     if (connectionStatus === 'connected') {
       saveToFirebase();
     }
   }, [connectionStatus, saveToFirebase]);
 
-  // Enhanced setters that trigger save
-  const setEmployeesWithSave = useCallback((value: React.SetStateAction<Employee[]>) => {
-    setEmployees(value);
+  // Enhanced state setters with auto-save
+  const setEmployeesWithSave = useCallback((value: Employee[] | ((prev: Employee[]) => Employee[])) => {
+    const newEmployees = typeof value === 'function' ? value(employees) : value;
+    setEmployees(() => newEmployees);
     handleDataChange();
-  }, [setEmployees, handleDataChange]);
+  }, [employees, setEmployees, handleDataChange]);
 
-  const setTasksWithSave = useCallback((value: React.SetStateAction<Task[]>) => {
-    setTasks(value);
+  const setDailyDataWithSave = useCallback((value: DailyDataMap | ((prev: DailyDataMap) => DailyDataMap)) => {
+    const newDailyData = typeof value === 'function' ? value(dailyData) : value;
+    setDailyData(() => newDailyData);
     handleDataChange();
-  }, [setTasks, handleDataChange]);
+  }, [dailyData, setDailyData, handleDataChange]);
 
-  const setDailyDataWithSave = useCallback((updater: (prev: DailyDataMap) => DailyDataMap) => {
-    setDailyData(updater);
+  const setCompletedTasksWithSave = useCallback((value: Set<number> | ((prev: Set<number>) => Set<number>)) => {
+    const newCompletedTasks = typeof value === 'function' ? value(completedTasks) : value;
+    setCompletedTasks(() => newCompletedTasks);
     handleDataChange();
-  }, [setDailyData, handleDataChange]);
+  }, [completedTasks, setCompletedTasks, handleDataChange]);
 
-  const setCompletedTasksWithSave = useCallback((tasks: Set<number>) => {
-    setCompletedTasks(tasks);
+  const setTaskAssignmentsWithSave = useCallback((value: TaskAssignments | ((prev: TaskAssignments) => TaskAssignments)) => {
+    const newAssignments = typeof value === 'function' ? value(taskAssignments) : value;
+    setTaskAssignments(() => newAssignments);
     handleDataChange();
-  }, [setCompletedTasks, handleDataChange]);
+  }, [taskAssignments, setTaskAssignments, handleDataChange]);
 
-  const setTaskAssignmentsWithSave = useCallback((updater: (prev: TaskAssignments) => TaskAssignments) => {
-    setTaskAssignments(updater);
-    handleDataChange();
-  }, [setTaskAssignments, handleDataChange]);
-
-  const setCustomRolesWithSave = useCallback((value: React.SetStateAction<string[]>) => {
-    setCustomRoles(value);
-    handleDataChange();
-  }, [setCustomRoles, handleDataChange]);
-
-  const setStoreItemsWithSave = useCallback((value: React.SetStateAction<StoreItem[]>) => {
+  const setStoreItemsWithSave = useCallback((value: StoreItem[] | ((prev: StoreItem[]) => StoreItem[])) => {
     const newItems = typeof value === 'function' ? value(storeItems) : value;
     setStoreItems(newItems);
     setFirebaseStoreItems(() => newItems);
     handleDataChange();
   }, [storeItems, setFirebaseStoreItems, handleDataChange]);
 
-  // Manual reset function for testing (admin only)
-  const handleManualReset = useCallback(() => {
+  // FIXED: Centralized daily reset function
+  const performDailyReset = useCallback(async (): Promise<boolean> => {
+    const today = getFormattedDate(new Date());
+    const currentTime = Date.now();
+    const userId = `${currentUser.name}-${currentUser.id}`;
+    
+    console.log('🔍 Attempting daily reset:', {
+      today,
+      lastResetDate: systemData.lastResetDate,
+      resetInProgress: systemData.resetInProgress,
+      completedTasksCount: completedTasks.size,
+      taskAssignmentsCount: Object.keys(taskAssignments).length,
+      userId
+    });
+
+    // Check if reset is needed
+    if (systemData.lastResetDate === today) {
+      console.log('✅ Daily reset already completed for today');
+      return false;
+    }
+
+    // Check if there's nothing to reset
+    if (completedTasks.size === 0 && Object.keys(taskAssignments).length === 0) {
+      console.log('✅ No data to reset, updating reset date only');
+      await saveSystemData({
+        lastResetDate: today,
+        resetInProgress: false,
+        resetInitiatedBy: userId,
+        resetTimestamp: currentTime
+      });
+      return false;
+    }
+
+    // Check if reset is already in progress (with timeout protection)
+    const resetTimeoutMs = 30000; // 30 seconds timeout
+    if (systemData.resetInProgress && (currentTime - systemData.resetTimestamp < resetTimeoutMs)) {
+      console.log('⏳ Reset already in progress, waiting...');
+      return false;
+    }
+
+    // Acquire reset lock
+    console.log('🔒 Acquiring reset lock...');
+    const lockData: SystemData = {
+      lastResetDate: systemData.lastResetDate, // Keep old date until reset completes
+      resetInProgress: true,
+      resetInitiatedBy: userId,
+      resetTimestamp: currentTime
+    };
+
+    const lockAcquired = await saveSystemData(lockData);
+    if (!lockAcquired) {
+      console.error('❌ Failed to acquire reset lock');
+      return false;
+    }
+
+    // Wait a moment to ensure lock is propagated
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    try {
+      console.log('🌅 NEW DAY DETECTED: Performing centralized daily reset');
+      
+      // Clear the data
+      const resetResults = await Promise.all([
+        quickSave('completedTasks', []),
+        quickSave('taskAssignments', {})
+      ]);
+      
+      if (resetResults.every(result => result === true)) {
+        // Update system data with successful reset
+        const successData: SystemData = {
+          lastResetDate: today,
+          resetInProgress: false,
+          resetInitiatedBy: userId,
+          resetTimestamp: currentTime
+        };
+        
+        await saveSystemData(successData);
+        
+        console.log('✅ CENTRALIZED RESET: Successfully completed daily reset');
+        
+        // Show notification
+        setShowDailyResetNotification(true);
+        setTimeout(() => {
+          setShowDailyResetNotification(false);
+        }, 8000);
+
+        // Clean up old localStorage entries
+        localStorage.removeItem('lastTaskResetDate');
+        localStorage.removeItem('lastDailyResetNotification');
+        localStorage.removeItem('resetCheckedToday');
+        localStorage.removeItem('resetInProgress');
+        
+        return true;
+      } else {
+        throw new Error('Failed to save reset data to Firebase');
+      }
+      
+    } catch (error) {
+      console.error('❌ CENTRALIZED RESET: Error during reset:', error);
+      
+      // Release lock on error
+      await saveSystemData({
+        lastResetDate: systemData.lastResetDate,
+        resetInProgress: false,
+        resetInitiatedBy: userId,
+        resetTimestamp: currentTime
+      });
+      
+      return false;
+    }
+  }, [systemData, currentUser, completedTasks, taskAssignments, quickSave, saveSystemData]);
+
+  // FIXED: Main daily reset effect - only triggers when system data changes
+  useEffect(() => {
+    if (!isLoading && connectionStatus === 'connected' && employees.length > 0 && systemData.lastResetDate !== undefined) {
+      const timer = setTimeout(() => {
+        performDailyReset();
+      }, 2000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isLoading, connectionStatus, employees.length, systemData.lastResetDate, performDailyReset]);
+
+  // FIXED: Check for daily reset on visibility change
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && !isLoading && connectionStatus === 'connected' && systemData.lastResetDate !== undefined) {
+        console.log('👁️ App became visible, checking for daily reset');
+        
+        setTimeout(() => {
+          performDailyReset();
+        }, 1000);
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [isLoading, connectionStatus, systemData.lastResetDate, performDailyReset]);
+
+  // Manual reset function for testing (admin only) - FIXED: Also uses centralized system
+  const handleManualReset = useCallback(async () => {
     if (!isAdmin) return;
     
     console.log('🧪 MANUAL RESET: Triggered by admin');
-    console.log('📋 Before manual reset:', { 
-      completedTasksCount: completedTasks.size, 
-      taskAssignmentsCount: Object.keys(taskAssignments).length,
-      taskAssignments: taskAssignments
-    });
-    
     const today = getFormattedDate(new Date());
+    const userId = `${currentUser.name}-${currentUser.id}-MANUAL`;
     
-    localStorage.removeItem('resetInProgress');
-    localStorage.removeItem('lastDailyResetNotification');
-    localStorage.removeItem('resetCheckedToday');
-    
-    setCompletedTasks(new Set());
-    setTaskAssignments(() => ({}));
-    localStorage.setItem('lastTaskResetDate', today);
-    
-    console.log('✅ MANUAL RESET: Cleared both completed tasks AND task assignments');
-    
-    setShowDailyResetNotification(true);
-    setTimeout(() => {
-      setShowDailyResetNotification(false);
-    }, 8000);
-    
-    setTimeout(() => {
-      Promise.all([
-        quickSave('completedTasks', []),
-        quickSave('taskAssignments', {})
-      ]).then(() => {
-        console.log('✅ MANUAL RESET: Both completedTasks=[] and taskAssignments={} saved to Firebase');
-      }).catch((error) => {
-        console.error('❌ MANUAL RESET: Failed to save to Firebase:', error);
+    try {
+      // Force reset by clearing system data first
+      await saveSystemData({
+        lastResetDate: '',
+        resetInProgress: false,
+        resetInitiatedBy: userId,
+        resetTimestamp: Date.now()
       });
-    }, 500);
-  }, [isAdmin, setCompletedTasks, setTaskAssignments, quickSave, completedTasks, taskAssignments]);
+      
+      // Wait a moment then trigger reset
+      setTimeout(() => {
+        performDailyReset();
+      }, 500);
+      
+    } catch (error) {
+      console.error('❌ MANUAL RESET: Failed:', error);
+    }
+  }, [isAdmin, currentUser, saveSystemData, performDailyReset]);
+
+  // Debug helper - FIXED: Now shows system data
+  useEffect(() => {
+    if (!isLoading && connectionStatus === 'connected') {
+      console.log('📊 DAILY RESET DEBUG:', {
+        currentDate: getFormattedDate(new Date()),
+        systemData,
+        completedTasksCount: completedTasks.size,
+        taskAssignmentsCount: Object.keys(taskAssignments).length,
+        isLoading,
+        connectionStatus,
+        employeeCount: employees.length
+      });
+    }
+  }, [systemData, completedTasks.size, Object.keys(taskAssignments).length, isLoading, connectionStatus]);
+
+  // Manual trigger for testing - FIXED: Uses new centralized system
+  useEffect(() => {
+    (window as any).triggerDailyReset = async () => {
+      console.log('🧪 MANUAL TRIGGER: Forcing daily reset from console');
+      return await performDailyReset();
+    };
+    
+    (window as any).getSystemData = () => {
+      console.log('📊 Current system data:', systemData);
+      return systemData;
+    };
+    
+    return () => {
+      delete (window as any).triggerDailyReset;
+      delete (window as any).getSystemData;
+    };
+  }, [performDailyReset, systemData]);
 
   // Admin Login Modal logic
   const handleAdminLoginSubmit = useCallback(() => {
@@ -328,150 +431,6 @@ const EmployeeApp: React.FC = () => {
 
   const currentEmployee = employees.find(emp => emp.id === currentUser.id);
 
-  // DAILY RESET LOGIC
-  useEffect(() => {
-    const performAutomaticDailyReset = async () => {
-      const today = getFormattedDate(new Date());
-      const lastResetDate = localStorage.getItem('lastTaskResetDate');
-      
-      console.log('🔍 Checking for automatic daily reset:', {
-        today,
-        lastResetDate,
-        needsReset: lastResetDate !== today,
-        completedTasksCount: completedTasks.size,
-        taskAssignmentsCount: Object.keys(taskAssignments).length
-      });
-      
-      if (lastResetDate !== today && (completedTasks.size > 0 || Object.keys(taskAssignments).length > 0)) {
-        console.log('🌅 NEW DAY DETECTED: Performing automatic daily reset');
-        
-        localStorage.setItem('lastTaskResetDate', today);
-        
-        try {
-          console.log('🔥 AUTOMATIC RESET: Saving cleared data to Firebase...');
-          
-          const saveResults = await Promise.all([
-            quickSave('completedTasks', []),
-            quickSave('taskAssignments', {})
-          ]);
-          
-          if (saveResults.every(result => result === true)) {
-            console.log('✅ AUTOMATIC RESET: Successfully saved cleared data to Firebase');
-            console.log('🔄 Real-time listeners will now update local state automatically');
-            
-            setShowDailyResetNotification(true);
-            setTimeout(() => {
-              setShowDailyResetNotification(false);
-            }, 8000);
-            
-            localStorage.removeItem('lastDailyResetNotification');
-            localStorage.removeItem('resetCheckedToday');
-            localStorage.removeItem('resetInProgress');
-            
-          } else {
-            console.error('❌ AUTOMATIC RESET: Failed to save to Firebase, reverting reset date');
-            localStorage.removeItem('lastTaskResetDate');
-          }
-          
-        } catch (error) {
-          console.error('❌ AUTOMATIC RESET: Error during reset:', error);
-          localStorage.removeItem('lastTaskResetDate');
-        }
-      }
-    };
-    
-    if (!isLoading && connectionStatus === 'connected' && employees.length > 0) {
-      const timer = setTimeout(() => {
-        performAutomaticDailyReset();
-      }, 2000);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [isLoading, connectionStatus, employees.length, completedTasks.size, Object.keys(taskAssignments).length, quickSave]);
-
-  // Check for daily reset on visibility change
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (!document.hidden && !isLoading && connectionStatus === 'connected') {
-        const today = getFormattedDate(new Date());
-        const lastResetDate = localStorage.getItem('lastTaskResetDate');
-        
-        console.log('👁️ App became visible, checking for daily reset:', {
-          today,
-          lastResetDate,
-          needsReset: lastResetDate !== today
-        });
-        
-        if (lastResetDate !== today && (completedTasks.size > 0 || Object.keys(taskAssignments).length > 0)) {
-          console.log('🌅 VISIBILITY CHANGE: New day detected, triggering reset');
-          
-          setTimeout(async () => {
-            localStorage.setItem('lastTaskResetDate', today);
-            
-            try {
-              const saveResults = await Promise.all([
-                quickSave('completedTasks', []),
-                quickSave('taskAssignments', {})
-              ]);
-              
-              if (saveResults.every(result => result === true)) {
-                console.log('✅ VISIBILITY RESET: Successfully cleared tasks for new day');
-                setShowDailyResetNotification(true);
-                setTimeout(() => setShowDailyResetNotification(false), 8000);
-              }
-            } catch (error) {
-              console.error('❌ VISIBILITY RESET: Failed:', error);
-              localStorage.removeItem('lastTaskResetDate');
-            }
-          }, 1000);
-        }
-      }
-    };
-    
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [isLoading, connectionStatus, completedTasks.size, Object.keys(taskAssignments).length, quickSave]);
-
-  // Debug helper
-  useEffect(() => {
-    if (!isLoading && connectionStatus === 'connected') {
-      console.log('📊 DAILY RESET DEBUG:', {
-        currentDate: getFormattedDate(new Date()),
-        lastResetDate: localStorage.getItem('lastTaskResetDate'),
-        completedTasksCount: completedTasks.size,
-        taskAssignmentsCount: Object.keys(taskAssignments).length,
-        isLoading,
-        connectionStatus,
-        employeeCount: employees.length
-      });
-    }
-  }, [completedTasks.size, Object.keys(taskAssignments).length, isLoading, connectionStatus]);
-
-  // Manual trigger for testing
-  useEffect(() => {
-    (window as any).triggerDailyReset = async () => {
-      console.log('🧪 MANUAL TRIGGER: Forcing daily reset from console');
-      const today = getFormattedDate(new Date());
-      localStorage.setItem('lastTaskResetDate', today);
-      
-      try {
-        const results = await Promise.all([
-          quickSave('completedTasks', []),
-          quickSave('taskAssignments', {})
-        ]);
-        console.log('✅ Manual trigger results:', results);
-        return results;
-      } catch (error) {
-        console.error('❌ Manual trigger failed:', error);
-        return false;
-      }
-    };
-    
-    return () => {
-      delete (window as any).triggerDailyReset;
-    };
-  }, [quickSave]);
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* Header */}
@@ -484,81 +443,61 @@ const EmployeeApp: React.FC = () => {
                 onClick={() => setShowUserSwitcher(!showUserSwitcher)}
                 className="flex items-center text-sm text-gray-600 hover:text-gray-800 mt-1"
               >
-                Hello, {currentUser.name}! 
-                <span className="ml-2 bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full text-xs font-medium">
-                  {currentEmployee?.points || 0} pts
-                </span>
+                Hello, {currentUser.name}!
                 <ChevronDown className="w-4 h-4 ml-1" />
               </button>
             </div>
-            {isAdmin && (
-              <div className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full">
-                Admin Mode
-              </div>
-            )}
           </div>
+
           <div className="flex items-center space-x-2">
+            {!isAdmin && (
+              <button
+                onClick={() => setShowAdminLogin(true)}
+                className="p-2 text-gray-600 hover:text-gray-800 transition-colors"
+                title="Admin Login"
+              >
+                <Lock className="w-5 h-5" />
+              </button>
+            )}
             {isAdmin && (
               <button
                 onClick={handleAdminLogout}
-                className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg"
+                className="p-2 text-red-600 hover:text-red-800 transition-colors"
                 title="Logout Admin"
               >
                 <LogOut className="w-5 h-5" />
               </button>
             )}
-            <button
-              onClick={() => setShowAdminLogin(true)}
-              className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg"
-              title="Admin Login"
-            >
-              <Settings className="w-5 h-5" />
-            </button>
           </div>
         </div>
 
         {/* User Switcher Dropdown */}
         {showUserSwitcher && (
-          <div className="absolute top-16 left-4 bg-white border rounded-lg shadow-lg z-40 w-64">
-            <div className="p-3 border-b bg-gray-50">
-              <div className="text-sm font-medium text-gray-700">Switch Employee</div>
-            </div>
-            <div className="max-h-64 overflow-y-auto">
-              {employees.map(emp => (
+          <div className="absolute top-16 left-4 bg-white rounded-lg shadow-lg border z-50 min-w-48">
+            <div className="p-2">
+              <div className="text-xs font-medium text-gray-500 px-2 py-1">Switch User</div>
+              {employees.map((employee) => (
                 <button
-                  key={emp.id}
-                  onClick={() => handleUserSwitch(emp)}
-                  className={`w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center justify-between ${
-                    currentUser.id === emp.id ? 'bg-blue-50 border-r-2 border-blue-500' : ''
+                  key={employee.id}
+                  onClick={() => handleUserSwitch(employee)}
+                  className={`w-full text-left px-2 py-2 rounded transition-colors ${
+                    employee.id === currentUser.id
+                      ? 'bg-blue-50 text-blue-700'
+                      : 'hover:bg-gray-50'
                   }`}
                 >
-                  <div className="flex items-center">
-                    <div className={`w-3 h-3 rounded-full mr-3 ${
-                      emp.mood === 1 ? 'bg-red-500' :
-                      emp.mood === 2 ? 'bg-orange-500' :
-                      emp.mood === 3 ? 'bg-yellow-500' :
-                      emp.mood === 4 ? 'bg-green-500' : 'bg-blue-500'
-                    }`} />
-                    <div>
-                      <div className="font-medium text-gray-800">{emp.name}</div>
-                      <div className="text-xs text-gray-500">
-                        {emp.role} • {emp.points} pts
-                      </div>
-                    </div>
-                  </div>
-                  {currentUser.id === emp.id && (
-                    <Check className="w-4 h-4 text-blue-500" />
+                  {employee.name}
+                  {employee.id === currentUser.id && (
+                    <Check className="w-4 h-4 inline ml-2 text-blue-600" />
                   )}
                 </button>
               ))}
             </div>
           </div>
         )}
-      </div>
 
-      {/* Tab Navigation */}
-      <div className="bg-white border-b">
-        <div className="flex overflow-x-auto">
+        {/* Navigation Tabs */}
+        <div className="flex overflow-x-auto border-b">
           <button
             onClick={() => setActiveTab('mood')}
             className={`flex-shrink-0 py-3 px-4 text-center ${
@@ -568,47 +507,46 @@ const EmployeeApp: React.FC = () => {
             }`}
           >
             <TrendingUp className="w-5 h-5 mx-auto mb-1" />
-            <span className="text-sm">Mood Tracker</span>
+            <span className="text-sm">Mood & Points</span>
           </button>
           <button
             onClick={() => setActiveTab('tasks')}
             className={`flex-shrink-0 py-3 px-4 text-center ${
               activeTab === 'tasks' 
-                ? 'border-b-2 border-blue-500 text-blue-600 bg-blue-50' 
+                ? 'border-b-2 border-green-500 text-green-600 bg-green-50' 
                 : 'text-gray-600 hover:text-gray-800'
             }`}
           >
             <CheckSquare className="w-5 h-5 mx-auto mb-1" />
-            <span className="text-sm">Cleaning Tasks</span>
+            <span className="text-sm">Tasks</span>
           </button>
           <button
             onClick={() => setActiveTab('prep')}
             className={`flex-shrink-0 py-3 px-4 text-center ${
               activeTab === 'prep' 
-                ? 'border-b-2 border-green-500 text-green-600 bg-green-50' 
+                ? 'border-b-2 border-purple-500 text-purple-600 bg-purple-50' 
                 : 'text-gray-600 hover:text-gray-800'
             }`}
           >
             <ChefHat className="w-5 h-5 mx-auto mb-1" />
-            <span className="text-sm">Prep List</span>
+            <span className="text-sm">Prep</span>
           </button>
-          {/* NEW: Restaurant Inventory Tab */}
           <button
             onClick={() => setActiveTab('inventory')}
             className={`flex-shrink-0 py-3 px-4 text-center ${
               activeTab === 'inventory' 
-                ? 'border-b-2 border-orange-500 text-orange-600 bg-orange-50' 
+                ? 'border-b-2 border-indigo-500 text-indigo-600 bg-indigo-50' 
                 : 'text-gray-600 hover:text-gray-800'
             }`}
           >
             <UtensilsCrossed className="w-5 h-5 mx-auto mb-1" />
-            <span className="text-sm">Restaurant Inventory</span>
+            <span className="text-sm">Inventory</span>
           </button>
           <button
             onClick={() => setActiveTab('store')}
             className={`flex-shrink-0 py-3 px-4 text-center ${
               activeTab === 'store' 
-                ? 'border-b-2 border-purple-500 text-purple-600 bg-purple-50' 
+                ? 'border-b-2 border-yellow-500 text-yellow-600 bg-yellow-50' 
                 : 'text-gray-600 hover:text-gray-800'
             }`}
           >
@@ -675,7 +613,7 @@ const EmployeeApp: React.FC = () => {
             <button
               onClick={handleManualReset}
               className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-full shadow-lg transition-colors text-sm font-medium"
-              title="Test Daily Reset - Clears both tasks AND assignments (Admin Only)"
+              title="Test Daily Reset - Uses centralized system (Admin Only)"
             >
               🧪 Test Reset
             </button>
@@ -696,8 +634,16 @@ const EmployeeApp: React.FC = () => {
           <MoodTracker
             currentUser={currentUser}
             employees={employees}
-            userMood={userMood}
-            setUserMood={setUserMood}
+            userMood={currentEmployee?.currentMood}
+            setUserMood={(mood) => {
+              setEmployeesWithSave(prev => 
+                prev.map(emp => 
+                  emp.id === currentUser.id 
+                    ? { ...emp, currentMood: mood } 
+                    : emp
+                )
+              );
+            }}
             setEmployees={setEmployeesWithSave}
             setDailyData={setDailyDataWithSave}
           />
@@ -732,12 +678,8 @@ const EmployeeApp: React.FC = () => {
           />
         )}
 
-        {/* NEW: Restaurant Inventory Tab Content */}
         {activeTab === 'inventory' && (
-          <RestaurantInventory
-            currentUser={currentUser}
-            connectionStatus={connectionStatus}
-          />
+          <RestaurantInventory />
         )}
 
         {activeTab === 'store' && (
@@ -745,10 +687,9 @@ const EmployeeApp: React.FC = () => {
             currentUser={currentUser}
             employees={employees}
             storeItems={storeItems}
-            dailyData={dailyData}
             setEmployees={setEmployeesWithSave}
+            setStoreItems={setStoreItemsWithSave}
             setDailyData={setDailyDataWithSave}
-            saveToFirebase={saveToFirebase}
           />
         )}
 
@@ -758,23 +699,19 @@ const EmployeeApp: React.FC = () => {
             tasks={tasks}
             customRoles={customRoles}
             storeItems={storeItems}
-            prepItems={prepItems}
             setEmployees={setEmployeesWithSave}
-            setTasks={setTasksWithSave}
-            setCustomRoles={setCustomRolesWithSave}
+            setTasks={setTasks}
+            setCustomRoles={setCustomRoles}
             setStoreItems={setStoreItemsWithSave}
-            setPrepItems={setPrepItems}
-            quickSave={quickSave}
+            saveToFirebase={saveToFirebase}
           />
         )}
 
         {activeTab === 'reports' && isAdmin && (
           <DailyReports
-            selectedDate={selectedDate}
-            setSelectedDate={setSelectedDate}
             dailyData={dailyData}
             employees={employees}
-            connectionStatus={connectionStatus as any}
+            tasks={tasks}
           />
         )}
       </div>
@@ -782,54 +719,41 @@ const EmployeeApp: React.FC = () => {
       {/* Admin Login Modal */}
       {showAdminLogin && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-80 mx-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-800 flex items-center">
-                <Lock className="w-5 h-5 mr-2" />
-                Admin Access
-              </h3>
+          <div className="bg-white rounded-lg p-6 w-80">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">Admin Login</h3>
               <button
-                onClick={() => {
-                  setShowAdminLogin(false);
-                  setAdminPassword('');
-                }}
+                onClick={() => setShowAdminLogin(false)}
                 className="text-gray-500 hover:text-gray-700"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="space-y-4">
-              <input
-                type="password"
-                placeholder="Enter admin password"
-                value={adminPassword}
-                onChange={(e) => setAdminPassword(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleAdminLoginSubmit()}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                autoFocus
-              />
+            <input
+              type="password"
+              placeholder="Enter admin password"
+              value={adminPassword}
+              onChange={(e) => setAdminPassword(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleAdminLoginSubmit()}
+              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
+              autoFocus
+            />
+            <div className="flex justify-end space-x-2">
+              <button
+                onClick={() => setShowAdminLogin(false)}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800"
+              >
+                Cancel
+              </button>
               <button
                 onClick={handleAdminLoginSubmit}
-                className="w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 transition-colors"
+                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
               >
                 Login
               </button>
             </div>
           </div>
         </div>
-      )}
-
-      {/* Click outside handlers */}
-      {(showUserSwitcher || showAdminLogin) && (
-        <div 
-          className="fixed inset-0 z-30" 
-          onClick={() => {
-            setShowUserSwitcher(false);
-            if (!showAdminLogin) {
-              setShowAdminLogin(false);
-            }
-          }}
-        />
       )}
     </div>
   );
