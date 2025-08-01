@@ -152,7 +152,8 @@ export const useFirebaseData = () => {
       return result;
     } catch (error) {
       console.error('❌ Atomic reset failed:', error);
-      return { success: false, reason: `Error: ${error.message}` };
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return { success: false, reason: `Error: ${errorMessage}` };
     }
   }, [connectionStatus, systemData, completedTasks, taskAssignments]);
 
