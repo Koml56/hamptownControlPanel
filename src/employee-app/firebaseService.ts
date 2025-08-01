@@ -182,7 +182,8 @@ export class FirebaseService {
         console.error('❌ Failed to release lock after error:', releaseError);
       }
       
-      return { success: false, reason: `Error: ${error.message}` };
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return { success: false, reason: `Error: ${errorMessage}` };
     }
   }
 
