@@ -1,12 +1,63 @@
-// firebaseService.ts - FIXED to include all prep and store fields
+// src/employee-app/firebaseService.ts - Enhanced with inventory support
 import { FIREBASE_CONFIG } from './constants';
 import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData } from './defaultData';
 import type { Employee, Task, DailyDataMap, TaskAssignments, PrepItem, ScheduledPrep, PrepSelections, StoreItem } from './types';
+import type { InventoryItem, DatabaseItem, ActivityLogEntry } from './inventory/types';
 
 export class FirebaseService {
   private baseUrl = FIREBASE_CONFIG.databaseURL;
   private saveQueue = new Set<string>();
   private isCurrentlySaving = false;
+
+  // Enhanced data summary for logging
+  private getDataSummary(field: string, data: any): any {
+    if (!data) return { empty: true };
+    
+    if (Array.isArray(data)) {
+      if (field.startsWith('inventory')) {
+        return {
+          count: data.length,
+          firstItem: data[0]?.name || data[0]?.type || 'Unknown',
+          types: field.includes('Database') ? 
+            [...new Set(data.map(item => item.type || 'uncategorized'))].slice(0, 3) :
+            [...new Set(data.map(item => item.category))].slice(0, 3)
+        };
+      }
+      return { count: data.length, sample: data[0] };
+    }
+    
+    if (typeof data === 'object') {
+      return { 
+        keys: Object.keys(data).length, 
+        sampleKeys: Object.keys(data).slice(0, 3) 
+      };
+    }
+    
+    return { type: typeof data, value: data };
+  }
+
+  // Get field data from the complete data object
+  private getFieldData(field: string, allData: any): any {
+    switch (field) {
+      case 'employees': return allData.employees;
+      case 'tasks': return allData.tasks;
+      case 'dailyData': return allData.dailyData;
+      case 'completedTasks': return Array.from(allData.completedTasks);
+      case 'taskAssignments': return allData.taskAssignments;
+      case 'customRoles': return allData.customRoles;
+      case 'prepItems': return allData.prepItems;
+      case 'scheduledPreps': return allData.scheduledPreps;
+      case 'prepSelections': return allData.prepSelections;
+      case 'storeItems': return allData.storeItems;
+      // NEW: Inventory fields
+      case 'inventoryDailyItems': return allData.inventoryDailyItems;
+      case 'inventoryWeeklyItems': return allData.inventoryWeeklyItems;
+      case 'inventoryMonthlyItems': return allData.inventoryMonthlyItems;
+      case 'inventoryDatabaseItems': return allData.inventoryDatabaseItems;
+      case 'inventoryActivityLog': return allData.inventoryActivityLog;
+      default: return null;
+    }
+  }
 
   // Quick save for immediate data persistence
   async quickSave(field: string, data: any): Promise<boolean> {
@@ -73,7 +124,7 @@ export class FirebaseService {
           
           setTimeout(() => {
             this.batchSave(queuedFields, allData);
-          }, 100);
+          }, 1000);
         }
       } else {
         console.error('❌ Some batch saves failed');
@@ -81,124 +132,43 @@ export class FirebaseService {
 
       return allSuccessful;
     } catch (error) {
-      console.error('❌ Batch save failed:', error);
+      console.error('❌ Batch save error:', error);
       return false;
     } finally {
       this.isCurrentlySaving = false;
     }
   }
 
-  // FIXED: Get data for specific field including ALL prep and store fields
-  private getFieldData(field: string, allData: any) {
-    switch (field) {
-      case 'employees':
-        return allData.employees;
-      case 'tasks':
-        return allData.tasks;
-      case 'dailyData':
-        return allData.dailyData;
-      case 'completedTasks':
-        return Array.from(allData.completedTasks);
-      case 'taskAssignments':
-        return allData.taskAssignments;
-      case 'customRoles':
-        return allData.customRoles;
-      case 'prepItems':
-        return allData.prepItems;
-      case 'scheduledPreps':
-        return allData.scheduledPreps;
-      case 'prepSelections':
-        return allData.prepSelections;
-      case 'storeItems':
-        return allData.storeItems;
-      default:
-        console.warn(`Unknown field: ${field}`);
-        return null;
-    }
-  }
-
-  // Get data summary for logging
-  private getDataSummary(field: string, data: any) {
-    switch (field) {
-      case 'employees':
-        return {
-          totalCount: data?.length || 0,
-          sampleEmployee: data?.[0]?.name || 'none'
-        };
-      case 'tasks':
-        return {
-          totalCount: data?.length || 0,
-          sampleTask: data?.[0]?.task || 'none'
-        };
-      case 'dailyData':
-        return {
-          totalDates: Object.keys(data || {}).length,
-          latestDate: Object.keys(data || {}).sort().pop() || 'none'
-        };
-      case 'completedTasks':
-        return {
-          completedCount: Array.isArray(data) ? data.length : (data?.size || 0)
-        };
-      case 'taskAssignments':
-        return {
-          totalAssignments: Object.keys(data || {}).length
-        };
-      case 'customRoles':
-        return {
-          rolesCount: data?.length || 0,
-          roles: data || []
-        };
-      case 'prepItems':
-        return {
-          totalCount: data?.length || 0,
-          samplePrep: data?.[0]?.name || 'none'
-        };
-      case 'scheduledPreps':
-        // ENHANCED: Better logging for scheduledPreps debugging
-        const todayStr = new Date().toISOString().split('T')[0];
-        const todayPreps = (data || []).filter((prep: any) => prep.scheduledDate === todayStr);
-        return {
-          totalCount: (data || []).length,
-          todayCount: todayPreps.length,
-          todayCompletedCount: todayPreps.filter((prep: any) => prep.completed).length,
-          sampleTodayPreps: todayPreps.slice(0, 3).map((p: any) => ({
-            id: p.id,
-            name: p.name,
-            completed: p.completed,
-            scheduledDate: p.scheduledDate
-          }))
-        };
-      case 'prepSelections':
-        return {
-          totalSelections: Object.keys(data || {}).length,
-          sampleKeys: Object.keys(data || {}).slice(0, 3)
-        };
-      case 'storeItems':
-        return {
-          totalCount: data?.length || 0,
-          availableCount: (data || []).filter((item: any) => item.available).length
-        };
-      default:
-        return data;
-    }
-  }
-
-  async loadData() {
-    console.log('🔥 Loading data from Firebase...');
+  // Enhanced load all data
+  async loadData(): Promise<{
+    employees: Employee[];
+    tasks: Task[];
+    dailyData: DailyDataMap;
+    completedTasks: number[];
+    taskAssignments: TaskAssignments;
+    customRoles: string[];
+    prepItems: PrepItem[];
+    scheduledPreps: ScheduledPrep[];
+    prepSelections: PrepSelections;
+    storeItems: StoreItem[];
+    // NEW: Inventory data
+    inventoryDailyItems: InventoryItem[];
+    inventoryWeeklyItems: InventoryItem[];
+    inventoryMonthlyItems: InventoryItem[];
+    inventoryDatabaseItems: DatabaseItem[];
+    inventoryActivityLog: ActivityLogEntry[];
+  }> {
+    console.log('🔄 Loading all data from Firebase...');
 
     try {
-      // FIXED: Load ALL fields including prep and store data
+      // Load all data in parallel
       const [
-        employeesRes, 
-        tasksRes, 
-        dailyRes, 
-        completedRes, 
-        assignmentsRes, 
-        rolesRes, 
-        prepItemsRes,
-        scheduledPrepsRes,
-        prepSelectionsRes,
-        storeItemsRes
+        employeesRes, tasksRes, dailyDataRes, completedTasksRes,
+        taskAssignmentsRes, customRolesRes, prepItemsRes,
+        scheduledPrepsRes, prepSelectionsRes, storeItemsRes,
+        // NEW: Load inventory data
+        inventoryDailyRes, inventoryWeeklyRes, inventoryMonthlyRes,
+        inventoryDatabaseRes, inventoryActivityLogRes
       ] = await Promise.all([
         fetch(`${this.baseUrl}/employees.json`),
         fetch(`${this.baseUrl}/tasks.json`),
@@ -209,92 +179,59 @@ export class FirebaseService {
         fetch(`${this.baseUrl}/prepItems.json`),
         fetch(`${this.baseUrl}/scheduledPreps.json`),
         fetch(`${this.baseUrl}/prepSelections.json`),
-        fetch(`${this.baseUrl}/storeItems.json`)
+        fetch(`${this.baseUrl}/storeItems.json`),
+        // Inventory endpoints
+        fetch(`${this.baseUrl}/inventoryDailyItems.json`),
+        fetch(`${this.baseUrl}/inventoryWeeklyItems.json`),
+        fetch(`${this.baseUrl}/inventoryMonthlyItems.json`),
+        fetch(`${this.baseUrl}/inventoryDatabaseItems.json`),
+        fetch(`${this.baseUrl}/inventoryActivityLog.json`)
       ]);
-      
-      const employeesData = await employeesRes.json();
-      const tasksData = await tasksRes.json();
-      const dailyDataRes = await dailyRes.json();
-      const completedTasksData = await completedRes.json();
-      const taskAssignmentsData = await assignmentsRes.json();
-      const customRolesData = await rolesRes.json();
-      const prepItemsData = await prepItemsRes.json();
-      const scheduledPrepsData = await scheduledPrepsRes.json();
-      const prepSelectionsData = await prepSelectionsRes.json();
-      const storeItemsData = await storeItemsRes.json();
-      
-      // Migrate employees data to include points if missing
-      const migratedEmployees = employeesData ? employeesData.map((emp: any) => ({
-        ...emp,
-        points: emp.points !== undefined ? emp.points : 0
-      })) : getDefaultEmployees();
 
-      // Migrate tasks data to include points if missing
-      const migratedTasks = tasksData ? tasksData.map((task: any) => ({
-        ...task,
-        points: task.points !== undefined ? task.points : this.getDefaultTaskPoints(task.priority)
-      })) : getDefaultTasks();
+      // Parse all responses
+      const [
+        employees, tasks, dailyData, completedTasks, taskAssignments,
+        customRoles, prepItems, scheduledPreps, prepSelections, storeItems,
+        // Parse inventory data
+        inventoryDailyItems, inventoryWeeklyItems, inventoryMonthlyItems,
+        inventoryDatabaseItems, inventoryActivityLog
+      ] = await Promise.all([
+        employeesRes.json(), tasksRes.json(), dailyDataRes.json(),
+        completedTasksRes.json(), taskAssignmentsRes.json(), customRolesRes.json(),
+        prepItemsRes.json(), scheduledPrepsRes.json(), prepSelectionsRes.json(),
+        storeItemsRes.json(),
+        // Parse inventory
+        inventoryDailyRes.json(), inventoryWeeklyRes.json(), inventoryMonthlyRes.json(),
+        inventoryDatabaseRes.json(), inventoryActivityLogRes.json()
+      ]);
 
-      // Migrate daily data to include new fields
-      const migratedDailyData = dailyDataRes ? this.migrateDailyData(dailyDataRes) : getEmptyDailyData();
-      
-      console.log('✅ Firebase: Data loaded and migrated successfully');
-      console.log('👥 Employees with points:', migratedEmployees);
-      
-      // ENHANCED: Log loaded prep data for debugging
-      if (scheduledPrepsData) {
-        console.log('📋 Loaded scheduledPreps:', this.getDataSummary('scheduledPreps', scheduledPrepsData));
-      }
+      console.log('✅ All data loaded from Firebase');
       
       return {
-        employees: migratedEmployees,
-        tasks: migratedTasks,
-        dailyData: migratedDailyData,
-        completedTasks: new Set<number>(completedTasksData || []),
-        taskAssignments: taskAssignmentsData || {},
-        customRoles: customRolesData || ['Cleaner', 'Manager', 'Supervisor'],
-        // FIXED: Include all prep and store data
-        prepItems: prepItemsData || [],
-        scheduledPreps: scheduledPrepsData || [],
-        prepSelections: prepSelectionsData || {},
-        storeItems: storeItemsData || []
+        employees: employees || getDefaultEmployees(),
+        tasks: tasks || getDefaultTasks(),
+        dailyData: dailyData || getEmptyDailyData(),
+        completedTasks: completedTasks || [],
+        taskAssignments: taskAssignments || {},
+        customRoles: customRoles || ['Cleaner', 'Manager', 'Supervisor'],
+        prepItems: prepItems || [],
+        scheduledPreps: scheduledPreps || [],
+        prepSelections: prepSelections || {},
+        storeItems: storeItems || [],
+        // Return inventory data with defaults
+        inventoryDailyItems: inventoryDailyItems || [],
+        inventoryWeeklyItems: inventoryWeeklyItems || [],
+        inventoryMonthlyItems: inventoryMonthlyItems || [],
+        inventoryDatabaseItems: inventoryDatabaseItems || [],
+        inventoryActivityLog: inventoryActivityLog || []
       };
-      
     } catch (error) {
-      console.error('❌ Firebase connection failed:', error);
+      console.error('❌ Load data failed:', error);
       throw error;
     }
   }
 
-  private getDefaultTaskPoints(priority: string): number {
-    switch (priority) {
-      case 'high': return 10;
-      case 'medium': return 5;
-      case 'low': return 3;
-      default: return 5;
-    }
-  }
-
-  private migrateDailyData(dailyData: any): DailyDataMap {
-    const migrated: DailyDataMap = {};
-
-    Object.keys(dailyData).forEach(date => {
-      const dayData = dailyData[date];
-      migrated[date] = {
-        completedTasks: dayData.completedTasks || [],
-        employeeMoods: dayData.employeeMoods || [],
-        purchases: dayData.purchases || [],
-        totalTasks: dayData.totalTasks || 22,
-        completionRate: dayData.completionRate || 0,
-        totalPointsEarned: dayData.totalPointsEarned || 0,
-        totalPointsSpent: dayData.totalPointsSpent || 0
-      };
-    });
-
-    return migrated;
-  }
-
-  // FIXED: Legacy saveData method updated to include ALL fields
+  // Enhanced save all data with inventory support
   async saveData(data: {
     employees: Employee[];
     tasks: Task[];
@@ -302,15 +239,20 @@ export class FirebaseService {
     completedTasks: Set<number>;
     taskAssignments: TaskAssignments;
     customRoles: string[];
-    // FIXED: Include all the new fields
     prepItems: PrepItem[];
     scheduledPreps: ScheduledPrep[];
     prepSelections: PrepSelections;
     storeItems: StoreItem[];
+    // NEW: Inventory data
+    inventoryDailyItems: InventoryItem[];
+    inventoryWeeklyItems: InventoryItem[];
+    inventoryMonthlyItems: InventoryItem[];
+    inventoryDatabaseItems: DatabaseItem[];
+    inventoryActivityLog: ActivityLogEntry[];
   }) {
-    console.log('🔥 Saving all data to Firebase...');
+    console.log('🔥 Saving all data to Firebase with inventory support...');
 
-    // FIXED: Include all fields in the save
+    // Enhanced fields list with inventory
     const fields = [
       'employees', 
       'tasks', 
@@ -321,20 +263,26 @@ export class FirebaseService {
       'prepItems',
       'scheduledPreps', 
       'prepSelections',
-      'storeItems'
+      'storeItems',
+      // NEW: Inventory fields
+      'inventoryDailyItems',
+      'inventoryWeeklyItems',
+      'inventoryMonthlyItems',
+      'inventoryDatabaseItems',
+      'inventoryActivityLog'
     ];
 
     const success = await this.batchSave(fields, data);
 
     if (success) {
-      console.log('✅ Firebase: All data saved successfully');
+      console.log('✅ Firebase: All data (including inventory) saved successfully');
     } else {
       console.error('❌ Firebase: Some data failed to save');
       throw new Error('Firebase save failed');
     }
   }
 
-  // Immediate save for critical operations (like task completion)
+  // Enhanced immediate save for critical operations with inventory support
   async saveImmediate(field: string, data: any, allData?: any): Promise<boolean> {
     console.log(`🔥 Immediate save triggered by ${field} change`);
 
@@ -357,7 +305,7 @@ export class FirebaseService {
     return success;
   }
 
-  // Get fields that should be synced together
+  // Enhanced related fields with inventory support
   private getRelatedFields(changedField: string): string[] {
     switch (changedField) {
       case 'completedTasks':
@@ -367,7 +315,16 @@ export class FirebaseService {
       case 'taskAssignments':
         return ['completedTasks'];
       case 'scheduledPreps':
-        return ['prepSelections']; // Prep completions might affect selections
+        return ['prepSelections'];
+      // NEW: Inventory related fields
+      case 'inventoryDailyItems':
+      case 'inventoryWeeklyItems':
+      case 'inventoryMonthlyItems':
+        return ['inventoryActivityLog', 'inventoryDatabaseItems'];
+      case 'inventoryDatabaseItems':
+        return ['inventoryDailyItems', 'inventoryWeeklyItems', 'inventoryMonthlyItems'];
+      case 'inventoryActivityLog':
+        return []; // Activity log is independent
       default:
         return [];
     }
