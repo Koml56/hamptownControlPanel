@@ -1,7 +1,8 @@
 // hooks.ts - UPDATED to support system data for centralized daily reset
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { firebaseService } from './firebaseService';
-import { applyTaskOperation, applyEmployeeOperation } from './taskOperations';
+import { applyTaskOperation } from './taskOperations';
+import { applyEmployeeOperation } from './employeeOperations';
 import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData, getDefaultStoreItems } from './defaultData';
 import type { 
   Employee, Task, DailyDataMap, TaskAssignments, PrepItem, 
