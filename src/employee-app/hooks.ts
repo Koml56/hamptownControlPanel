@@ -4,6 +4,9 @@ import { firebaseService } from './firebaseService';
 import { applyTaskOperation } from './taskOperations';
 import { applyEmployeeOperation } from './employeeOperations';
 import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData, getDefaultStoreItems } from './defaultData';
+import { initializeApp } from 'firebase/app';
+import { getDatabase, ref, onValue, off } from 'firebase/database';
+import { FIREBASE_CONFIG } from './constants';
 import type { 
   Employee, Task, DailyDataMap, TaskAssignments, PrepItem, 
   ScheduledPrep, PrepSelections, StoreItem, CurrentUser 
@@ -268,101 +271,131 @@ export const useFirebaseData = () => {
     loadFromFirebase();
   }, [loadFromFirebase]);
 
-  // ENHANCED: Real-time Firebase listeners with system data support
+  // FIXED: Real-time Firebase listeners using proper Firebase SDK
   useEffect(() => {
     if (connectionStatus !== 'connected') return;
 
-    console.log('🔄 Setting up real-time Firebase listeners...');
+    console.log('🔄 Setting up Firebase real-time listeners...');
     
-    // Helper function to set up a listener
-    const setupListener = (path: string, callback: (data: any) => void) => {
-      const eventSource = new EventSource(
-        `${firebaseService['baseUrl']}/${path}.json?accept=text/event-stream`
-      );
-      
-      eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          callback(data);
-        } catch (error) {
-          console.error(`Error parsing ${path} data:`, error);
-        }
-      };
-      
-      eventSource.onerror = (error) => {
-        console.error(`EventSource error for ${path}:`, error);
-      };
-      
-      return eventSource;
-    };
+    // Initialize Firebase
+    const firebaseApp = initializeApp(FIREBASE_CONFIG);
+    const db = getDatabase(firebaseApp);
 
     // Set up all listeners
-    const listeners: EventSource[] = [];
+    const listeners: any[] = [];
 
-    // Standard data listeners
-    listeners.push(setupListener('employees', (data) => {
-      if (data) {
-        const migrated = Array.isArray(data) ? data : Object.values(data);
-        setEmployees(migrated);
-      }
-    }));
+    // Employees listener
+    const employeesRef = ref(db, 'employees');
+    const handleEmployees = (snapshot: any) => {
+      const data = snapshot.val() || [];
+      const migrated = Array.isArray(data) ? data : Object.values(data);
+      setEmployees(migrated);
+    };
+    onValue(employeesRef, handleEmployees);
+    listeners.push({ ref: employeesRef, handler: handleEmployees });
 
-    listeners.push(setupListener('tasks', (data) => {
-      if (data) {
-        const migrated = Array.isArray(data) ? data : Object.values(data);
-        setTasks(migrated);
-      }
-    }));
+    // Tasks listener
+    const tasksRef = ref(db, 'tasks');
+    const handleTasks = (snapshot: any) => {
+      const data = snapshot.val() || [];
+      const migrated = Array.isArray(data) ? data : Object.values(data);
+      setTasks(migrated);
+    };
+    onValue(tasksRef, handleTasks);
+    listeners.push({ ref: tasksRef, handler: handleTasks });
 
-    listeners.push(setupListener('dailyData', (data) => {
-      setDailyData(data || {});
-    }));
+    // DailyData listener
+    const dailyDataRef = ref(db, 'dailyData');
+    const handleDailyData = (snapshot: any) => {
+      setDailyData(snapshot.val() || {});
+    };
+    onValue(dailyDataRef, handleDailyData);
+    listeners.push({ ref: dailyDataRef, handler: handleDailyData });
 
-    listeners.push(setupListener('completedTasks', (data) => {
+    // CompletedTasks listener
+    const completedTasksRef = ref(db, 'completedTasks');
+    const handleCompletedTasks = (snapshot: any) => {
+      const data = snapshot.val() || [];
       const tasks = Array.isArray(data) ? data : (data ? Object.values(data) : []);
       setCompletedTasks(new Set(tasks));
-    }));
+    };
+    onValue(completedTasksRef, handleCompletedTasks);
+    listeners.push({ ref: completedTasksRef, handler: handleCompletedTasks });
 
-    listeners.push(setupListener('taskAssignments', (data) => {
-      setTaskAssignments(data || {});
-    }));
+    // TaskAssignments listener
+    const taskAssignmentsRef = ref(db, 'taskAssignments');
+    const handleTaskAssignments = (snapshot: any) => {
+      setTaskAssignments(snapshot.val() || {});
+    };
+    onValue(taskAssignmentsRef, handleTaskAssignments);
+    listeners.push({ ref: taskAssignmentsRef, handler: handleTaskAssignments });
 
-    listeners.push(setupListener('customRoles', (data) => {
+    // CustomRoles listener
+    const customRolesRef = ref(db, 'customRoles');
+    const handleCustomRoles = (snapshot: any) => {
+      const data = snapshot.val() || [];
       const roles = Array.isArray(data) ? data : (data ? Object.values(data) : []);
       setCustomRoles(roles);
-    }));
+    };
+    onValue(customRolesRef, handleCustomRoles);
+    listeners.push({ ref: customRolesRef, handler: handleCustomRoles });
 
-    listeners.push(setupListener('prepItems', (data) => {
+    // PrepItems listener
+    const prepItemsRef = ref(db, 'prepItems');
+    const handlePrepItems = (snapshot: any) => {
+      const data = snapshot.val() || [];
       const items = Array.isArray(data) ? data : (data ? Object.values(data) : []);
       setPrepItems(items);
-    }));
+    };
+    onValue(prepItemsRef, handlePrepItems);
+    listeners.push({ ref: prepItemsRef, handler: handlePrepItems });
 
-    listeners.push(setupListener('scheduledPreps', (data) => {
-      const preps = Array.isArray(data) ? data : (data ? Object.values(data) : []);
-      setScheduledPreps(preps);
-    }));
+    // ScheduledPreps listener
+    const scheduledPrepsRef = ref(db, 'scheduledPreps');
+    const handleScheduledPreps = (snapshot: any) => {
+      const data = snapshot.val() || [];
+      const migrated = Array.isArray(data) ? data : (data ? Object.values(data) : []);
+      setScheduledPreps(migrated);
+    };
+    onValue(scheduledPrepsRef, handleScheduledPreps);
+    listeners.push({ ref: scheduledPrepsRef, handler: handleScheduledPreps });
 
-    listeners.push(setupListener('prepSelections', (data) => {
-      setPrepSelections(data || {});
-    }));
+    // PrepSelections listener
+    const prepSelectionsRef = ref(db, 'prepSelections');
+    const handlePrepSelections = (snapshot: any) => {
+      setPrepSelections(snapshot.val() || {});
+    };
+    onValue(prepSelectionsRef, handlePrepSelections);
+    listeners.push({ ref: prepSelectionsRef, handler: handlePrepSelections });
 
-    listeners.push(setupListener('storeItems', (data) => {
+    // StoreItems listener
+    const storeItemsRef = ref(db, 'storeItems');
+    const handleStoreItems = (snapshot: any) => {
+      const data = snapshot.val() || [];
       const items = Array.isArray(data) ? data : (data ? Object.values(data) : []);
       setStoreItems(items);
-    }));
+    };
+    onValue(storeItemsRef, handleStoreItems);
+    listeners.push({ ref: storeItemsRef, handler: handleStoreItems });
 
     // ADDED: System data listener
-    listeners.push(setupListener('systemData', (data) => {
+    const systemDataRef = ref(db, 'systemData');
+    const handleSystemData = (snapshot: any) => {
+      const data = snapshot.val();
       if (data) {
-        console.log('📊 System data updated via real-time listener:', data);
+        console.log('📊 System data updated via Firebase listener:', data);
         setSystemData(data);
       }
-    }));
+    };
+    onValue(systemDataRef, handleSystemData);
+    listeners.push({ ref: systemDataRef, handler: handleSystemData });
 
     // Cleanup function
     return () => {
-      console.log('🔌 Closing real-time Firebase listeners...');
-      listeners.forEach(listener => listener.close());
+      console.log('🔌 Cleaning up Firebase listeners...');
+      listeners.forEach(({ ref: listenerRef, handler }) => {
+        off(listenerRef, 'value', handler);
+      });
     };
   }, [connectionStatus]);
 
