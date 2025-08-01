@@ -8,6 +8,34 @@ export class FirebaseService {
   private saveQueue = new Set<string>();
   private isCurrentlySaving = false;
 
+  // Get the shared lastTaskResetDate from Firebase
+  async getLastTaskResetDate(): Promise<string | null> {
+    try {
+      const response = await fetch(`${this.baseUrl}/meta/lastTaskResetDate.json`);
+      if (!response.ok) throw new Error('Failed to fetch lastTaskResetDate');
+      const date = await response.json();
+      return typeof date === 'string' ? date : null;
+    } catch (error) {
+      console.error('❌ Error fetching lastTaskResetDate:', error);
+      return null;
+    }
+  }
+
+  // Set the shared lastTaskResetDate in Firebase
+  async setLastTaskResetDate(date: string): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.baseUrl}/meta/lastTaskResetDate.json`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(date)
+      });
+      if (!response.ok) throw new Error('Failed to set lastTaskResetDate');
+      return true;
+    } catch (error) {
+      console.error('❌ Error setting lastTaskResetDate:', error);
+      return false;
+    }
+  }
   // Quick save for immediate data persistence
   async quickSave(field: string, data: any): Promise<boolean> {
     console.log(`🔥 QuickSave: ${field}`);
