@@ -43,6 +43,11 @@ import type { ActiveTab, Employee, Task, DailyDataMap, TaskAssignments, StoreIte
 type ExtendedActiveTab = ActiveTab | 'inventory';
 
 const EmployeeApp: React.FC = () => {
+  // FirebaseService instance for meta operations
+  const firebaseMeta = React.useRef<any>(null);
+  if (!firebaseMeta.current) {
+    firebaseMeta.current = new (require('./firebaseService').FirebaseService)();
+  }
   // Firebase and Auth hooks with multi-device sync
   const {
     isLoading,
@@ -329,105 +334,77 @@ const EmployeeApp: React.FC = () => {
   const currentEmployee = employees.find(emp => emp.id === currentUser.id);
 
   // DAILY RESET LOGIC
+  // DAILY RESET LOGIC (Firebase shared)
   useEffect(() => {
     const performAutomaticDailyReset = async () => {
       const today = getFormattedDate(new Date());
-      const lastResetDate = localStorage.getItem('lastTaskResetDate');
-      
-      console.log('🔍 Checking for automatic daily reset:', {
+      const lastResetDate = await firebaseMeta.current.getLastTaskResetDate();
+      console.log('🔍 [CROSS-DEVICE] Checking for automatic daily reset:', {
         today,
         lastResetDate,
         needsReset: lastResetDate !== today,
         completedTasksCount: completedTasks.size,
         taskAssignmentsCount: Object.keys(taskAssignments).length
       });
-      
       if (lastResetDate !== today && (completedTasks.size > 0 || Object.keys(taskAssignments).length > 0)) {
-        console.log('🌅 NEW DAY DETECTED: Performing automatic daily reset');
-        
-        localStorage.setItem('lastTaskResetDate', today);
-        
+        console.log('🌅 [CROSS-DEVICE] NEW DAY DETECTED: Performing automatic daily reset');
         try {
-          console.log('🔥 AUTOMATIC RESET: Saving cleared data to Firebase...');
-          
           const saveResults = await Promise.all([
             quickSave('completedTasks', []),
             quickSave('taskAssignments', {})
           ]);
-          
           if (saveResults.every(result => result === true)) {
-            console.log('✅ AUTOMATIC RESET: Successfully saved cleared data to Firebase');
-            console.log('🔄 Real-time listeners will now update local state automatically');
-            
+            await firebaseMeta.current.setLastTaskResetDate(today);
             setShowDailyResetNotification(true);
             setTimeout(() => {
               setShowDailyResetNotification(false);
             }, 8000);
-            
-            localStorage.removeItem('lastDailyResetNotification');
-            localStorage.removeItem('resetCheckedToday');
-            localStorage.removeItem('resetInProgress');
-            
           } else {
-            console.error('❌ AUTOMATIC RESET: Failed to save to Firebase, reverting reset date');
-            localStorage.removeItem('lastTaskResetDate');
+            console.error('❌ [CROSS-DEVICE] AUTOMATIC RESET: Failed to save to Firebase');
           }
-          
         } catch (error) {
-          console.error('❌ AUTOMATIC RESET: Error during reset:', error);
-          localStorage.removeItem('lastTaskResetDate');
+          console.error('❌ [CROSS-DEVICE] AUTOMATIC RESET: Error during reset:', error);
         }
       }
     };
-    
     if (!isLoading && connectionStatus === 'connected' && employees.length > 0) {
       const timer = setTimeout(() => {
         performAutomaticDailyReset();
       }, 2000);
-      
       return () => clearTimeout(timer);
     }
   }, [isLoading, connectionStatus, employees.length, completedTasks.size, Object.keys(taskAssignments).length, quickSave]);
 
   // Check for daily reset on visibility change
   useEffect(() => {
-    const handleVisibilityChange = () => {
+    const handleVisibilityChange = async () => {
       if (!document.hidden && !isLoading && connectionStatus === 'connected') {
         const today = getFormattedDate(new Date());
-        const lastResetDate = localStorage.getItem('lastTaskResetDate');
-        
-        console.log('👁️ App became visible, checking for daily reset:', {
+        const lastResetDate = await firebaseMeta.current.getLastTaskResetDate();
+        console.log('👁️ [CROSS-DEVICE] App became visible, checking for daily reset:', {
           today,
           lastResetDate,
           needsReset: lastResetDate !== today
         });
-        
         if (lastResetDate !== today && (completedTasks.size > 0 || Object.keys(taskAssignments).length > 0)) {
-          console.log('🌅 VISIBILITY CHANGE: New day detected, triggering reset');
-          
           setTimeout(async () => {
-            localStorage.setItem('lastTaskResetDate', today);
-            
             try {
               const saveResults = await Promise.all([
                 quickSave('completedTasks', []),
                 quickSave('taskAssignments', {})
               ]);
-              
               if (saveResults.every(result => result === true)) {
-                console.log('✅ VISIBILITY RESET: Successfully cleared tasks for new day');
+                await firebaseMeta.current.setLastTaskResetDate(today);
                 setShowDailyResetNotification(true);
                 setTimeout(() => setShowDailyResetNotification(false), 8000);
               }
             } catch (error) {
-              console.error('❌ VISIBILITY RESET: Failed:', error);
-              localStorage.removeItem('lastTaskResetDate');
+              console.error('❌ [CROSS-DEVICE] VISIBILITY RESET: Failed:', error);
             }
           }, 1000);
         }
       }
     };
-    
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [isLoading, connectionStatus, completedTasks.size, Object.keys(taskAssignments).length, quickSave]);
