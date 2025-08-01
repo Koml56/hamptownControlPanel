@@ -6,8 +6,9 @@ import { applyEmployeeOperation } from './employeeOperations';
 import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData, getDefaultStoreItems } from './defaultData';
 import type { 
   Employee, Task, DailyDataMap, TaskAssignments, PrepItem, 
-  ScheduledPrep, PrepSelections, StoreItem, SyncOperation, CurrentUser 
+  ScheduledPrep, PrepSelections, StoreItem, CurrentUser 
 } from './types';
+import type { SyncOperation } from './OperationManager';
 
 // System data interface
 interface SystemData {
