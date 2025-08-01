@@ -2,11 +2,15 @@
 import { FIREBASE_CONFIG } from './constants';
 import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData } from './defaultData';
 import type { Employee, Task, DailyDataMap, TaskAssignments, PrepItem, ScheduledPrep, PrepSelections, StoreItem } from './types';
+import { initializeApp } from 'firebase/app';
+import { getDatabase, ref, onValue, off } from 'firebase/database';
 
 export class FirebaseService {
   private baseUrl = FIREBASE_CONFIG.databaseURL;
   private saveQueue = new Set<string>();
   private isCurrentlySaving = false;
+  private app = initializeApp(FIREBASE_CONFIG);
+  private db = getDatabase(this.app);
 
   // Get the shared lastTaskResetDate from Firebase
   async getLastTaskResetDate(): Promise<string | null> {
@@ -399,5 +403,24 @@ export class FirebaseService {
       default:
         return [];
     }
+  }
+
+  // True real-time listeners using Firebase SDK
+  onCompletedTasksChange(callback: (completed: number[] | Set<number>) => void) {
+    const completedRef = ref(this.db, 'completedTasks');
+    const handler = onValue(completedRef, (snapshot) => {
+      const data = snapshot.val() || [];
+      callback(data);
+    });
+    return () => off(completedRef, 'value', handler);
+  }
+
+  onTaskAssignmentsChange(callback: (assignments: any) => void) {
+    const assignmentsRef = ref(this.db, 'taskAssignments');
+    const handler = onValue(assignmentsRef, (snapshot) => {
+      const data = snapshot.val() || {};
+      callback(data);
+    });
+    return () => off(assignmentsRef, 'value', handler);
   }
 }
