@@ -1,5 +1,6 @@
-// src/employee-app/inventory/InventoryContext.tsx
-import React, { createContext, useContext, useState, useCallback } from 'react';
+// InventoryContext.tsx - Enhanced with Firebase integration and multi-device sync
+import React, { createContext, useContext, useCallback, useEffect, useRef } from 'react';
+import { useFirebaseData } from '../hooks';
 import { 
   InventoryItem, 
   DatabaseItem, 
@@ -10,6 +11,7 @@ import {
   ActivityType,
   InventoryContextType 
 } from './types';
+import { InventorySyncOperation } from '../types';
 import { generateId, showToast } from './utils';
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
@@ -26,53 +28,137 @@ interface InventoryProviderProps {
   children: React.ReactNode;
 }
 
-// Empty initial data - no default items
-const initialDailyItems: InventoryItem[] = [];
-const initialWeeklyItems: InventoryItem[] = [];
-const initialMonthlyItems: InventoryItem[] = [];
-const initialActivityLog: ActivityLogEntry[] = [];
-
 export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }) => {
-  // State - All start with empty arrays
-  const [dailyItems, setDailyItems] = useState<InventoryItem[]>(initialDailyItems);
-  const [weeklyItems, setWeeklyItems] = useState<InventoryItem[]>(initialWeeklyItems);
-  const [monthlyItems, setMonthlyItems] = useState<InventoryItem[]>(initialMonthlyItems);
-  const [databaseItems, setDatabaseItems] = useState<DatabaseItem[]>([]);
-  const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>(initialActivityLog);
-  const [selectedItems, setSelectedItems] = useState<Set<number | string>>(new Set());
-  const [currentTab, setCurrentTab] = useState<InventoryFrequency | 'reports'>('daily');
+  // Get Firebase data and functions
+  const {
+    // Inventory state from Firebase
+    dailyItems,
+    weeklyItems, 
+    monthlyItems,
+    databaseItems,
+    activityLog,
+    connectionStatus,
+    // Inventory setters
+    setDailyItems,
+    setWeeklyItems,
+    setMonthlyItems,
+    setDatabaseItems,
+    setActivityLog,
+    // Firebase save functions
+    saveInventoryFrequency,
+    saveDatabaseItems,
+    saveActivityLog,
+    applyInventoryOperation,
+    quickSave
+  } = useFirebaseData();
+
+  // Local UI state
+  const [selectedItems, setSelectedItems] = React.useState<Set<number | string>>(new Set());
+  const [currentTab, setCurrentTab] = React.useState<InventoryFrequency | 'reports'>('daily');
+  
+  // Refs for optimization
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSaveHash = useRef<string>('');
+
+  // Initialize inventory data on mount
+  useEffect(() => {
+    console.log('🏪 Inventory context initialized with Firebase data:', {
+      dailyItems: dailyItems.length,
+      weeklyItems: weeklyItems.length, 
+      monthlyItems: monthlyItems.length,
+      databaseItems: databaseItems.length,
+      activityLog: activityLog.length,
+      connectionStatus
+    });
+  }, [dailyItems.length, weeklyItems.length, monthlyItems.length, databaseItems.length, activityLog.length, connectionStatus]);
 
   // Helper function to get items by frequency
-  const getItemsByFrequency = (frequency: InventoryFrequency): InventoryItem[] => {
+  const getItemsByFrequency = useCallback((frequency: InventoryFrequency): InventoryItem[] => {
     switch (frequency) {
       case 'daily': return dailyItems;
       case 'weekly': return weeklyItems;
       case 'monthly': return monthlyItems;
       default: return [];
     }
-  };
+  }, [dailyItems, weeklyItems, monthlyItems]);
 
-  // Helper function to set items by frequency
-  const setItemsByFrequency = (frequency: InventoryFrequency, items: InventoryItem[]): void => {
+  // Helper function to set items by frequency with Firebase save
+  const setItemsByFrequency = useCallback(async (frequency: InventoryFrequency, items: InventoryItem[]): Promise<void> => {
+    console.log(`🗂️ Setting ${frequency} items:`, items.length);
+    
+    // Update local state immediately for responsive UI
     switch (frequency) {
-      case 'daily': setDailyItems(items); break;
-      case 'weekly': setWeeklyItems(items); break;
-      case 'monthly': setMonthlyItems(items); break;
+      case 'daily': 
+        setDailyItems(items); 
+        break;
+      case 'weekly': 
+        setWeeklyItems(items); 
+        break;
+      case 'monthly': 
+        setMonthlyItems(items); 
+        break;
     }
-  };
 
-  // Add activity entry
-  const addActivityEntry = useCallback((entry: Omit<ActivityLogEntry, 'id' | 'timestamp'>) => {
+    // Save to Firebase with debouncing
+    if (connectionStatus === 'connected') {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+      
+      saveTimeoutRef.current = setTimeout(async () => {
+        try {
+          await saveInventoryFrequency(frequency, items);
+          console.log(`✅ ${frequency} items saved to Firebase`);
+        } catch (error) {
+          console.error(`❌ Failed to save ${frequency} items:`, error);
+          showToast(`Failed to sync ${frequency} items to cloud`);
+        }
+      }, 1000); // 1 second debounce
+    }
+  }, [connectionStatus, saveInventoryFrequency, setDailyItems, setWeeklyItems, setMonthlyItems]);
+
+  // Enhanced add activity entry with Firebase sync
+  const addActivityEntry = useCallback(async (entry: Omit<ActivityLogEntry, 'id' | 'timestamp'>) => {
     const newEntry: ActivityLogEntry = {
       ...entry,
       id: generateId(),
       timestamp: new Date().toLocaleString()
     };
-    setActivityLog(prev => [newEntry, ...prev]);
-  }, []);
 
-  // Update item stock
-  const updateItemStock = useCallback((
+    // Update local state immediately
+    const updatedLog = [newEntry, ...activityLog];
+    setActivityLog(updatedLog);
+
+    // Save to Firebase
+    if (connectionStatus === 'connected') {
+      try {
+        await saveActivityLog(updatedLog);
+        console.log('✅ Activity log saved to Firebase');
+      } catch (error) {
+        console.error('❌ Failed to save activity log:', error);
+      }
+    }
+
+    // Create sync operation for multi-device
+    const syncOperation: InventorySyncOperation = {
+      type: 'report_waste',
+      payload: { entry: newEntry },
+      timestamp: new Date().toISOString(),
+      userId: 'Current User',
+      device: navigator.userAgent.split(' ')[0] || 'Unknown'
+    };
+
+    if (connectionStatus === 'connected') {
+      try {
+        await applyInventoryOperation(syncOperation);
+      } catch (error) {
+        console.error('❌ Failed to apply sync operation:', error);
+      }
+    }
+  }, [activityLog, setActivityLog, connectionStatus, saveActivityLog, applyInventoryOperation]);
+
+  // Enhanced update item stock with Firebase sync
+  const updateItemStock = useCallback(async (
     itemId: number | string, 
     newStock: number, 
     frequency: InventoryFrequency, 
@@ -94,27 +180,48 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
         : i
     );
 
-    setItemsByFrequency(frequency, updatedItems);
+    // Update local state and save to Firebase
+    await setItemsByFrequency(frequency, updatedItems);
     
-    addActivityEntry({
+    // Add activity entry
+    await addActivityEntry({
       type: 'count_update',
       item: item.name,
-      quantity: newStock,
+      quantity: newStock - oldStock,
       unit: item.unit,
       employee,
-      notes: notes || `Count updated from ${oldStock} to ${newStock}`
+      notes: notes || `Stock updated from ${oldStock} to ${newStock}`
     });
 
-    showToast(`Successfully updated ${item.name} count to ${newStock} ${item.unit}!`);
-  }, [addActivityEntry]);
+    // Create sync operation for multi-device
+    const syncOperation: InventorySyncOperation = {
+      type: 'update_stock',
+      payload: { newStock, oldStock },
+      frequency,
+      itemId,
+      timestamp: new Date().toISOString(),
+      userId: employee,
+      device: navigator.userAgent.split(' ')[0] || 'Unknown'
+    };
 
-  // Report waste
-  const reportWaste = useCallback((
-    itemId: number | string,
-    amount: number,
-    reason: WasteReason,
-    frequency: InventoryFrequency,
-    employee: string,
+    if (connectionStatus === 'connected') {
+      try {
+        await applyInventoryOperation(syncOperation);
+      } catch (error) {
+        console.error('❌ Failed to apply stock update sync:', error);
+      }
+    }
+
+    showToast(`Successfully updated ${item.name} stock to ${newStock} ${item.unit}!`);
+  }, [getItemsByFrequency, setItemsByFrequency, addActivityEntry, connectionStatus, applyInventoryOperation]);
+
+  // Enhanced report waste with Firebase sync
+  const reportWaste = useCallback(async (
+    itemId: number | string, 
+    amount: number, 
+    reason: WasteReason, 
+    frequency: InventoryFrequency, 
+    employee: string, 
     notes?: string
   ) => {
     const items = getItemsByFrequency(frequency);
@@ -130,15 +237,18 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
       return;
     }
 
+    const newStock = item.currentStock - amount;
     const updatedItems = items.map(i => 
       i.id === itemId 
-        ? { ...i, currentStock: i.currentStock - amount }
+        ? { ...i, currentStock: newStock }
         : i
     );
 
-    setItemsByFrequency(frequency, updatedItems);
+    // Update local state and save to Firebase
+    await setItemsByFrequency(frequency, updatedItems);
     
-    addActivityEntry({
+    // Add activity entry
+    await addActivityEntry({
       type: 'waste',
       item: item.name,
       quantity: amount,
@@ -148,25 +258,83 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
       reason
     });
 
-    showToast(`Successfully reported waste of ${amount} ${item.unit} ${item.name}!`);
-  }, [addActivityEntry]);
+    // Create sync operation for multi-device
+    const syncOperation: InventorySyncOperation = {
+      type: 'report_waste',
+      payload: { 
+        wasteAmount: amount, 
+        newStock, 
+        reason, 
+        itemName: item.name, 
+        unit: item.unit,
+        notes 
+      },
+      frequency,
+      itemId,
+      timestamp: new Date().toISOString(),
+      userId: employee,
+      device: navigator.userAgent.split(' ')[0] || 'Unknown'
+    };
 
-  // Import from Excel
-  const importFromExcel = useCallback((data: any[]) => {
-    setDatabaseItems(prev => [...prev, ...data]);
-    showToast(`Imported ${data.length} items to database`);
+    if (connectionStatus === 'connected') {
+      try {
+        await applyInventoryOperation(syncOperation);
+      } catch (error) {
+        console.error('❌ Failed to apply waste report sync:', error);
+      }
+    }
+
+    showToast(`Successfully reported waste of ${amount} ${item.unit} ${item.name}!`);
+  }, [getItemsByFrequency, setItemsByFrequency, addActivityEntry, connectionStatus, applyInventoryOperation]);
+
+  // Enhanced import from Excel with Firebase sync
+  const importFromExcel = useCallback(async (data: DatabaseItem[]) => {
+    // Update local state immediately
+    const updatedDatabaseItems = [...databaseItems, ...data];
+    setDatabaseItems(updatedDatabaseItems);
     
-    addActivityEntry({
+    // Save to Firebase
+    if (connectionStatus === 'connected') {
+      try {
+        await saveDatabaseItems(updatedDatabaseItems);
+        console.log('✅ Database items saved to Firebase after import');
+      } catch (error) {
+        console.error('❌ Failed to save imported items:', error);
+        showToast('Items imported locally but failed to sync to cloud');
+      }
+    }
+
+    // Add activity entry
+    await addActivityEntry({
       type: 'import',
       item: 'Excel Import',
       quantity: data.length,
       unit: 'items',
       employee: 'System'
     });
-  }, [addActivityEntry]);
 
-  // Add manual item
-  const addManualItem = useCallback((item: Omit<DatabaseItem, 'id' | 'frequency'>) => {
+    // Create sync operation for multi-device
+    const syncOperation: InventorySyncOperation = {
+      type: 'import_items',
+      payload: { items: data },
+      timestamp: new Date().toISOString(),
+      userId: 'System',
+      device: navigator.userAgent.split(' ')[0] || 'Unknown'
+    };
+
+    if (connectionStatus === 'connected') {
+      try {
+        await applyInventoryOperation(syncOperation);
+      } catch (error) {
+        console.error('❌ Failed to apply import sync:', error);
+      }
+    }
+
+    showToast(`Imported ${data.length} items to database`);
+  }, [databaseItems, setDatabaseItems, connectionStatus, saveDatabaseItems, addActivityEntry, applyInventoryOperation]);
+
+  // Enhanced add manual item with Firebase sync
+  const addManualItem = useCallback(async (item: Omit<DatabaseItem, 'id' | 'frequency'>) => {
     const newItem: DatabaseItem = {
       ...item,
       id: generateId(),
@@ -174,20 +342,52 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
       isAssigned: false
     };
     
-    setDatabaseItems(prev => [...prev, newItem]);
-    showToast('Item added to database successfully');
+    // Update local state immediately
+    const updatedDatabaseItems = [...databaseItems, newItem];
+    setDatabaseItems(updatedDatabaseItems);
     
-    addActivityEntry({
+    // Save to Firebase
+    if (connectionStatus === 'connected') {
+      try {
+        await saveDatabaseItems(updatedDatabaseItems);
+        console.log('✅ Manual item saved to Firebase');
+      } catch (error) {
+        console.error('❌ Failed to save manual item:', error);
+        showToast('Item added locally but failed to sync to cloud');
+      }
+    }
+
+    // Add activity entry
+    await addActivityEntry({
       type: 'manual_add',
       item: item.name,
       quantity: 1,
       unit: 'item',
       employee: 'Current User'
     });
-  }, [addActivityEntry]);
 
-  // Assign items to category - FIXED: Handle existing assignments without duplicating
-  const assignToCategory = useCallback((
+    // Create sync operation for multi-device
+    const syncOperation: InventorySyncOperation = {
+      type: 'add_item',
+      payload: { item: newItem },
+      timestamp: new Date().toISOString(),
+      userId: 'Current User',
+      device: navigator.userAgent.split(' ')[0] || 'Unknown'
+    };
+
+    if (connectionStatus === 'connected') {
+      try {
+        await applyInventoryOperation(syncOperation);
+      } catch (error) {
+        console.error('❌ Failed to apply add item sync:', error);
+      }
+    }
+
+    showToast('Item added to database successfully');
+  }, [databaseItems, setDatabaseItems, connectionStatus, saveDatabaseItems, addActivityEntry, applyInventoryOperation]);
+
+  // Enhanced assign items to category with Firebase sync
+  const assignToCategory = useCallback(async (
     itemIds: (number | string)[],
     frequency: InventoryFrequency,
     category: InventoryCategory,
@@ -195,12 +395,15 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
     initialStock: number
   ) => {
     const selectedItemsData = databaseItems.filter(item => itemIds.includes(item.id));
-    console.log('Assigning items:', selectedItemsData.length, 'to', frequency, category);
+    console.log('🔄 Assigning items with Firebase sync:', selectedItemsData.length, 'to', frequency, category);
     
+    const newInventoryItems: InventoryItem[] = [];
+    
+    // Process each selected item
     selectedItemsData.forEach(dbItem => {
-      // If item is already assigned, we need to handle it differently
+      // Handle existing assignments
       if (dbItem.isAssigned) {
-        // Find existing inventory item(s) linked to this database item
+        // Remove from previous assignment
         const allFrequencies: InventoryFrequency[] = ['daily', 'weekly', 'monthly'];
         
         allFrequencies.forEach(freq => {
@@ -223,7 +426,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
               );
               setItemsByFrequency(freq, updatedItems);
             } else {
-              // Remove from different frequency (moving to new frequency)
+              // Remove from different frequency
               const filteredItems = items.filter(item => item.databaseId !== dbItem.id);
               setItemsByFrequency(freq, filteredItems);
             }
@@ -245,8 +448,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
             databaseId: dbItem.id
           };
           
-          const currentItems = getItemsByFrequency(frequency);
-          setItemsByFrequency(frequency, [...currentItems, newInventoryItem]);
+          newInventoryItems.push(newInventoryItem);
         }
       } else {
         // Item not assigned yet, create new inventory item
@@ -263,13 +465,18 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
           databaseId: dbItem.id
         };
         
-        const currentItems = getItemsByFrequency(frequency);
-        setItemsByFrequency(frequency, [...currentItems, newInventoryItem]);
+        newInventoryItems.push(newInventoryItem);
       }
     });
+
+    // Add new items to frequency
+    if (newInventoryItems.length > 0) {
+      const currentItems = getItemsByFrequency(frequency);
+      await setItemsByFrequency(frequency, [...currentItems, ...newInventoryItems]);
+    }
     
     // Update database items to show assignment status
-    setDatabaseItems(prev => prev.map(item => 
+    const updatedDatabaseItems = databaseItems.map(item => 
       itemIds.includes(item.id) 
         ? { 
             ...item, 
@@ -279,14 +486,25 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
             assignedDate: new Date().toISOString().split('T')[0]
           }
         : item
-    ));
+    );
+    setDatabaseItems(updatedDatabaseItems);
+
+    // Save database items to Firebase
+    if (connectionStatus === 'connected') {
+      try {
+        await saveDatabaseItems(updatedDatabaseItems);
+        console.log('✅ Database items assignment saved to Firebase');
+      } catch (error) {
+        console.error('❌ Failed to save database items assignment:', error);
+      }
+    }
     
     setSelectedItems(new Set());
     
     showToast(`Successfully ${selectedItemsData.some(item => item.isAssigned) ? 'updated' : 'assigned'} ${selectedItemsData.length} items to ${frequency} - ${category}`);
     
-    // Add activity log entry
-    addActivityEntry({
+    // Add activity entry
+    await addActivityEntry({
       type: 'manual_add',
       item: `${selectedItemsData.length} items`,
       quantity: selectedItemsData.length,
@@ -294,11 +512,34 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
       employee: 'Current User',
       notes: `${selectedItemsData.some(item => item.isAssigned) ? 'Updated assignment to' : 'Assigned to'} ${frequency} - ${category}`
     });
-  }, [databaseItems, addActivityEntry]);
 
-  // Unassign item from category - brings it back to unassigned status and removes ALL duplicates
-  const unassignFromCategory = useCallback((itemId: number | string) => {
-    // Find the database item
+    // Create sync operation for multi-device
+    const syncOperation: InventorySyncOperation = {
+      type: 'assign_item',
+      payload: { 
+        itemIds, 
+        frequency, 
+        category, 
+        minLevel, 
+        initialStock,
+        newItems: newInventoryItems 
+      },
+      timestamp: new Date().toISOString(),
+      userId: 'Current User',
+      device: navigator.userAgent.split(' ')[0] || 'Unknown'
+    };
+
+    if (connectionStatus === 'connected') {
+      try {
+        await applyInventoryOperation(syncOperation);
+      } catch (error) {
+        console.error('❌ Failed to apply assign operation sync:', error);
+      }
+    }
+  }, [databaseItems, getItemsByFrequency, setItemsByFrequency, setDatabaseItems, connectionStatus, saveDatabaseItems, addActivityEntry, applyInventoryOperation]);
+
+  // Enhanced unassign from category with Firebase sync
+  const unassignFromCategory = useCallback(async (itemId: number | string) => {
     const dbItem = databaseItems.find(item => item.id === itemId);
     if (!dbItem) {
       showToast('Database item not found!');
@@ -310,20 +551,22 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
       return;
     }
 
-    // Remove ALL instances from inventory lists (including duplicates)
+    // Remove ALL instances from inventory lists
+    const updatePromises: Promise<void>[] = [];
     ['daily', 'weekly', 'monthly'].forEach(freq => {
       const items = getItemsByFrequency(freq as InventoryFrequency);
       const updatedItems = items.filter(item => item.databaseId !== itemId);
       
-      // Only update if there were changes
       if (updatedItems.length !== items.length) {
-        setItemsByFrequency(freq as InventoryFrequency, updatedItems);
+        updatePromises.push(setItemsByFrequency(freq as InventoryFrequency, updatedItems));
         console.log(`Removed ${items.length - updatedItems.length} duplicate(s) from ${freq}`);
       }
     });
 
+    await Promise.all(updatePromises);
+
     // Update database item to show unassigned status
-    setDatabaseItems(prev => prev.map(item => 
+    const updatedDatabaseItems = databaseItems.map(item => 
       item.id === itemId 
         ? { 
             ...item, 
@@ -333,28 +576,92 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
             assignedDate: undefined
           }
         : item
-    ));
+    );
+    setDatabaseItems(updatedDatabaseItems);
+
+    // Save to Firebase
+    if (connectionStatus === 'connected') {
+      try {
+        await saveDatabaseItems(updatedDatabaseItems);
+        console.log('✅ Database items unassignment saved to Firebase');
+      } catch (error) {
+        console.error('❌ Failed to save database items unassignment:', error);
+      }
+    }
+
+    // Create sync operation for multi-device
+    const syncOperation: InventorySyncOperation = {
+      type: 'unassign_item',
+      payload: { itemId },
+      itemId,
+      timestamp: new Date().toISOString(),
+      userId: 'Current User',
+      device: navigator.userAgent.split(' ')[0] || 'Unknown'
+    };
+
+    if (connectionStatus === 'connected') {
+      try {
+        await applyInventoryOperation(syncOperation);
+      } catch (error) {
+        console.error('❌ Failed to apply unassign operation sync:', error);
+      }
+    }
 
     showToast(`Successfully unassigned ${dbItem.name} from inventory (removed all duplicates)`);
-  }, [databaseItems]);
+  }, [databaseItems, getItemsByFrequency, setItemsByFrequency, setDatabaseItems, connectionStatus, saveDatabaseItems, applyInventoryOperation]);
 
-  // Delete items from database
-  const deleteItems = useCallback((itemIds: (number | string)[]) => {
+  // Enhanced delete items with Firebase sync
+  const deleteItems = useCallback(async (itemIds: (number | string)[]) => {
     if (itemIds.length === 0) return;
     
-    // Also remove from inventory lists if assigned
+    // Remove from inventory lists if assigned
+    const updatePromises: Promise<void>[] = [];
     itemIds.forEach(itemId => {
       ['daily', 'weekly', 'monthly'].forEach(freq => {
         const items = getItemsByFrequency(freq as InventoryFrequency);
         const updatedItems = items.filter(item => item.databaseId !== itemId);
-        setItemsByFrequency(freq as InventoryFrequency, updatedItems);
+        if (updatedItems.length !== items.length) {
+          updatePromises.push(setItemsByFrequency(freq as InventoryFrequency, updatedItems));
+        }
       });
     });
+
+    await Promise.all(updatePromises);
     
-    setDatabaseItems(prev => prev.filter(item => !itemIds.includes(item.id)));
+    // Update database items
+    const updatedDatabaseItems = databaseItems.filter(item => !itemIds.includes(item.id));
+    setDatabaseItems(updatedDatabaseItems);
+
+    // Save to Firebase
+    if (connectionStatus === 'connected') {
+      try {
+        await saveDatabaseItems(updatedDatabaseItems);
+        console.log('✅ Database items deletion saved to Firebase');
+      } catch (error) {
+        console.error('❌ Failed to save database items deletion:', error);
+      }
+    }
+    
     setSelectedItems(new Set());
     showToast(`Deleted ${itemIds.length} items from database`);
-  }, []);
+
+    // Create sync operation for multi-device
+    const syncOperation: InventorySyncOperation = {
+      type: 'remove_item',
+      payload: { itemIds },
+      timestamp: new Date().toISOString(),
+      userId: 'Current User',
+      device: navigator.userAgent.split(' ')[0] || 'Unknown'
+    };
+
+    if (connectionStatus === 'connected') {
+      try {
+        await applyInventoryOperation(syncOperation);
+      } catch (error) {
+        console.error('❌ Failed to apply delete operation sync:', error);
+      }
+    }
+  }, [databaseItems, getItemsByFrequency, setItemsByFrequency, setDatabaseItems, connectionStatus, saveDatabaseItems, applyInventoryOperation]);
 
   // Toggle item selection
   const toggleItemSelection = useCallback((itemId: number | string) => {
@@ -374,9 +681,10 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
     setSelectedItems(new Set());
   }, []);
 
-  // Clean up duplicate items - removes duplicate assignments based on databaseId
-  const cleanupDuplicates = useCallback(() => {
+  // Clean up duplicate items with Firebase sync
+  const cleanupDuplicates = useCallback(async () => {
     let totalCleaned = 0;
+    const updatePromises: Promise<void>[] = [];
     
     ['daily', 'weekly', 'monthly'].forEach(freq => {
       const items = getItemsByFrequency(freq as InventoryFrequency);
@@ -384,31 +692,44 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
       const uniqueItems = items.filter(item => {
         if (item.databaseId && seen.has(item.databaseId)) {
           totalCleaned++;
-          return false; // Remove duplicate
+          return false;
         }
         if (item.databaseId) {
           seen.add(item.databaseId);
         }
-        return true; // Keep unique item
+        return true;
       });
       
       if (uniqueItems.length !== items.length) {
-        setItemsByFrequency(freq as InventoryFrequency, uniqueItems);
+        updatePromises.push(setItemsByFrequency(freq as InventoryFrequency, uniqueItems));
         console.log(`Cleaned ${items.length - uniqueItems.length} duplicates from ${freq}`);
       }
     });
     
+    await Promise.all(updatePromises);
+    
     if (totalCleaned > 0) {
       showToast(`Cleaned up ${totalCleaned} duplicate items from inventory`);
     }
-  }, []);
+  }, [getItemsByFrequency, setItemsByFrequency]);
 
   // Switch tab
   const switchTab = useCallback((tab: InventoryFrequency | 'reports') => {
     setCurrentTab(tab);
-    setSelectedItems(new Set()); // Clear selections when switching tabs
+    setSelectedItems(new Set());
   }, []);
 
+  // Connection status monitoring
+  useEffect(() => {
+    if (connectionStatus === 'connected') {
+      console.log('🌐 Inventory Firebase connection established');
+    } else if (connectionStatus === 'error') {
+      console.warn('⚠️ Inventory Firebase connection error - working offline');
+      showToast('Connection lost - inventory changes saved locally', 'warning');
+    }
+  }, [connectionStatus]);
+
+  // Context value with all enhanced functions
   const value: InventoryContextType = {
     // Data
     dailyItems,
@@ -421,7 +742,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
     // UI State
     currentTab,
     
-    // Actions
+    // Actions with Firebase integration
     setDailyItems,
     setWeeklyItems,
     setMonthlyItems,
@@ -438,7 +759,10 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
     deleteItems,
     toggleItemSelection,
     clearSelection,
-    switchTab
+    switchTab,
+    
+    // Connection status for UI feedback
+    connectionStatus
   };
 
   return (
