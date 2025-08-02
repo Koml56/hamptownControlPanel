@@ -1,4 +1,5 @@
-// prep-utils.ts - Utility functions for prep list system with fixed regex
+// prep-utils.ts - Utility functions for prep list system
+
 export const getDateString = (date: Date): string => {
   // Use local date to avoid timezone issues
   const year = date.getFullYear();
@@ -26,16 +27,11 @@ export const getWeekDates = (startDate: Date = new Date()): Date[] => {
   return dates;
 };
 
-// FIXED: Proper regex patterns with explicit escaping
 export const formatRecipeText = (text: string): string => {
-  if (!text || typeof text !== 'string') {
-    return '';
-  }
-  
   return text
-    .replace(new RegExp('\\*\\*(.*?)\\*\\*', 'g'), '<strong>$1</strong>')
-    .replace(new RegExp('\\*(.*?)\\*', 'g'), '<em>$1</em>')
-    .replace(new RegExp('\\n', 'g'), '<br/>');
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/\n/g, '<br/>');
 };
 
 export const getSelectionKey = (date: Date, prepId: number): string => {
