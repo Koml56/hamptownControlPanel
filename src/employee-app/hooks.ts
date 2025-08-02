@@ -7,9 +7,9 @@ import { FirebaseService } from './firebaseService';
 import { 
   migrateEmployeeData, 
   migrateTaskData, 
-  migrateScheduledPreps, 
-  getFormattedDate 
+  migrateScheduledPreps
 } from './migrationUtils';
+import { getFormattedDate } from './utils';
 import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData, getDefaultStoreItems } from './defaultData';
 import type { 
   Employee, 
@@ -24,9 +24,12 @@ import type {
   CurrentUser,
   InventoryData,
   InventorySyncOperation,
-  SyncOperation
+  SyncOperation,
+  InventoryItem,
+  DatabaseItem,
+  ActivityLogEntry,
+  InventoryFrequency
 } from './types';
-import type { InventoryItem, DatabaseItem, ActivityLogEntry, InventoryFrequency } from './inventory/types';
 
 // Enhanced Firebase data hook with comprehensive inventory support
 export const useFirebaseData = () => {
