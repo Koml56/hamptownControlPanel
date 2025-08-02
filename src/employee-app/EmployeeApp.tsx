@@ -40,7 +40,7 @@ import type { SyncOperation } from './OperationManager';
 // Types and Constants
 import { getFormattedDate } from './utils';
 import { getDefaultStoreItems } from './defaultData';
-import type { ActiveTab, Employee, Task, DailyDataMap, TaskAssignments, StoreItem } from './types';
+import type { ActiveTab, Employee, Task, DailyDataMap, TaskAssignments, StoreItem, SyncOperation } from './types';
 
 // Extended ActiveTab type to include inventory
 type ExtendedActiveTab = ActiveTab | 'inventory';
@@ -93,7 +93,7 @@ const EmployeeApp: React.FC = () => {
     saveInventoryData,
     saveInventoryFrequency,
     saveDatabaseItems,
-    saveActivityLog,
+    saveActivityLog: saveActivityLogToFirebase,
     applyInventoryOperation,
     // Sync operations
     applyTaskSyncOperation
@@ -184,6 +184,20 @@ const EmployeeApp: React.FC = () => {
 
   const currentTabs = isAdmin ? adminTabs : tabs;
 
+  // Add userMood state for MoodTracker
+  const [userMood, setUserMood] = React.useState(() => {
+    const currentEmployee = employees.find(emp => emp.id === currentUser.id);
+    return currentEmployee?.mood || 3;
+  });
+
+  // Update userMood when currentUser or employees change
+  useEffect(() => {
+    const currentEmployee = employees.find(emp => emp.id === currentUser.id);
+    if (currentEmployee) {
+      setUserMood(currentEmployee.mood);
+    }
+  }, [currentUser.id, employees]);
+
   // Enhanced tab rendering with inventory
   const renderTabContent = () => {
     const commonProps = {
@@ -205,7 +219,13 @@ const EmployeeApp: React.FC = () => {
 
     switch (activeTab) {
       case 'mood':
-        return <MoodTracker {...commonProps} />;
+        return (
+          <MoodTracker 
+            {...commonProps}
+            userMood={userMood}
+            setUserMood={setUserMood}
+          />
+        );
         
       case 'tasks':
         return <TaskManager {...commonProps} />;
@@ -261,7 +281,13 @@ const EmployeeApp: React.FC = () => {
         ) : null;
         
       default:
-        return <MoodTracker {...commonProps} />;
+        return (
+          <MoodTracker 
+            {...commonProps}
+            userMood={userMood}
+            setUserMood={setUserMood}
+          />
+        );
     }
   };
 
