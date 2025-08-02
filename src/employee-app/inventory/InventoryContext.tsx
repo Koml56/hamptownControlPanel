@@ -9,9 +9,9 @@ import {
   InventoryCategory, 
   WasteReason, 
   ActivityType,
-  InventoryContextType 
-} from './types';
-import { InventorySyncOperation } from '../types';
+  InventoryContextType,
+  InventorySyncOperation
+} from '../types';
 import { generateId, showToast } from './utils';
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
