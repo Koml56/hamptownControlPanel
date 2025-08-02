@@ -307,7 +307,7 @@ const EmployeeApp: React.FC = () => {
 
   // Enhanced admin login with inventory access
   const handleAdminLoginSubmit = () => {
-    const success = handleAdminLogin(adminPassword, setIsAdmin);
+    const success = handleAdminLogin(adminPassword, setIsAdmin, setActiveTab, setAdminPassword);
     if (success) {
       setShowAdminLogin(false);
       setAdminPassword('');
