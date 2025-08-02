@@ -1,570 +1,291 @@
-// inventory/migrationUtils.ts - Utilities for migrating existing inventory data to Firebase
-import type { 
-  InventoryItem, 
-  DatabaseItem, 
-  ActivityLogEntry, 
-  InventoryFrequency,
-  InventoryCategory 
-} from './types';
-import type { InventoryData } from '../types';
-import { generateId, showToast } from './utils';
+// migrationUtils.ts - Enhanced with missing prep migration functions
+import type { Employee, Task, ScheduledPrep, PrepItem, PrepSelections, DailyDataMap } from './types';
+import { getFormattedDate } from './utils';
+import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData } from './defaultData';
 
-// ================== MIGRATION TYPES ==================
-interface LegacyInventoryItem {
-  id?: number | string;
-  name: string;
-  category?: string;
-  stock?: number;
-  minStock?: number;
-  unit?: string;
-  cost?: number;
-  ean?: string;
-  frequency?: string;
-  [key: string]: any;
-}
-
-interface LegacyInventoryData {
-  daily?: LegacyInventoryItem[];
-  weekly?: LegacyInventoryItem[];
-  monthly?: LegacyInventoryItem[];
-  database?: LegacyInventoryItem[];
-  activities?: any[];
-  version?: number;
-}
-
-interface MigrationResult {
-  success: boolean;
-  migratedData: InventoryData;
-  warnings: string[];
-  errors: string[];
-  stats: {
-    dailyItems: number;
-    weeklyItems: number;
-    monthlyItems: number;
-    databaseItems: number;
-    activityEntries: number;
-  };
-}
-
-// ================== VALIDATION FUNCTIONS ==================
-export const validateInventoryItem = (item: any): string[] => {
-  const errors: string[] = [];
+export const migrateEmployeeData = (employees: any[]): Employee[] => {
+  if (!employees || !Array.isArray(employees)) return getDefaultEmployees();
   
-  if (!item.name || typeof item.name !== 'string') {
-    errors.push('Item name is required and must be a string');
-  }
-  
-  if (item.currentStock !== undefined && (typeof item.currentStock !== 'number' || item.currentStock < 0)) {
-    errors.push('Current stock must be a non-negative number');
-  }
-  
-  if (item.minLevel !== undefined && (typeof item.minLevel !== 'number' || item.minLevel < 0)) {
-    errors.push('Minimum level must be a non-negative number');
-  }
-  
-  if (item.cost !== undefined && (typeof item.cost !== 'number' || item.cost < 0)) {
-    errors.push('Cost must be a non-negative number');
-  }
-  
-  return errors;
+  return employees.map(emp => ({
+    id: emp.id || 0,
+    name: emp.name || 'Unknown',
+    mood: emp.mood || 3,
+    lastUpdated: emp.lastUpdated || 'Not updated',
+    role: emp.role || 'Cleaner',
+    lastMoodDate: emp.lastMoodDate || null,
+    points: typeof emp.points === 'number' ? emp.points : 0 // Ensure points is always a number
+  }));
 };
 
-export const validateDatabaseItem = (item: any): string[] => {
-  const errors: string[] = [];
+export const migrateTaskData = (tasks: any[]): Task[] => {
+  if (!tasks || !Array.isArray(tasks)) return getDefaultTasks();
   
-  if (!item.name || typeof item.name !== 'string') {
-    errors.push('Database item name is required and must be a string');
-  }
-  
-  if (item.frequency && !['daily', 'weekly', 'monthly', 'database'].includes(item.frequency)) {
-    errors.push('Frequency must be one of: daily, weekly, monthly, database');
-  }
-  
-  return errors;
+  return tasks.map(task => ({
+    id: task.id || 0,
+    task: task.task || 'Unknown Task',
+    location: task.location || 'Unknown Location',
+    priority: task.priority || 'medium',
+    estimatedTime: task.estimatedTime || '30 min',
+    points: typeof task.points === 'number' ? task.points : getDefaultPointsForPriority(task.priority)
+  }));
 };
 
-// ================== CATEGORY MAPPING ==================
-const mapLegacyCategory = (legacyCategory: string | undefined): InventoryCategory => {
-  if (!legacyCategory) return 'uncategorized';
+// NEW: Missing migrateScheduledPreps function
+export const migrateScheduledPreps = (scheduledPreps: any[]): ScheduledPrep[] => {
+  if (!scheduledPreps || !Array.isArray(scheduledPreps)) return [];
   
-  const categoryMap: Record<string, InventoryCategory> = {
-    'vegetables': 'produce',
-    'fruits': 'produce',
-    'produce': 'produce',
-    'meat': 'meat',
-    'chicken': 'meat',
-    'beef': 'meat',
-    'fish': 'meat',
-    'dairy': 'dairy',
-    'milk': 'dairy',
-    'cheese': 'dairy',
-    'bread': 'bread',
-    'bakery': 'bread',
-    'drinks': 'beverages',
-    'beverages': 'beverages',
-    'coffee': 'beverages',
-    'cooking': 'cooking',
-    'spices': 'cooking',
-    'oils': 'cooking',
-    'baking': 'baking',
-    'flour': 'baking',
-    'sugar': 'baking',
-    'rice': 'grains',
-    'pasta': 'grains',
-    'grains': 'grains',
-    'cleaning': 'cleaning',
-    'supplies': 'supplies',
-    'packaging': 'packaging',
-    'tukku': 'tukku'
-  };
-  
-  const normalized = legacyCategory.toLowerCase().trim();
-  return categoryMap[normalized] || 'uncategorized';
+  return scheduledPreps.map(prep => ({
+    id: prep.id || Date.now() + Math.random(),
+    prepId: prep.prepId || 0,
+    name: prep.name || 'Unknown Prep',
+    category: prep.category || 'muut',
+    estimatedTime: prep.estimatedTime || '30 min',
+    isCustom: prep.isCustom || false,
+    hasRecipe: prep.hasRecipe || false,
+    recipe: prep.recipe || null,
+    scheduledDate: prep.scheduledDate || getFormattedDate(new Date()),
+    priority: prep.priority || 'medium',
+    timeSlot: prep.timeSlot || '',
+    completed: typeof prep.completed === 'boolean' ? prep.completed : false, // CRITICAL: Ensure completed status is boolean
+    assignedTo: prep.assignedTo || null,
+    notes: prep.notes || ''
+  }));
 };
 
-// ================== ITEM MIGRATION FUNCTIONS ==================
-export const migrateLegacyInventoryItem = (
-  legacyItem: LegacyInventoryItem,
-  frequency: InventoryFrequency
-): { item: InventoryItem | null; warnings: string[]; errors: string[] } => {
-  const warnings: string[] = [];
-  const errors: string[] = [];
+// NEW: Migrate prep items
+export const migratePrepItems = (prepItems: any[]): PrepItem[] => {
+  if (!prepItems || !Array.isArray(prepItems)) return [];
   
-  // Validate legacy item
-  const validationErrors = validateInventoryItem(legacyItem);
-  if (validationErrors.length > 0) {
-    errors.push(...validationErrors);
-    return { item: null, warnings, errors };
-  }
+  return prepItems.map(item => ({
+    id: item.id || Date.now() + Math.random(),
+    name: item.name || 'Unknown Prep',
+    category: item.category || 'muut',
+    estimatedTime: item.estimatedTime || '30 min',
+    isCustom: typeof item.isCustom === 'boolean' ? item.isCustom : false,
+    hasRecipe: typeof item.hasRecipe === 'boolean' ? item.hasRecipe : false,
+    recipe: item.recipe || null,
+    frequency: typeof item.frequency === 'number' ? item.frequency : 1
+  }));
+};
+
+// NEW: Migrate prep selections
+export const migratePrepSelections = (prepSelections: any): PrepSelections => {
+  if (!prepSelections || typeof prepSelections !== 'object') return {};
   
-  try {
-    const migratedItem: InventoryItem = {
-      id: legacyItem.id || generateId(),
-      name: legacyItem.name.trim(),
-      category: mapLegacyCategory(legacyItem.category),
-      currentStock: legacyItem.stock || legacyItem.currentStock || 0,
-      minLevel: legacyItem.minStock || legacyItem.minLevel || 1,
-      unit: legacyItem.unit || 'pieces',
-      lastUsed: new Date().toISOString().split('T')[0],
-      cost: legacyItem.cost || 0,
-      ean: legacyItem.ean || '',
-      frequency,
-      databaseId: legacyItem.databaseId || legacyItem.id
+  const migrated: PrepSelections = {};
+  Object.keys(prepSelections).forEach(key => {
+    const selection = prepSelections[key];
+    migrated[key] = {
+      priority: selection.priority || 'medium',
+      timeSlot: selection.timeSlot || '',
+      selected: typeof selection.selected === 'boolean' ? selection.selected : false
     };
-    
-    // Add warnings for data transformations
-    if (legacyItem.category && mapLegacyCategory(legacyItem.category) === 'uncategorized') {
-      warnings.push(`Category '${legacyItem.category}' was mapped to 'uncategorized'`);
-    }
-    
-    if (!legacyItem.unit) {
-      warnings.push('Unit was set to default value "pieces"');
-    }
-    
-    if (legacyItem.stock !== undefined && legacyItem.currentStock !== undefined) {
-      warnings.push('Both "stock" and "currentStock" found, used "currentStock"');
-    }
-    
-    return { item: migratedItem, warnings, errors };
-  } catch (error) {
-    errors.push(`Migration failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    return { item: null, warnings, errors };
-  }
+  });
+  
+  return migrated;
 };
 
-export const migrateLegacyDatabaseItem = (
-  legacyItem: LegacyInventoryItem
-): { item: DatabaseItem | null; warnings: string[]; errors: string[] } => {
-  const warnings: string[] = [];
-  const errors: string[] = [];
+// NEW: Migrate daily data
+export const migrateDailyData = (dailyData: any): DailyDataMap => {
+  if (!dailyData || typeof dailyData !== 'object') return getEmptyDailyData();
   
-  // Validate legacy item
-  const validationErrors = validateDatabaseItem(legacyItem);
-  if (validationErrors.length > 0) {
-    errors.push(...validationErrors);
-    return { item: null, warnings, errors };
-  }
-  
-  try {
-    const migratedItem: DatabaseItem = {
-      id: legacyItem.id || generateId(),
-      name: legacyItem.name.trim(),
-      ean: legacyItem.ean || '',
-      unit: legacyItem.unit || 'pieces',
-      cost: legacyItem.cost || 0,
-      costWithTax: legacyItem.costWithTax || (legacyItem.cost ? legacyItem.cost * 1.24 : 0),
-      type: mapLegacyCategory(legacyItem.category),
-      frequency: 'database',
-      isAssigned: legacyItem.isAssigned || false,
-      assignedTo: legacyItem.assignedTo as InventoryFrequency || undefined,
-      assignedCategory: legacyItem.assignedCategory ? mapLegacyCategory(legacyItem.assignedCategory) : undefined,
-      assignedDate: legacyItem.assignedDate || undefined
+  const migrated: DailyDataMap = {};
+  Object.keys(dailyData).forEach(date => {
+    const dayData = dailyData[date];
+    migrated[date] = {
+      completedTasks: Array.isArray(dayData.completedTasks) ? dayData.completedTasks : [],
+      employeeMoods: Array.isArray(dayData.employeeMoods) ? dayData.employeeMoods : [],
+      purchases: Array.isArray(dayData.purchases) ? dayData.purchases : [],
+      totalTasks: typeof dayData.totalTasks === 'number' ? dayData.totalTasks : 22,
+      completionRate: typeof dayData.completionRate === 'number' ? dayData.completionRate : 0,
+      totalPointsEarned: typeof dayData.totalPointsEarned === 'number' ? dayData.totalPointsEarned : 0,
+      totalPointsSpent: typeof dayData.totalPointsSpent === 'number' ? dayData.totalPointsSpent : 0
     };
-    
-    // Add warnings for data transformations
-    if (!legacyItem.unit) {
-      warnings.push('Unit was set to default value "pieces"');
-    }
-    
-    if (legacyItem.costWithTax === undefined && legacyItem.cost) {
-      warnings.push('CostWithTax was calculated as cost * 1.24');
-    }
-    
-    return { item: migratedItem, warnings, errors };
-  } catch (error) {
-    errors.push(`Migration failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    return { item: null, warnings, errors };
+  });
+  
+  return migrated;
+};
+
+const getDefaultPointsForPriority = (priority: string): number => {
+  switch (priority) {
+    case 'high': return 10;
+    case 'medium': return 5;
+    case 'low': return 3;
+    default: return 5;
   }
 };
 
-// ================== ACTIVITY LOG MIGRATION ==================
-export const migrateLegacyActivityEntry = (
-  legacyEntry: any
-): { entry: ActivityLogEntry | null; warnings: string[]; errors: string[] } => {
-  const warnings: string[] = [];
-  const errors: string[] = [];
+export const forceDataMigration = async () => {
+  console.log('🔄 Starting forced data migration...');
   
-  if (!legacyEntry.item || !legacyEntry.type) {
-    errors.push('Activity entry must have item and type');
-    return { entry: null, warnings, errors };
-  }
+  // This function can be called to force migrate existing Firebase data
+  // You can call this from the browser console if needed
+  
+  const baseUrl = 'https://hamptown-panel-default-rtdb.firebaseio.com';
   
   try {
-    const migratedEntry: ActivityLogEntry = {
-      id: legacyEntry.id || generateId(),
-      type: legacyEntry.type || 'manual_add',
-      item: legacyEntry.item,
-      quantity: legacyEntry.quantity || 0,
-      unit: legacyEntry.unit || 'pieces',
-      employee: legacyEntry.employee || legacyEntry.user || 'Unknown',
-      timestamp: legacyEntry.timestamp || legacyEntry.date || new Date().toLocaleString(),
-      notes: legacyEntry.notes || legacyEntry.description || '',
-      reason: legacyEntry.reason
+    // Load existing data
+    const [employeesRes, tasksRes, scheduledPrepsRes, prepItemsRes, prepSelectionsRes, dailyDataRes] = await Promise.all([
+      fetch(`${baseUrl}/employees.json`),
+      fetch(`${baseUrl}/tasks.json`),
+      fetch(`${baseUrl}/scheduledPreps.json`),
+      fetch(`${baseUrl}/prepItems.json`),
+      fetch(`${baseUrl}/prepSelections.json`),
+      fetch(`${baseUrl}/dailyData.json`)
+    ]);
+    
+    const [existingEmployees, existingTasks, existingScheduledPreps, existingPrepItems, existingPrepSelections, existingDailyData] = await Promise.all([
+      employeesRes.json(),
+      tasksRes.json(),
+      scheduledPrepsRes.json(),
+      prepItemsRes.json(),
+      prepSelectionsRes.json(),
+      dailyDataRes.json()
+    ]);
+    
+    // Migrate data
+    const migratedEmployees = migrateEmployeeData(existingEmployees || []);
+    const migratedTasks = migrateTaskData(existingTasks || []);
+    const migratedScheduledPreps = migrateScheduledPreps(existingScheduledPreps || []);
+    const migratedPrepItems = migratePrepItems(existingPrepItems || []);
+    const migratedPrepSelections = migratePrepSelections(existingPrepSelections || {});
+    const migratedDailyData = migrateDailyData(existingDailyData || {});
+    
+    // Save migrated data back
+    await Promise.all([
+      fetch(`${baseUrl}/employees.json`, {
+        method: 'PUT',
+        body: JSON.stringify(migratedEmployees)
+      }),
+      fetch(`${baseUrl}/tasks.json`, {
+        method: 'PUT',
+        body: JSON.stringify(migratedTasks)
+      }),
+      fetch(`${baseUrl}/scheduledPreps.json`, {
+        method: 'PUT',
+        body: JSON.stringify(migratedScheduledPreps)
+      }),
+      fetch(`${baseUrl}/prepItems.json`, {
+        method: 'PUT',
+        body: JSON.stringify(migratedPrepItems)
+      }),
+      fetch(`${baseUrl}/prepSelections.json`, {
+        method: 'PUT',
+        body: JSON.stringify(migratedPrepSelections)
+      }),
+      fetch(`${baseUrl}/dailyData.json`, {
+        method: 'PUT',
+        body: JSON.stringify(migratedDailyData)
+      })
+    ]);
+    
+    console.log('✅ Enhanced data migration completed successfully');
+    console.log('👥 Migrated employees:', migratedEmployees);
+    console.log('📋 Migrated tasks:', migratedTasks);
+    console.log('🍳 Migrated scheduled preps:', migratedScheduledPreps);
+    console.log('📝 Migrated prep items:', migratedPrepItems);
+    console.log('📊 Migrated daily data:', Object.keys(migratedDailyData).length, 'days');
+    
+    return { 
+      employees: migratedEmployees, 
+      tasks: migratedTasks,
+      scheduledPreps: migratedScheduledPreps,
+      prepItems: migratedPrepItems,
+      prepSelections: migratedPrepSelections,
+      dailyData: migratedDailyData
     };
-    
-    // Add warnings for data transformations
-    if (!legacyEntry.employee && !legacyEntry.user) {
-      warnings.push('Employee was set to "Unknown"');
-    }
-    
-    if (!legacyEntry.timestamp && !legacyEntry.date) {
-      warnings.push('Timestamp was set to current date');
-    }
-    
-    return { entry: migratedEntry, warnings, errors };
-  } catch (error) {
-    errors.push(`Migration failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    return { entry: null, warnings, errors };
-  }
-};
-
-// ================== FULL DATA MIGRATION ==================
-export const migrateInventoryData = async (
-  legacyData: LegacyInventoryData | any,
-  options: {
-    validateData?: boolean;
-    skipInvalidItems?: boolean;
-    showProgress?: boolean;
-  } = {}
-): Promise<MigrationResult> => {
-  const {
-    validateData = true,
-    skipInvalidItems = true,
-    showProgress = false
-  } = options;
-  
-  const result: MigrationResult = {
-    success: false,
-    migratedData: {
-      dailyItems: [],
-      weeklyItems: [],
-      monthlyItems: [],
-      databaseItems: [],
-      activityLog: [],
-      lastUpdated: new Date().toISOString(),
-      version: 1
-    },
-    warnings: [],
-    errors: [],
-    stats: {
-      dailyItems: 0,
-      weeklyItems: 0,
-      monthlyItems: 0,
-      databaseItems: 0,
-      activityEntries: 0
-    }
-  };
-  
-  try {
-    console.log('🔄 Starting inventory data migration...');
-    
-    // Migrate daily items
-    if (legacyData.daily || legacyData.dailyItems) {
-      const dailyItems = legacyData.daily || legacyData.dailyItems || [];
-      if (showProgress) console.log(`📦 Migrating ${dailyItems.length} daily items...`);
-      
-      for (const legacyItem of dailyItems) {
-        const migration = migrateLegacyInventoryItem(legacyItem, 'daily');
-        
-        if (migration.item) {
-          result.migratedData.dailyItems.push(migration.item);
-          result.stats.dailyItems++;
-        } else if (!skipInvalidItems) {
-          result.errors.push(`Failed to migrate daily item: ${legacyItem.name || 'Unknown'}`);
-        }
-        
-        result.warnings.push(...migration.warnings.map(w => `Daily item ${legacyItem.name}: ${w}`));
-        result.errors.push(...migration.errors.map(e => `Daily item ${legacyItem.name}: ${e}`));
-      }
-    }
-    
-    // Migrate weekly items
-    if (legacyData.weekly || legacyData.weeklyItems) {
-      const weeklyItems = legacyData.weekly || legacyData.weeklyItems || [];
-      if (showProgress) console.log(`📦 Migrating ${weeklyItems.length} weekly items...`);
-      
-      for (const legacyItem of weeklyItems) {
-        const migration = migrateLegacyInventoryItem(legacyItem, 'weekly');
-        
-        if (migration.item) {
-          result.migratedData.weeklyItems.push(migration.item);
-          result.stats.weeklyItems++;
-        } else if (!skipInvalidItems) {
-          result.errors.push(`Failed to migrate weekly item: ${legacyItem.name || 'Unknown'}`);
-        }
-        
-        result.warnings.push(...migration.warnings.map(w => `Weekly item ${legacyItem.name}: ${w}`));
-        result.errors.push(...migration.errors.map(e => `Weekly item ${legacyItem.name}: ${e}`));
-      }
-    }
-    
-    // Migrate monthly items
-    if (legacyData.monthly || legacyData.monthlyItems) {
-      const monthlyItems = legacyData.monthly || legacyData.monthlyItems || [];
-      if (showProgress) console.log(`📦 Migrating ${monthlyItems.length} monthly items...`);
-      
-      for (const legacyItem of monthlyItems) {
-        const migration = migrateLegacyInventoryItem(legacyItem, 'monthly');
-        
-        if (migration.item) {
-          result.migratedData.monthlyItems.push(migration.item);
-          result.stats.monthlyItems++;
-        } else if (!skipInvalidItems) {
-          result.errors.push(`Failed to migrate monthly item: ${legacyItem.name || 'Unknown'}`);
-        }
-        
-        result.warnings.push(...migration.warnings.map(w => `Monthly item ${legacyItem.name}: ${w}`));
-        result.errors.push(...migration.errors.map(e => `Monthly item ${legacyItem.name}: ${e}`));
-      }
-    }
-    
-    // Migrate database items
-    if (legacyData.database || legacyData.databaseItems) {
-      const databaseItems = legacyData.database || legacyData.databaseItems || [];
-      if (showProgress) console.log(`🗄️ Migrating ${databaseItems.length} database items...`);
-      
-      for (const legacyItem of databaseItems) {
-        const migration = migrateLegacyDatabaseItem(legacyItem);
-        
-        if (migration.item) {
-          result.migratedData.databaseItems.push(migration.item);
-          result.stats.databaseItems++;
-        } else if (!skipInvalidItems) {
-          result.errors.push(`Failed to migrate database item: ${legacyItem.name || 'Unknown'}`);
-        }
-        
-        result.warnings.push(...migration.warnings.map(w => `Database item ${legacyItem.name}: ${w}`));
-        result.errors.push(...migration.errors.map(e => `Database item ${legacyItem.name}: ${e}`));
-      }
-    }
-    
-    // Migrate activity log
-    if (legacyData.activities || legacyData.activityLog) {
-      const activities = legacyData.activities || legacyData.activityLog || [];
-      if (showProgress) console.log(`📝 Migrating ${activities.length} activity entries...`);
-      
-      for (const legacyEntry of activities) {
-        const migration = migrateLegacyActivityEntry(legacyEntry);
-        
-        if (migration.entry) {
-          result.migratedData.activityLog.push(migration.entry);
-          result.stats.activityEntries++;
-        } else if (!skipInvalidItems) {
-          result.errors.push(`Failed to migrate activity entry: ${legacyEntry.id || 'Unknown'}`);
-        }
-        
-        result.warnings.push(...migration.warnings.map(w => `Activity entry: ${w}`));
-        result.errors.push(...migration.errors.map(e => `Activity entry: ${e}`));
-      }
-    }
-    
-    // Sort activity log by timestamp (newest first)
-    result.migratedData.activityLog.sort((a, b) => 
-      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-    );
-    
-    // Determine success
-    const hasData = result.stats.dailyItems > 0 || 
-                   result.stats.weeklyItems > 0 || 
-                   result.stats.monthlyItems > 0 || 
-                   result.stats.databaseItems > 0;
-    
-    result.success = hasData && (skipInvalidItems || result.errors.length === 0);
-    
-    console.log('✅ Inventory data migration completed:', result.stats);
-    
-    if (showProgress) {
-      showToast(
-        `Migration completed: ${result.stats.dailyItems + result.stats.weeklyItems + result.stats.monthlyItems + result.stats.databaseItems} items migrated`,
-        result.warnings.length > 0 ? 'warning' : 'success'
-      );
-    }
-    
-    return result;
     
   } catch (error) {
     console.error('❌ Migration failed:', error);
-    result.errors.push(`Migration failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    return result;
+    throw error;
   }
 };
 
-// ================== FIREBASE MIGRATION HELPER ==================
-export const migrateAndSaveToFirebase = async (
-  legacyData: LegacyInventoryData | any,
-  firebaseService: any,
-  options: {
-    backup?: boolean;
-    validateData?: boolean;
-    skipInvalidItems?: boolean;
-    showProgress?: boolean;
-  } = {}
-): Promise<{ success: boolean; migrationResult: MigrationResult; backupResult?: any }> => {
-  const {
-    backup = true,
-    validateData = true,
-    skipInvalidItems = true,
-    showProgress = true
-  } = options;
+// NEW: Utility to get data summary for debugging
+export const getDataSummary = (dataType: string, data: any) => {
+  if (!data) return { type: dataType, count: 0, sample: null };
   
+  if (Array.isArray(data)) {
+    return {
+      type: dataType,
+      count: data.length,
+      sample: data.slice(0, 3)
+    };
+  }
+  
+  if (typeof data === 'object') {
+    const keys = Object.keys(data);
+    return {
+      type: dataType,
+      count: keys.length,
+      sample: keys.slice(0, 3).reduce((acc, key) => {
+        acc[key] = data[key];
+        return acc;
+      }, {} as any)
+    };
+  }
+  
+  return { type: dataType, count: 1, sample: data };
+};
+
+// NEW: Utility to validate migrated data
+export const validateMigratedData = (data: any, dataType: string): boolean => {
   try {
-    console.log('🚀 Starting Firebase migration process...');
-    
-    // Create backup if requested
-    let backupResult;
-    if (backup) {
-      console.log('💾 Creating backup of existing data...');
-      try {
-        const existingData = await firebaseService.loadData();
-        backupResult = await firebaseService.quickSave(
-          `backup_inventory_${Date.now()}`,
-          existingData.inventoryData || {}
+    switch (dataType) {
+      case 'employees':
+        return Array.isArray(data) && data.every(emp => 
+          typeof emp.id === 'number' && 
+          typeof emp.name === 'string' && 
+          typeof emp.points === 'number'
         );
-        console.log(backupResult ? '✅ Backup created' : '⚠️ Backup failed');
-      } catch (error) {
-        console.warn('⚠️ Backup failed, continuing with migration:', error);
-      }
+        
+      case 'tasks':
+        return Array.isArray(data) && data.every(task => 
+          typeof task.id === 'number' && 
+          typeof task.task === 'string' && 
+          typeof task.points === 'number'
+        );
+        
+      case 'scheduledPreps':
+        return Array.isArray(data) && data.every(prep => 
+          typeof prep.id !== 'undefined' && 
+          typeof prep.name === 'string' && 
+          typeof prep.completed === 'boolean'
+        );
+        
+      case 'prepItems':
+        return Array.isArray(data) && data.every(item => 
+          typeof item.id !== 'undefined' && 
+          typeof item.name === 'string'
+        );
+        
+      default:
+        return true;
     }
-    
-    // Perform migration
-    const migrationResult = await migrateInventoryData(legacyData, {
-      validateData,
-      skipInvalidItems,
-      showProgress
-    });
-    
-    if (!migrationResult.success) {
-      throw new Error(`Migration failed: ${migrationResult.errors.join(', ')}`);
-    }
-    
-    // Save migrated data to Firebase
-    console.log('💾 Saving migrated data to Firebase...');
-    const saveSuccess = await firebaseService.saveInventoryData(migrationResult.migratedData);
-    
-    if (!saveSuccess) {
-      throw new Error('Failed to save migrated data to Firebase');
-    }
-    
-    console.log('✅ Firebase migration completed successfully');
-    
-    if (showProgress) {
-      showToast('Inventory data migrated and saved to Firebase successfully!', 'success');
-    }
-    
-    return {
-      success: true,
-      migrationResult,
-      backupResult
-    };
-    
   } catch (error) {
-    console.error('❌ Firebase migration failed:', error);
-    
-    if (showProgress) {
-      showToast(`Migration failed: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
-    }
-    
-    return {
-      success: false,
-      migrationResult: {
-        success: false,
-        migratedData: {
-          dailyItems: [],
-          weeklyItems: [],
-          monthlyItems: [],
-          databaseItems: [],
-          activityLog: [],
-          lastUpdated: new Date().toISOString(),
-          version: 0
-        },
-        warnings: [],
-        errors: [error instanceof Error ? error.message : 'Unknown error'],
-        stats: {
-          dailyItems: 0,
-          weeklyItems: 0,
-          monthlyItems: 0,
-          databaseItems: 0,
-          activityEntries: 0
-        }
-      }
-    };
+    console.error(`❌ Validation failed for ${dataType}:`, error);
+    return false;
   }
 };
 
-// ================== EXPORT HELPERS ==================
-export const exportMigrationReport = (migrationResult: MigrationResult): string => {
-  const report = `
-INVENTORY MIGRATION REPORT
-==========================
-
-Migration Status: ${migrationResult.success ? 'SUCCESS' : 'FAILED'}
-Generated: ${new Date().toLocaleString()}
-
-STATISTICS:
------------
-Daily Items: ${migrationResult.stats.dailyItems}
-Weekly Items: ${migrationResult.stats.weeklyItems}
-Monthly Items: ${migrationResult.stats.monthlyItems}
-Database Items: ${migrationResult.stats.databaseItems}
-Activity Entries: ${migrationResult.stats.activityEntries}
-
-WARNINGS (${migrationResult.warnings.length}):
-${migrationResult.warnings.length > 0 ? migrationResult.warnings.map(w => `- ${w}`).join('\n') : 'None'}
-
-ERRORS (${migrationResult.errors.length}):
-${migrationResult.errors.length > 0 ? migrationResult.errors.map(e => `- ${e}`).join('\n') : 'None'}
-
-DATA STRUCTURE:
----------------
-Daily Items: ${migrationResult.migratedData.dailyItems.length}
-Weekly Items: ${migrationResult.migratedData.weeklyItems.length}
-Monthly Items: ${migrationResult.migratedData.monthlyItems.length}
-Database Items: ${migrationResult.migratedData.databaseItems.length}
-Activity Log: ${migrationResult.migratedData.activityLog.length}
-
-Last Updated: ${migrationResult.migratedData.lastUpdated}
-Version: ${migrationResult.migratedData.version}
-`;
-  
-  return report;
+// NEW: Clean up function to remove invalid entries
+export const cleanupData = (data: any[], dataType: string): any[] => {
+  return data.filter(item => {
+    switch (dataType) {
+      case 'employees':
+        return item && typeof item.name === 'string' && item.name.trim() !== '';
+        
+      case 'tasks':
+        return item && typeof item.task === 'string' && item.task.trim() !== '';
+        
+      case 'scheduledPreps':
+        return item && typeof item.name === 'string' && item.name.trim() !== '';
+        
+      case 'prepItems':
+        return item && typeof item.name === 'string' && item.name.trim() !== '';
+        
+      default:
+        return true;
+    }
+  });
 };
