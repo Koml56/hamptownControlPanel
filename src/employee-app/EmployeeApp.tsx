@@ -197,55 +197,60 @@ const EmployeeApp: React.FC = () => {
 
   // Enhanced tab rendering with inventory
   const renderTabContent = () => {
-    const commonProps = {
-      currentUser,
-      connectionStatus,
-      employees,
-      tasks,
-      dailyData,
-      completedTasks,
-      taskAssignments,
-      setEmployees,
-      setTasks,
-      setDailyData,
-      setCompletedTasks,
-      setTaskAssignments,
-      saveToFirebase,
-      quickSave
-    };
-
     switch (activeTab) {
       case 'mood':
         return (
           <MoodTracker 
-            {...commonProps}
+            currentUser={currentUser}
+            employees={employees}
             userMood={userMood}
             setUserMood={setUserMood}
+            setEmployees={setEmployees}
+            setDailyData={setDailyData}
           />
         );
         
       case 'tasks':
-        return <TaskManager {...commonProps} />;
+        return (
+          <TaskManager 
+            currentUser={currentUser}
+            tasks={tasks}
+            employees={employees}
+            completedTasks={completedTasks}
+            taskAssignments={taskAssignments}
+            dailyData={dailyData}
+            setCompletedTasks={setCompletedTasks}
+            setTaskAssignments={setTaskAssignments}
+            setDailyData={setDailyData}
+            setEmployees={setEmployees}
+          />
+        );
         
       case 'store':
         return (
           <Store 
-            {...commonProps}
+            currentUser={currentUser}
+            employees={employees}
             storeItems={storeItems}
-            setStoreItems={setStoreItems}
+            dailyData={dailyData}
+            setEmployees={setEmployees}
+            setDailyData={setDailyData}
+            saveToFirebase={saveToFirebase}
           />
         );
         
       case 'prep':
         return (
           <PrepListPrototype
-            {...commonProps}
+            currentUser={currentUser}
+            connectionStatus={connectionStatus}
             prepItems={prepItems}
             scheduledPreps={scheduledPreps}
             prepSelections={prepSelections}
             setPrepItems={setPrepItems}
             setScheduledPreps={setScheduledPreps}
             setPrepSelections={setPrepSelections}
+            quickSave={quickSave}
           />
         );
         
@@ -261,28 +266,40 @@ const EmployeeApp: React.FC = () => {
       case 'reports':
         return (
           <DailyReports
-            {...commonProps}
-            customRoles={customRoles}
-            setCustomRoles={setCustomRoles}
+            selectedDate={new Date().toISOString().split('T')[0]}
+            setSelectedDate={() => {}} // Placeholder since we don't use this in the enhanced version
+            dailyData={dailyData}
+            employees={employees}
+            connectionStatus={connectionStatus}
           />
         );
         
       case 'admin':
         return isAdmin ? (
           <AdminPanel
-            {...commonProps}
+            employees={employees}
+            tasks={tasks}
             customRoles={customRoles}
+            storeItems={storeItems}
+            prepItems={prepItems}
+            setEmployees={setEmployees}
+            setTasks={setTasks}
             setCustomRoles={setCustomRoles}
-            onLogout={logoutAdmin}
+            setStoreItems={setStoreItems}
+            setPrepItems={setPrepItems}
+            quickSave={quickSave}
           />
         ) : null;
         
       default:
         return (
           <MoodTracker 
-            {...commonProps}
+            currentUser={currentUser}
+            employees={employees}
             userMood={userMood}
             setUserMood={setUserMood}
+            setEmployees={setEmployees}
+            setDailyData={setDailyData}
           />
         );
     }
@@ -451,11 +468,23 @@ const EmployeeApp: React.FC = () => {
 
             {/* Enhanced Sync Status */}
             <div className="hidden md:flex items-center space-x-4">
-              <SyncStatusIndicator 
-                connectionStatus={connectionStatus} 
-                lastSync={lastSync}
-                additionalInfo={`${databaseItems?.length || 0} inventory items`}
-              />
+              <div className="flex items-center space-x-2 text-white text-sm">
+                <div className={`w-2 h-2 rounded-full ${
+                  connectionStatus === 'connected' ? 'bg-green-400' : 
+                  connectionStatus === 'error' ? 'bg-red-400' : 'bg-yellow-400'
+                }`} />
+                <span>{connectionStatus === 'connected' ? 'Connected' : connectionStatus === 'error' ? 'Offline' : 'Connecting'}</span>
+                {lastSync && (
+                  <span className="text-blue-200">
+                    • Last sync: {lastSync}
+                  </span>
+                )}
+                {databaseItems && databaseItems.length > 0 && (
+                  <span className="text-blue-200">
+                    • {databaseItems.length} inventory items
+                  </span>
+                )}
+              </div>
               {renderUserInfo()}
             </div>
 
