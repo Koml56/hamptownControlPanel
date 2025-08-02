@@ -1,415 +1,273 @@
-// hooks.ts - Enhanced with comprehensive inventory Firebase integration
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, onValue, off } from 'firebase/database';
-import { FIREBASE_CONFIG } from './constants';
+// hooks.ts - FIXED: Enhanced Firebase save/load for prep completions with better debugging
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { FirebaseService } from './firebaseService';
-import { 
-  migrateEmployeeData, 
-  migrateTaskData, 
-  migrateScheduledPreps
-} from './migrationUtils';
 import { getFormattedDate } from './utils';
+import { migrateEmployeeData, migrateTaskData } from './migrationUtils';
 import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData, getDefaultStoreItems } from './defaultData';
-import type { 
-  Employee, 
-  Task, 
-  DailyDataMap, 
-  TaskAssignments, 
-  PrepItem, 
-  ScheduledPrep, 
-  PrepSelections, 
-  StoreItem,
+import type {
+  Employee,
+  Task,
+  DailyDataMap,
+  TaskAssignments,
   ConnectionStatus,
   CurrentUser,
-  InventoryData,
-  InventorySyncOperation,
-  SyncOperation,
-  InventoryItem,
-  DatabaseItem,
-  ActivityLogEntry,
-  InventoryFrequency
+  PrepItem,
+  ScheduledPrep,
+  PrepSelections,
+  StoreItem
 } from './types';
+import type { SyncOperation } from './OperationManager';
+import { getDatabase, ref, onValue, off } from 'firebase/database';
+import { initializeApp } from 'firebase/app';
+import { FIREBASE_CONFIG } from './constants';
+import { applyTaskOperation } from './taskOperations';
 
-// Enhanced Firebase data hook with comprehensive inventory support
+// FIXED: Enhanced prep data migration with completion status validation
+const migrateScheduledPreps = (scheduledPreps: any[]): ScheduledPrep[] => {
+  if (!scheduledPreps || !Array.isArray(scheduledPreps)) return [];
+  
+  return scheduledPreps.map(prep => ({
+    id: prep.id || Date.now() + Math.random(),
+    prepId: prep.prepId || 0,
+    name: prep.name || 'Unknown Prep',
+    category: prep.category || 'muut',
+    estimatedTime: prep.estimatedTime || '30 min',
+    isCustom: prep.isCustom || false,
+    hasRecipe: prep.hasRecipe || false,
+    recipe: prep.recipe || null,
+    scheduledDate: prep.scheduledDate || getFormattedDate(new Date()),
+    priority: prep.priority || 'medium',
+    timeSlot: prep.timeSlot || '',
+    completed: typeof prep.completed === 'boolean' ? prep.completed : false,
+    assignedTo: prep.assignedTo || null,
+    notes: prep.notes || ''
+  }));
+};
+
 export const useFirebaseData = () => {
-  const [isLoading, setIsLoading] = useState(false);
-  const [lastSync, setLastSync] = useState<string | null>(null);
+  // State management
+  const [isLoading, setIsLoading] = useState(true);
+  const [lastSync, setLastSync] = useState<Date | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
-
-  // Main app data
+  
+  // Main data states
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [dailyData, setDailyData] = useState<DailyDataMap>({});
   const [completedTasks, setCompletedTasks] = useState<Set<number>>(new Set());
   const [taskAssignments, setTaskAssignments] = useState<TaskAssignments>({});
-  const [customRoles, setCustomRoles] = useState<string[]>(['Cleaner', 'Manager', 'Supervisor']);
-
-  // PrepList data
+  const [customRoles, setCustomRoles] = useState<string[]>([]);
+  
+  // Prep management states
   const [prepItems, setPrepItems] = useState<PrepItem[]>([]);
   const [scheduledPreps, setScheduledPreps] = useState<ScheduledPrep[]>([]);
   const [prepSelections, setPrepSelections] = useState<PrepSelections>({});
   
-  // Store data
+  // Store management state
   const [storeItems, setStoreItems] = useState<StoreItem[]>([]);
 
-  // NEW: Inventory data
-  const [dailyItems, setDailyItems] = useState<InventoryItem[]>([]);
-  const [weeklyItems, setWeeklyItems] = useState<InventoryItem[]>([]);
-  const [monthlyItems, setMonthlyItems] = useState<InventoryItem[]>([]);
-  const [databaseItems, setDatabaseItems] = useState<DatabaseItem[]>([]);
-  const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
-  
-  const firebaseService = new FirebaseService();
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Service instances
+  const firebaseService = useRef<FirebaseService | null>(null);
+  const isSavingRef = useRef(false);
   const lastSaveDataRef = useRef<string>('');
-  const isInitializedRef = useRef<boolean>(false);
-  const isSavingRef = useRef<boolean>(false);
 
-  // Enhanced debounced save with inventory data
-  const debouncedSave = useCallback(async () => {
-    if (isSavingRef.current || connectionStatus !== 'connected') {
-      return;
+  // Initialize Firebase service
+  useEffect(() => {
+    if (!firebaseService.current) {
+      firebaseService.current = new FirebaseService();
     }
+  }, []);
 
-    isSavingRef.current = true;
-    
-    // Create complete data hash including inventory
-    const currentDataHash = JSON.stringify({
-      employees: employees.length,
-      tasks: tasks.length,
-      dailyData: Object.keys(dailyData).length,
-      completedTasks: completedTasks.size,
-      taskAssignments: Object.keys(taskAssignments).length,
-      customRoles: customRoles.length,
-      prepItems: prepItems.length,
-      scheduledPreps: scheduledPreps.length,
-      prepSelections: Object.keys(prepSelections).length,
-      storeItems: storeItems.length,
-      // NEW: Include inventory in hash
-      dailyItems: dailyItems.length,
-      weeklyItems: weeklyItems.length,
-      monthlyItems: monthlyItems.length,
-      databaseItems: databaseItems.length,
-      activityLog: activityLog.length
-    });
-
-    if (lastSaveDataRef.current === currentDataHash) {
-      console.log('📦 No changes detected, skipping save');
-      isSavingRef.current = false;
-      return;
-    }
-    
-    try {
-      console.log('🔥 Enhanced save with inventory data...');
-      
-      // Enhanced save with ALL fields including inventory
-      await firebaseService.saveData({
-        employees,
-        tasks,
-        dailyData,
-        completedTasks,
-        taskAssignments,
-        customRoles,
-        prepItems,
-        scheduledPreps,
-        prepSelections,
-        storeItems,
-        // NEW: Include inventory data
-        dailyItems,
-        weeklyItems,
-        monthlyItems,
-        databaseItems,
-        activityLog
-      });
-
-      setLastSync(new Date().toLocaleTimeString());
-      lastSaveDataRef.current = currentDataHash;
-      setConnectionStatus('connected');
-      
-    } catch (error) {
-      console.error('❌ Enhanced save failed:', error);
-      setConnectionStatus('error');
-    } finally {
-      isSavingRef.current = false;
-    }
-  }, [
-    employees, tasks, dailyData, completedTasks, taskAssignments, customRoles,
-    prepItems, scheduledPreps, prepSelections, storeItems,
-    // NEW: Include inventory data in dependencies
-    dailyItems, weeklyItems, monthlyItems, databaseItems, activityLog,
-    connectionStatus
-  ]);
-
-  // Enhanced quick save for immediate inventory operations
+  // Quick save function for individual fields (used by prep list)
   const quickSave = useCallback(async (field: string, data: any): Promise<boolean> => {
-    if (connectionStatus !== 'connected') {
-      console.warn('⛔ Cannot save: offline or error connection');
-      return false;
-    }
-
-    console.log(`🔥 Quick save: ${field}`);
+    if (!firebaseService.current) return false;
     
     try {
-      let saveData = data instanceof Set ? Array.from(data) : data;
-      
-      // Enhanced logging for inventory fields
-      if (field.includes('inventory') || field.includes('Items')) {
-        console.log(`📦 Saving ${field}:`, {
-          count: Array.isArray(saveData) ? saveData.length : 'not array',
-          sample: Array.isArray(saveData) ? saveData.slice(0, 2) : saveData
-        });
-      }
-      
-      const success = await firebaseService.quickSave(field, saveData);
-      
-      if (success) {
-        setLastSync(new Date().toLocaleTimeString());
-        setConnectionStatus('connected');
-      } else {
-        setConnectionStatus('error');
-      }
-      
-      return success;
+      console.log(`💾 Quick save: ${field}`, data);
+      await firebaseService.current.saveField(field, data);
+      setLastSync(new Date());
+      return true;
     } catch (error) {
       console.error(`❌ Quick save failed for ${field}:`, error);
-      setConnectionStatus('error');
       return false;
     }
-  }, [connectionStatus]);
+  }, []);
 
-  // Enhanced save to Firebase with longer debounce
-  const saveToFirebase = useCallback(() => {
-    if (connectionStatus !== 'connected') {
-      console.warn('⛔ Not saving to Firebase: offline or error connection');
-      return;
-    }
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-
-    saveTimeoutRef.current = setTimeout(() => {
-      debouncedSave();
-    }, 2000); // 2 second debounce
-  }, [debouncedSave, connectionStatus]);
-
-  // Enhanced load from Firebase with inventory data
+  // Main data loading function
   const loadFromFirebase = useCallback(async () => {
-    if (isLoading) return;
+    if (!firebaseService.current) return;
 
     setIsLoading(true);
     setConnectionStatus('connecting');
 
     try {
-      console.log('📡 Enhanced loading with inventory data...');
+      console.log('📡 Loading data from Firebase...');
       
-      const loadPromise = firebaseService.loadData();
+      // Load main data with timeout to prevent hanging
+      const loadPromise = firebaseService.current.loadData();
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Load timeout')), 15000)
+        setTimeout(() => reject(new Error('Load timeout')), 10000) // 10 second timeout
       );
 
       const data = await Promise.race([loadPromise, timeoutPromise]) as any;
 
-      // Migrate core data
-      const finalEmployees = migrateEmployeeData(data.employees);
-      const finalTasks = migrateTaskData(data.tasks);
+      const finalEmployees = migrateEmployeeData(data.employees || []);
+      const finalTasks = migrateTaskData(data.tasks || []);
       const finalScheduledPreps = migrateScheduledPreps(data.scheduledPreps || []);
 
-      // Enhanced logging for loaded data
-      console.log('📦 Loaded enhanced data:', {
-        employees: finalEmployees.length,
-        tasks: finalTasks.length,
-        scheduledPreps: finalScheduledPreps.length,
-        // NEW: Log inventory data
-        inventoryData: data.inventoryData ? {
-          dailyItems: data.inventoryData.dailyItems?.length || 0,
-          weeklyItems: data.inventoryData.weeklyItems?.length || 0,
-          monthlyItems: data.inventoryData.monthlyItems?.length || 0,
-          databaseItems: data.inventoryData.databaseItems?.length || 0,
-          activityLog: data.inventoryData.activityLog?.length || 0,
-          version: data.inventoryData.version || 0
-        } : 'No inventory data'
+      // ENHANCED: Debug loaded scheduledPreps data with completion status
+      console.log('🔍 Loading scheduledPreps from Firebase:', {
+        count: finalScheduledPreps.length,
+        todayPreps: finalScheduledPreps.filter((prep: any) => 
+          prep.scheduledDate === getFormattedDate(new Date())
+        ).length,
+        todayCompleted: finalScheduledPreps.filter((prep: any) => 
+          prep.scheduledDate === getFormattedDate(new Date()) && prep.completed === true
+        ).length,
+        sampleData: finalScheduledPreps.slice(0, 5).map((prep: any) => ({
+          id: prep.id,
+          name: prep.name,
+          completed: prep.completed,
+          scheduledDate: prep.scheduledDate
+        })),
+        rawDataSample: data.scheduledPreps ? data.scheduledPreps.slice(0, 3) : 'No raw data'
       });
 
-      // Set core data
-      setEmployees(finalEmployees);
-      setTasks(finalTasks);
-      setDailyData(data.dailyData || {});
+      // Set data immediately
+      setEmployees(finalEmployees.length > 0 ? finalEmployees : getDefaultEmployees());
+      setTasks(finalTasks.length > 0 ? finalTasks : getDefaultTasks());
+      setDailyData(data.dailyData || getEmptyDailyData());
       setCompletedTasks(new Set(data.completedTasks || []));
       setTaskAssignments(data.taskAssignments || {});
-      setCustomRoles(data.customRoles || ['Cleaner', 'Manager', 'Supervisor']);
-      setPrepItems(data.prepItems || []);
+      setCustomRoles(Array.isArray(data.customRoles) ? data.customRoles : []);
+      setPrepItems(Array.isArray(data.prepItems) ? data.prepItems : []);
       setScheduledPreps(finalScheduledPreps);
       setPrepSelections(data.prepSelections || {});
-      setStoreItems(data.storeItems || getDefaultStoreItems());
+      setStoreItems(Array.isArray(data.storeItems) ? data.storeItems : getDefaultStoreItems());
 
-      // NEW: Set inventory data
-      if (data.inventoryData) {
-        setDailyItems(data.inventoryData.dailyItems || []);
-        setWeeklyItems(data.inventoryData.weeklyItems || []);
-        setMonthlyItems(data.inventoryData.monthlyItems || []);
-        setDatabaseItems(data.inventoryData.databaseItems || []);
-        setActivityLog(data.inventoryData.activityLog || []);
-      } else {
-        // Initialize with empty inventory data
-        setDailyItems([]);
-        setWeeklyItems([]);
-        setMonthlyItems([]);
-        setDatabaseItems([]);
-        setActivityLog([]);
-      }
+      // ENHANCED: Log what we actually set for scheduledPreps with completion status
+      const todayStr = getFormattedDate(new Date());
+      const todayPreps = finalScheduledPreps.filter((prep: any) => prep.scheduledDate === todayStr);
+      const todayCompleted = todayPreps.filter((prep: any) => prep.completed === true);
+      
+      console.log('✅ Set scheduledPreps state:', {
+        count: finalScheduledPreps.length,
+        todayCount: todayPreps.length,
+        todayCompletedCount: todayCompleted.length,
+        completionPercentage: todayPreps.length > 0 ? 
+          Math.round((todayCompleted.length / todayPreps.length) * 100) : 0
+      });
 
       setConnectionStatus('connected');
-      setLastSync(new Date().toLocaleTimeString());
-      lastSaveDataRef.current = JSON.stringify({ loaded: true });
-      isInitializedRef.current = true;
-
-      console.log('✅ Enhanced data loaded successfully with inventory');
+      setLastSync(new Date());
+      console.log('✅ Data loaded successfully from Firebase');
 
     } catch (error) {
-      console.error('❌ Enhanced load failed:', error);
+      console.error('❌ Firebase load error:', error);
       setConnectionStatus('error');
-
-      if (!isInitializedRef.current) {
-        console.log('⚠️ Setting defaults due to load failure');
-        setEmployees(getDefaultEmployees());
-        setTasks(getDefaultTasks());
-        setDailyData(getEmptyDailyData());
-        setPrepItems([]);
-        setScheduledPreps([]);
-        setPrepSelections({});
-        setStoreItems(getDefaultStoreItems());
-        // NEW: Set empty inventory defaults
-        setDailyItems([]);
-        setWeeklyItems([]);
-        setMonthlyItems([]);
-        setDatabaseItems([]);
-        setActivityLog([]);
-      }
+      
+      // Load defaults on error
+      setEmployees(getDefaultEmployees());
+      setTasks(getDefaultTasks());
+      setDailyData(getEmptyDailyData());
+      setStoreItems(getDefaultStoreItems());
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading]);
-
-  // NEW: Inventory-specific save functions
-  const saveInventoryData = useCallback(async (data: Partial<InventoryData>): Promise<boolean> => {
-    if (connectionStatus !== 'connected') return false;
-    
-    console.log('🏪 Saving inventory data:', Object.keys(data));
-    return await firebaseService.saveInventoryData(data);
-  }, [connectionStatus]);
-
-  const saveInventoryFrequency = useCallback(async (
-    frequency: 'daily' | 'weekly' | 'monthly', 
-    items: InventoryItem[]
-  ): Promise<boolean> => {
-    if (connectionStatus !== 'connected') return false;
-    
-    console.log(`🗂️ Saving ${frequency} items:`, items.length);
-    return await firebaseService.saveInventoryFrequency(frequency, items);
-  }, [connectionStatus]);
-
-  const saveDatabaseItems = useCallback(async (items: DatabaseItem[]): Promise<boolean> => {
-    if (connectionStatus !== 'connected') return false;
-    
-    console.log('🗄️ Saving database items:', items.length);
-    return await firebaseService.saveDatabaseItems(items);
-  }, [connectionStatus]);
-
-  const saveActivityLog = useCallback(async (log: ActivityLogEntry[]): Promise<boolean> => {
-    if (connectionStatus !== 'connected') return false;
-    
-    console.log('📝 Saving activity log:', log.length);
-    return await firebaseService.saveActivityLog(log);
-  }, [connectionStatus]);
-
-  // NEW: Apply inventory sync operation
-  const applyInventoryOperation = useCallback(async (operation: InventorySyncOperation): Promise<boolean> => {
-    console.log('🔄 Applying inventory operation:', operation.type);
-    return await firebaseService.applyInventoryOperation(operation);
   }, []);
 
-  // Enhanced auto-save with inventory data
-  useEffect(() => {
-    if (isInitializedRef.current && !isSavingRef.current) {
-      const autoSaveTimer = setTimeout(() => {
-        saveToFirebase();
-      }, 1000);
+  // Main data saving function
+  const saveToFirebase = useCallback(async () => {
+    if (!firebaseService.current || isSavingRef.current) return;
+
+    isSavingRef.current = true;
+    setConnectionStatus('connecting');
+
+    try {
+      console.log('💾 Saving data to Firebase...');
       
-      return () => clearTimeout(autoSaveTimer);
-    }
-  }, [
-    employees, tasks, dailyData, completedTasks, taskAssignments, customRoles, scheduledPreps,
-    // NEW: Include inventory in auto-save triggers
-    dailyItems, weeklyItems, monthlyItems, databaseItems
-  ]);
+      const dataToSave = {
+        employees,
+        tasks,
+        dailyData,
+        completedTasks: Array.from(completedTasks),
+        taskAssignments,
+        customRoles,
+        prepItems,
+        scheduledPreps,
+        prepSelections,
+        storeItems
+      };
 
-  // Separate effect for activity log (less frequent saves)
-  useEffect(() => {
-    if (isInitializedRef.current) {
-      const timer = setTimeout(() => {
-        saveToFirebase();
-      }, 5000); // 5 second delay for activity log
+      await firebaseService.current.saveData(dataToSave);
       
-      return () => clearTimeout(timer);
+      setConnectionStatus('connected');
+      setLastSync(new Date());
+      console.log('✅ Data saved successfully to Firebase');
+
+    } catch (error) {
+      console.error('❌ Firebase save error:', error);
+      setConnectionStatus('error');
+    } finally {
+      isSavingRef.current = false;
     }
-  }, [activityLog]);
+  }, [employees, tasks, dailyData, completedTasks, taskAssignments, customRoles, 
+      prepItems, scheduledPreps, prepSelections, storeItems]);
 
-  // Enhanced real-time listeners including inventory
-  const firebaseAppRef = useRef<any>(null);
-  const dbRef = useRef<any>(null);
-  
-  if (!firebaseAppRef.current) {
-    firebaseAppRef.current = initializeApp(FIREBASE_CONFIG);
-    dbRef.current = getDatabase(firebaseAppRef.current);
-  }
-
+  // Real-time data listeners
   useEffect(() => {
-    const db = dbRef.current;
-    if (!db) return;
+    if (!firebaseService.current) return;
 
-    console.log('🔄 Setting up enhanced real-time listeners with inventory...');
+    const app = initializeApp(FIREBASE_CONFIG);
+    const db = getDatabase(app);
 
-    // Existing listeners
+    // Employees
     const employeesRef = ref(db, 'employees');
     const handleEmployees = (snapshot: any) => {
       const data = snapshot.val() || [];
-      setEmployees(Array.isArray(data) ? data : Object.values(data));
+      const migrated = migrateEmployeeData(Array.isArray(data) ? data : Object.values(data));
+      setEmployees(migrated.length > 0 ? migrated : getDefaultEmployees());
     };
     onValue(employeesRef, handleEmployees);
 
+    // Tasks
     const tasksRef = ref(db, 'tasks');
     const handleTasks = (snapshot: any) => {
       const data = snapshot.val() || [];
-      setTasks(Array.isArray(data) ? data : Object.values(data));
+      const migrated = migrateTaskData(Array.isArray(data) ? data : Object.values(data));
+      setTasks(migrated.length > 0 ? migrated : getDefaultTasks());
     };
     onValue(tasksRef, handleTasks);
 
+    // DailyData
     const dailyDataRef = ref(db, 'dailyData');
     const handleDailyData = (snapshot: any) => {
-      setDailyData(snapshot.val() || {});
+      setDailyData(snapshot.val() || getEmptyDailyData());
     };
     onValue(dailyDataRef, handleDailyData);
 
+    // CompletedTasks
     const completedTasksRef = ref(db, 'completedTasks');
     const handleCompletedTasks = (snapshot: any) => {
-      const data = snapshot.val() || [];
-      setCompletedTasks(new Set(data));
+      setCompletedTasks(new Set(snapshot.val() || []));
     };
     onValue(completedTasksRef, handleCompletedTasks);
 
+    // TaskAssignments
     const taskAssignmentsRef = ref(db, 'taskAssignments');
     const handleTaskAssignments = (snapshot: any) => {
       setTaskAssignments(snapshot.val() || {});
     };
     onValue(taskAssignmentsRef, handleTaskAssignments);
 
+    // CustomRoles
     const customRolesRef = ref(db, 'customRoles');
     const handleCustomRoles = (snapshot: any) => {
-      setCustomRoles(snapshot.val() || ['Cleaner', 'Manager', 'Supervisor']);
+      setCustomRoles(Array.isArray(snapshot.val()) ? snapshot.val() : []);
     };
     onValue(customRolesRef, handleCustomRoles);
 
+    // PrepItems
     const prepItemsRef = ref(db, 'prepItems');
     const handlePrepItems = (snapshot: any) => {
       const data = snapshot.val() || [];
@@ -417,6 +275,7 @@ export const useFirebaseData = () => {
     };
     onValue(prepItemsRef, handlePrepItems);
 
+    // ScheduledPreps
     const scheduledPrepsRef = ref(db, 'scheduledPreps');
     const handleScheduledPreps = (snapshot: any) => {
       const data = snapshot.val() || [];
@@ -425,12 +284,14 @@ export const useFirebaseData = () => {
     };
     onValue(scheduledPrepsRef, handleScheduledPreps);
 
+    // PrepSelections
     const prepSelectionsRef = ref(db, 'prepSelections');
     const handlePrepSelections = (snapshot: any) => {
       setPrepSelections(snapshot.val() || {});
     };
     onValue(prepSelectionsRef, handlePrepSelections);
 
+    // StoreItems
     const storeItemsRef = ref(db, 'storeItems');
     const handleStoreItems = (snapshot: any) => {
       const data = snapshot.val() || [];
@@ -438,24 +299,8 @@ export const useFirebaseData = () => {
     };
     onValue(storeItemsRef, handleStoreItems);
 
-    // NEW: Inventory real-time listeners
-    const inventoryDataRef = ref(db, 'inventoryData');
-    const handleInventoryData = (snapshot: any) => {
-      const data = snapshot.val();
-      if (data) {
-        console.log('🔄 Real-time inventory update received');
-        setDailyItems(data.dailyItems || []);
-        setWeeklyItems(data.weeklyItems || []);
-        setMonthlyItems(data.monthlyItems || []);
-        setDatabaseItems(data.databaseItems || []);
-        setActivityLog(data.activityLog || []);
-      }
-    };
-    onValue(inventoryDataRef, handleInventoryData);
-
-    // Cleanup function
+    // Cleanup
     return () => {
-      console.log('🧹 Cleaning up enhanced real-time listeners');
       off(employeesRef, 'value', handleEmployees);
       off(tasksRef, 'value', handleTasks);
       off(dailyDataRef, 'value', handleDailyData);
@@ -466,16 +311,18 @@ export const useFirebaseData = () => {
       off(scheduledPrepsRef, 'value', handleScheduledPreps);
       off(prepSelectionsRef, 'value', handlePrepSelections);
       off(storeItemsRef, 'value', handleStoreItems);
-      // NEW: Cleanup inventory listeners
-      off(inventoryDataRef, 'value', handleInventoryData);
     };
   }, []);
 
-  // Apply task sync operation (existing)
+  // Apply task sync operation
   const applyTaskSyncOperation = (op: SyncOperation) => {
-    // Implementation for task operations
-    console.log('🔄 Applying task sync operation:', op);
+    setTasks(prev => applyTaskOperation(prev, op));
   };
+
+  // Initial data load
+  useEffect(() => {
+    loadFromFirebase();
+  }, [loadFromFirebase]);
 
   return {
     // State
@@ -492,12 +339,6 @@ export const useFirebaseData = () => {
     scheduledPreps,
     prepSelections,
     storeItems,
-    // NEW: Inventory state
-    dailyItems,
-    weeklyItems,
-    monthlyItems,
-    databaseItems,
-    activityLog,
 
     // Setters
     setEmployees,
@@ -510,30 +351,15 @@ export const useFirebaseData = () => {
     setScheduledPreps,
     setPrepSelections,
     setStoreItems,
-    // NEW: Inventory setters
-    setDailyItems,
-    setWeeklyItems,
-    setMonthlyItems,
-    setDatabaseItems,
-    setActivityLog,
 
     // Actions
     loadFromFirebase,
     saveToFirebase,
     quickSave,
-    // NEW: Inventory actions
-    saveInventoryData,
-    saveInventoryFrequency,
-    saveDatabaseItems,
-    saveActivityLog,
-    applyInventoryOperation,
-
-    // Sync operations
     applyTaskSyncOperation
   };
 };
 
-// Enhanced Auth hook (unchanged)
 export const useAuth = () => {
   const [currentUser, setCurrentUser] = useState<CurrentUser>({ id: 1, name: 'Luka' });
   const [isAdmin, setIsAdmin] = useState(false);
@@ -563,9 +389,14 @@ export const useAuth = () => {
   };
 };
 
-// Enhanced task realtime sync hook (simplified)
 export const useTaskRealtimeSync = (applyTaskSyncOperation: (op: SyncOperation) => void) => {
-  // Enhanced real-time sync handled by Firebase listeners in useFirebaseData
-  console.log('🔄 Enhanced task realtime sync initialized');
-  return { status: 'connected' };
+  // Real-time sync handled by Firebase listeners in useFirebaseData
+  // This hook can be extended for additional sync functionality if needed
+  
+  useEffect(() => {
+    console.log('🔄 Task real-time sync initialized');
+    return () => {
+      console.log('🔄 Task real-time sync cleaned up');
+    };
+  }, [applyTaskSyncOperation]);
 };
