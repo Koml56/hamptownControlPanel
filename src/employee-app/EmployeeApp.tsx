@@ -1,4 +1,4 @@
-// EmployeeApp.tsx - Enhanced with Firebase-integrated Restaurant Inventory
+// EmployeeApp.tsx - Updated with Restaurant Inventory tab integration
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Users, 
@@ -14,10 +14,7 @@ import {
   Check, 
   ShoppingBag, 
   ChefHat,
-  UtensilsCrossed, // Inventory icon
-  Cloud,
-  CloudOff,
-  Wifi
+  UtensilsCrossed // New icon for inventory
 } from 'lucide-react';
 
 // Components
@@ -27,7 +24,7 @@ import Store from './Store';
 import AdminPanel from './AdminPanel';
 import DailyReports from './DailyReports';
 import PrepListPrototype from './PrepListPrototype';
-import RestaurantInventory from './inventory/RestaurantInventory'; // Enhanced inventory
+import RestaurantInventory from './inventory/RestaurantInventory'; // NEW: Inventory component
 import SyncStatusIndicator from './SyncStatusIndicator';
 
 // Hooks and Functions
@@ -35,14 +32,14 @@ import { useFirebaseData, useAuth, useTaskRealtimeSync } from './hooks';
 import { handleAdminLogin } from './adminFunctions';
 import { offlineQueue, resolveTaskConflicts } from './taskOperations';
 import { applyEmployeeOperation, resolveEmployeeConflicts } from './employeeOperations';
-import type { SyncOperation } from './OperationManager';
+// REMOVED: import type { SyncOperation } from './OperationManager'; // ❌ This was duplicate
 
 // Types and Constants
 import { getFormattedDate } from './utils';
 import { getDefaultStoreItems } from './defaultData';
 import type { ActiveTab, Employee, Task, DailyDataMap, TaskAssignments, StoreItem, SyncOperation } from './types';
 
-// Extended ActiveTab type to include inventory
+// Extend ActiveTab type to include inventory
 type ExtendedActiveTab = ActiveTab | 'inventory';
 
 const EmployeeApp: React.FC = () => {
@@ -106,6 +103,12 @@ const EmployeeApp: React.FC = () => {
   const [adminPassword, setAdminPassword] = useState('');
   const [showAdminLogin, setShowAdminLogin] = useState(false);
 
+  // Add userMood state for MoodTracker
+  const [userMood, setUserMood] = React.useState(() => {
+    const currentEmployee = employees.find(emp => emp.id === currentUser.id);
+    return currentEmployee?.mood || 3;
+  });
+
   // Enhanced sync status tracking
   const [syncStats, setSyncStats] = useState({
     lastInventorySync: null as string | null,
@@ -166,6 +169,14 @@ const EmployeeApp: React.FC = () => {
     loadFromFirebase();
   }, [loadFromFirebase]);
 
+  // Update userMood when currentUser or employees change
+  useEffect(() => {
+    const currentEmployee = employees.find(emp => emp.id === currentUser.id);
+    if (currentEmployee) {
+      setUserMood(currentEmployee.mood);
+    }
+  }, [currentUser.id, employees]);
+
   // Enhanced tab configuration with inventory
   const tabs = [
     { id: 'mood' as const, label: 'Mood', icon: TrendingUp, color: 'blue' },
@@ -183,20 +194,6 @@ const EmployeeApp: React.FC = () => {
   ];
 
   const currentTabs = isAdmin ? adminTabs : tabs;
-
-  // Add userMood state for MoodTracker
-  const [userMood, setUserMood] = React.useState(() => {
-    const currentEmployee = employees.find(emp => emp.id === currentUser.id);
-    return currentEmployee?.mood || 3;
-  });
-
-  // Update userMood when currentUser or employees change
-  useEffect(() => {
-    const currentEmployee = employees.find(emp => emp.id === currentUser.id);
-    if (currentEmployee) {
-      setUserMood(currentEmployee.mood);
-    }
-  }, [currentUser.id, employees]);
 
   // Enhanced tab rendering with inventory
   const renderTabContent = () => {
@@ -325,11 +322,11 @@ const EmployeeApp: React.FC = () => {
             <div className="mt-2 space-y-1">
               <div className="flex items-center text-xs">
                 {connectionStatus === 'connected' ? (
-                  <Cloud className="w-3 h-3 text-green-500 mr-1" />
+                  <div className="w-3 h-3 bg-green-500 rounded-full mr-1" />
                 ) : connectionStatus === 'error' ? (
-                  <CloudOff className="w-3 h-3 text-red-500 mr-1" />
+                  <div className="w-3 h-3 bg-red-500 rounded-full mr-1" />
                 ) : (
-                  <Wifi className="w-3 h-3 text-yellow-500 mr-1" />
+                  <div className="w-3 h-3 bg-yellow-500 rounded-full mr-1" />
                 )}
                 <span className="text-gray-600">
                   {connectionStatus === 'connected' ? 'Online & Synced' : 
@@ -457,7 +454,7 @@ const EmployeeApp: React.FC = () => {
               <SyncStatusIndicator 
                 connectionStatus={connectionStatus} 
                 lastSync={lastSync}
-                additionalInfo={`${databaseItems.length} inventory items`}
+                additionalInfo={`${databaseItems?.length || 0} inventory items`}
               />
               {renderUserInfo()}
             </div>
@@ -492,7 +489,7 @@ const EmployeeApp: React.FC = () => {
                   <span className="font-medium">{tab.label}</span>
                   
                   {/* Enhanced badge indicators */}
-                  {tab.id === 'inventory' && databaseItems.length > 0 && (
+                  {tab.id === 'inventory' && databaseItems && databaseItems.length > 0 && (
                     <span className={`ml-1 px-2 py-1 text-xs rounded-full ${
                       isActive ? 'bg-teal-100 text-teal-800' : 'bg-white/20 text-white'
                     }`}>
@@ -500,7 +497,7 @@ const EmployeeApp: React.FC = () => {
                     </span>
                   )}
                   
-                  {tab.id === 'tasks' && Array.from(completedTasks).length > 0 && (
+                  {tab.id === 'tasks' && completedTasks && Array.from(completedTasks).length > 0 && (
                     <span className={`ml-1 px-2 py-1 text-xs rounded-full ${
                       isActive ? 'bg-green-100 text-green-800' : 'bg-white/20 text-white'
                     }`}>
