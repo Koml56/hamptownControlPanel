@@ -1,4 +1,6 @@
-// types.ts
+// types.ts - Updated with comprehensive inventory support
+import type { InventoryItem, DatabaseItem, ActivityLogEntry, InventoryFrequency, InventoryCategory } from './inventory/types';
+
 export interface Employee {
   id: number;
   name: string;
@@ -117,7 +119,7 @@ export interface CurrentUser {
 
 export type Priority = 'low' | 'medium' | 'high';
 export type ConnectionStatus = 'connecting' | 'connected' | 'error';
-export type ActiveTab = 'mood' | 'tasks' | 'store' | 'admin' | 'reports' | 'prep';
+export type ActiveTab = 'mood' | 'tasks' | 'store' | 'admin' | 'reports' | 'prep' | 'inventory';
 
 // Admin Panel Props Interface
 export interface AdminPanelProps {
@@ -132,4 +134,142 @@ export interface AdminPanelProps {
   setStoreItems: (updater: (prev: StoreItem[]) => StoreItem[]) => void;
   setPrepItems: (updater: (prev: PrepItem[]) => PrepItem[]) => void;
   quickSave: (field: string, data: any) => Promise<any>;
+}
+
+// ================== NEW: INVENTORY DATA TYPES ==================
+
+// Enhanced inventory data types for Firebase
+export interface InventoryData {
+  dailyItems: InventoryItem[];
+  weeklyItems: InventoryItem[];
+  monthlyItems: InventoryItem[];
+  databaseItems: DatabaseItem[];
+  activityLog: ActivityLogEntry[];
+  lastUpdated: string;
+  version: number;
+}
+
+// Complete app data structure for Firebase
+export interface AppData {
+  employees: Employee[];
+  tasks: Task[];
+  dailyData: DailyDataMap;
+  completedTasks: number[];
+  taskAssignments: TaskAssignments;
+  customRoles: string[];
+  prepItems: PrepItem[];
+  scheduledPreps: ScheduledPrep[];
+  prepSelections: PrepSelections;
+  storeItems: StoreItem[];
+  // NEW: Add inventory data
+  inventoryData: InventoryData;
+  // Metadata
+  lastUpdated: string;
+  version: number;
+}
+
+// Inventory sync operations for real-time updates
+export interface InventorySyncOperation {
+  type: 'update_stock' | 'add_item' | 'remove_item' | 'assign_item' | 'unassign_item' | 'report_waste' | 'import_items';
+  payload: any;
+  frequency?: InventoryFrequency;
+  itemId?: number | string;
+  timestamp: string;
+  userId: string;
+  device: string;
+}
+
+// Extended sync event types
+export type SyncEventType = 
+  | 'data_update' 
+  | 'device_join' 
+  | 'device_leave' 
+  | 'conflict_resolution' 
+  | 'full_sync'
+  | 'inventory_update'
+  | 'inventory_conflict';
+
+export interface SyncEvent {
+  type: SyncEventType;
+  timestamp: number;
+  deviceId: string;
+  deviceName: string;
+  data?: any;
+  field?: string;
+  description?: string;
+  inventoryData?: Partial<InventoryData>;
+}
+
+// Enhanced device info with inventory sync capabilities
+export interface DeviceInfo {
+  id: string;
+  name: string;
+  lastSeen: number;
+  user: string;
+  platform: string;
+  isActive: boolean;
+  browserInfo: string;
+  ipAddress?: string;
+  inventoryVersion?: number;
+  lastInventorySync?: number;
+}
+
+// Task sync operation interface (existing)
+export interface SyncOperation {
+  type: string;
+  payload: any;
+  timestamp: string;
+  userId: string;
+  device: string;
+}
+
+// Re-export inventory types for convenience
+export type {
+  InventoryItem,
+  DatabaseItem,
+  ActivityLogEntry,
+  InventoryFrequency,
+  InventoryCategory,
+  WasteReason,
+  ActivityType,
+  StockStatus
+} from './inventory/types';
+
+// Extended InventoryContextType with Firebase support
+export interface InventoryContextType {
+  // Data
+  dailyItems: InventoryItem[];
+  weeklyItems: InventoryItem[];
+  monthlyItems: InventoryItem[];
+  databaseItems: DatabaseItem[];
+  activityLog: ActivityLogEntry[];
+  selectedItems: Set<number | string>;
+  
+  // UI State
+  currentTab: InventoryFrequency | 'reports';
+  
+  // Actions
+  setDailyItems: (items: InventoryItem[]) => void;
+  setWeeklyItems: (items: InventoryItem[]) => void;
+  setMonthlyItems: (items: InventoryItem[]) => void;
+  setDatabaseItems: (items: DatabaseItem[]) => void;
+  setActivityLog: (log: ActivityLogEntry[]) => void;
+  addActivityEntry: (entry: Omit<ActivityLogEntry, 'id' | 'timestamp'>) => void;
+  updateItemStock: (itemId: number | string, newStock: number, frequency: InventoryFrequency, employee: string, notes?: string) => void;
+  reportWaste: (itemId: number | string, amount: number, reason: WasteReason, frequency: InventoryFrequency, employee: string, notes?: string) => void;
+  importFromExcel: (data: any[]) => void;
+  addManualItem: (item: Omit<DatabaseItem, 'id' | 'frequency'>) => void;
+  assignToCategory: (itemIds: (number | string)[], frequency: InventoryFrequency, category: InventoryCategory, minLevel: number, initialStock: number) => void;
+  unassignFromCategory: (itemId: number | string) => void;
+  cleanupDuplicates: () => void;
+  deleteItems: (itemIds: (number | string)[]) => void;
+  toggleItemSelection: (itemId: number | string) => void;
+  clearSelection: () => void;
+  switchTab: (tab: InventoryFrequency | 'reports') => void;
+  connectionStatus?: ConnectionStatus;
+}
+
+export interface InventoryTabProps {
+  currentUser: CurrentUser;
+  connectionStatus: ConnectionStatus;
 }
