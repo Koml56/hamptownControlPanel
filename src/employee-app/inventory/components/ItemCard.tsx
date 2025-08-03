@@ -1,7 +1,7 @@
 // src/employee-app/inventory/components/ItemCard.tsx
 import React from 'react';
 import { Edit3, Trash2 } from 'lucide-react';
-import { InventoryItem } from '../types';
+import { InventoryItem } from '../../types';
 import { getCategoryIcon, getStockStatus } from '../utils';
 
 interface ItemCardProps {

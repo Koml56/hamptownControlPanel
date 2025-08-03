@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useInventory } from '../InventoryContext';
-import { InventoryFrequency, WasteReason } from '../types';
+import { InventoryFrequency, WasteReason } from '../../types';
 
 interface WasteModalProps {
   frequency: InventoryFrequency;

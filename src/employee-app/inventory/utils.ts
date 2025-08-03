@@ -1,5 +1,5 @@
 // src/employee-app/inventory/utils.ts
-import type { InventoryCategory, StockStatus, InventoryFrequency } from './types';
+import type { InventoryCategory, StockStatus, InventoryFrequency } from '../types';
 
 export const getCategoryIcon = (category: InventoryCategory | string | undefined): string => {
   if (!category) return '❓';

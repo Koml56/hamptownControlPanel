@@ -13,7 +13,10 @@ import type {
   PrepItem,
   ScheduledPrep,
   PrepSelections,
-  StoreItem
+  StoreItem,
+  InventoryItem,
+  DatabaseItem,
+  ActivityLogEntry
 } from './types';
 import type { SyncOperation } from './OperationManager';
 import { getDatabase, ref, onValue, off } from 'firebase/database';
@@ -89,6 +92,13 @@ export const useFirebaseData = () => {
   
   // Store data
   const [storeItems, setStoreItems] = useState<StoreItem[]>([]);
+  
+  // Inventory data
+  const [inventoryDailyItems, setInventoryDailyItems] = useState<InventoryItem[]>([]);
+  const [inventoryWeeklyItems, setInventoryWeeklyItems] = useState<InventoryItem[]>([]);
+  const [inventoryMonthlyItems, setInventoryMonthlyItems] = useState<InventoryItem[]>([]);
+  const [inventoryDatabaseItems, setInventoryDatabaseItems] = useState<DatabaseItem[]>([]);
+  const [inventoryActivityLog, setInventoryActivityLog] = useState<ActivityLogEntry[]>([]);
   
   const firebaseService = new FirebaseService();
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -249,7 +259,12 @@ export const useFirebaseData = () => {
       prepItemsLength: prepItems.length,
       scheduledPrepsLength: scheduledPreps.length,
       prepSelectionsKeys: Object.keys(prepSelections).length,
-      storeItemsLength: storeItems.length
+      storeItemsLength: storeItems.length,
+      inventoryDailyItemsLength: inventoryDailyItems.length,
+      inventoryWeeklyItemsLength: inventoryWeeklyItems.length,
+      inventoryMonthlyItemsLength: inventoryMonthlyItems.length,
+      inventoryDatabaseItemsLength: inventoryDatabaseItems.length,
+      inventoryActivityLogLength: inventoryActivityLog.length
     });
 
     if (currentDataHash === lastSaveDataRef.current) {
@@ -272,7 +287,13 @@ export const useFirebaseData = () => {
         prepItems,
         scheduledPreps,
         prepSelections,
-        storeItems
+        storeItems,
+        // Inventory fields
+        inventoryDailyItems,
+        inventoryWeeklyItems,
+        inventoryMonthlyItems,
+        inventoryDatabaseItems,
+        inventoryActivityLog
       });
 
       setLastSync(new Date().toLocaleTimeString());
@@ -288,6 +309,7 @@ export const useFirebaseData = () => {
   }, [
     employees, tasks, dailyData, completedTasks, taskAssignments, customRoles,
     prepItems, scheduledPreps, prepSelections, storeItems,
+    inventoryDailyItems, inventoryWeeklyItems, inventoryMonthlyItems, inventoryDatabaseItems, inventoryActivityLog,
     connectionStatus, debouncedBatchSync
   ]);
 
@@ -358,6 +380,13 @@ export const useFirebaseData = () => {
       setScheduledPreps(finalScheduledPreps);
       setPrepSelections(data.prepSelections || {});
       setStoreItems(data.storeItems || getDefaultStoreItems());
+      
+      // Set inventory data
+      setInventoryDailyItems(data.inventoryDailyItems || []);
+      setInventoryWeeklyItems(data.inventoryWeeklyItems || []);
+      setInventoryMonthlyItems(data.inventoryMonthlyItems || []);
+      setInventoryDatabaseItems(data.inventoryDatabaseItems || []);
+      setInventoryActivityLog(data.inventoryActivityLog || []);
 
       // ENHANCED: Log what we actually set for scheduledPreps with completion status
       const todayStr = getFormattedDate(new Date());
@@ -536,6 +565,11 @@ export const useFirebaseData = () => {
     scheduledPreps,
     prepSelections,
     storeItems,
+    inventoryDailyItems,
+    inventoryWeeklyItems,
+    inventoryMonthlyItems,
+    inventoryDatabaseItems,
+    inventoryActivityLog,
 
     // Setters
     setEmployees,
@@ -548,6 +582,11 @@ export const useFirebaseData = () => {
     setScheduledPreps,
     setPrepSelections,
     setStoreItems,
+    setInventoryDailyItems,
+    setInventoryWeeklyItems,
+    setInventoryMonthlyItems,
+    setInventoryDatabaseItems,
+    setInventoryActivityLog,
 
     // Actions
     loadFromFirebase,

@@ -7,9 +7,9 @@ import {
   InventoryFrequency, 
   InventoryCategory, 
   WasteReason, 
-  ActivityType,
-  InventoryContextType 
-} from './types';
+  ActivityType
+} from '../types'; // Import from main types.ts
+import { InventoryContextType } from './types'; // Local context type
 import { generateId, showToast } from './utils';
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
@@ -24,21 +24,42 @@ export const useInventory = () => {
 
 interface InventoryProviderProps {
   children: React.ReactNode;
+  // Firebase props
+  inventoryDailyItems: InventoryItem[];
+  inventoryWeeklyItems: InventoryItem[];
+  inventoryMonthlyItems: InventoryItem[];
+  inventoryDatabaseItems: DatabaseItem[];
+  inventoryActivityLog: ActivityLogEntry[];
+  setInventoryDailyItems: (items: InventoryItem[]) => void;
+  setInventoryWeeklyItems: (items: InventoryItem[]) => void;
+  setInventoryMonthlyItems: (items: InventoryItem[]) => void;
+  setInventoryDatabaseItems: (items: DatabaseItem[]) => void;
+  setInventoryActivityLog: (log: ActivityLogEntry[]) => void;
+  quickSave: (field: string, data: any) => Promise<boolean>;
 }
 
-// Empty initial data - no default items
-const initialDailyItems: InventoryItem[] = [];
-const initialWeeklyItems: InventoryItem[] = [];
-const initialMonthlyItems: InventoryItem[] = [];
-const initialActivityLog: ActivityLogEntry[] = [];
-
-export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }) => {
-  // State - All start with empty arrays
-  const [dailyItems, setDailyItems] = useState<InventoryItem[]>(initialDailyItems);
-  const [weeklyItems, setWeeklyItems] = useState<InventoryItem[]>(initialWeeklyItems);
-  const [monthlyItems, setMonthlyItems] = useState<InventoryItem[]>(initialMonthlyItems);
-  const [databaseItems, setDatabaseItems] = useState<DatabaseItem[]>([]);
-  const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>(initialActivityLog);
+export const InventoryProvider: React.FC<InventoryProviderProps> = ({ 
+  children,
+  inventoryDailyItems,
+  inventoryWeeklyItems,
+  inventoryMonthlyItems,
+  inventoryDatabaseItems,
+  inventoryActivityLog,
+  setInventoryDailyItems,
+  setInventoryWeeklyItems,
+  setInventoryMonthlyItems,
+  setInventoryDatabaseItems,
+  setInventoryActivityLog,
+  quickSave
+}) => {
+  // Use Firebase state instead of local state
+  const dailyItems = inventoryDailyItems;
+  const weeklyItems = inventoryWeeklyItems;
+  const monthlyItems = inventoryMonthlyItems;
+  const databaseItems = inventoryDatabaseItems;
+  const activityLog = inventoryActivityLog;
+  
+  // UI-only state (not synced to Firebase)
   const [selectedItems, setSelectedItems] = useState<Set<number | string>>(new Set());
   const [currentTab, setCurrentTab] = useState<InventoryFrequency | 'reports'>('daily');
 
@@ -52,24 +73,35 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
     }
   };
 
-  // Helper function to set items by frequency
+  // Helper function to set items by frequency with Firebase sync
   const setItemsByFrequency = (frequency: InventoryFrequency, items: InventoryItem[]): void => {
     switch (frequency) {
-      case 'daily': setDailyItems(items); break;
-      case 'weekly': setWeeklyItems(items); break;
-      case 'monthly': setMonthlyItems(items); break;
+      case 'daily': 
+        setInventoryDailyItems(items);
+        quickSave('inventoryDailyItems', items);
+        break;
+      case 'weekly': 
+        setInventoryWeeklyItems(items);
+        quickSave('inventoryWeeklyItems', items);
+        break;
+      case 'monthly': 
+        setInventoryMonthlyItems(items);
+        quickSave('inventoryMonthlyItems', items);
+        break;
     }
   };
 
-  // Add activity entry
+  // Add activity entry with Firebase sync
   const addActivityEntry = useCallback((entry: Omit<ActivityLogEntry, 'id' | 'timestamp'>) => {
     const newEntry: ActivityLogEntry = {
       ...entry,
       id: generateId(),
       timestamp: new Date().toLocaleString()
     };
-    setActivityLog(prev => [newEntry, ...prev]);
-  }, []);
+    const updatedLog = [newEntry, ...activityLog];
+    setInventoryActivityLog(updatedLog);
+    quickSave('inventoryActivityLog', updatedLog);
+  }, [activityLog, setInventoryActivityLog, quickSave]);
 
   // Update item stock
   const updateItemStock = useCallback((
@@ -151,9 +183,11 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
     showToast(`Successfully reported waste of ${amount} ${item.unit} ${item.name}!`);
   }, [addActivityEntry]);
 
-  // Import from Excel
+  // Import from Excel with Firebase sync
   const importFromExcel = useCallback((data: any[]) => {
-    setDatabaseItems(prev => [...prev, ...data]);
+    const updatedDatabaseItems = [...databaseItems, ...data];
+    setInventoryDatabaseItems(updatedDatabaseItems);
+    quickSave('inventoryDatabaseItems', updatedDatabaseItems);
     showToast(`Imported ${data.length} items to database`);
     
     addActivityEntry({
@@ -163,9 +197,9 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
       unit: 'items',
       employee: 'System'
     });
-  }, [addActivityEntry]);
+  }, [databaseItems, setInventoryDatabaseItems, quickSave, addActivityEntry]);
 
-  // Add manual item
+  // Add manual item with Firebase sync
   const addManualItem = useCallback((item: Omit<DatabaseItem, 'id' | 'frequency'>) => {
     const newItem: DatabaseItem = {
       ...item,
@@ -174,7 +208,9 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
       isAssigned: false
     };
     
-    setDatabaseItems(prev => [...prev, newItem]);
+    const updatedDatabaseItems = [...databaseItems, newItem];
+    setInventoryDatabaseItems(updatedDatabaseItems);
+    quickSave('inventoryDatabaseItems', updatedDatabaseItems);
     showToast('Item added to database successfully');
     
     addActivityEntry({
@@ -184,7 +220,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
       unit: 'item',
       employee: 'Current User'
     });
-  }, [addActivityEntry]);
+  }, [databaseItems, setInventoryDatabaseItems, quickSave, addActivityEntry]);
 
   // Assign items to category - FIXED: Handle existing assignments without duplicating
   const assignToCategory = useCallback((
@@ -268,8 +304,8 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
       }
     });
     
-    // Update database items to show assignment status
-    setDatabaseItems(prev => prev.map(item => 
+    // Update database items to show assignment status with Firebase sync
+    const updatedDatabaseItems = databaseItems.map(item => 
       itemIds.includes(item.id) 
         ? { 
             ...item, 
@@ -279,7 +315,9 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
             assignedDate: new Date().toISOString().split('T')[0]
           }
         : item
-    ));
+    );
+    setInventoryDatabaseItems(updatedDatabaseItems);
+    quickSave('inventoryDatabaseItems', updatedDatabaseItems);
     
     setSelectedItems(new Set());
     
@@ -322,8 +360,8 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
       }
     });
 
-    // Update database item to show unassigned status
-    setDatabaseItems(prev => prev.map(item => 
+    // Update database item to show unassigned status with Firebase sync
+    const updatedDatabaseItems = databaseItems.map(item => 
       item.id === itemId 
         ? { 
             ...item, 
@@ -333,7 +371,9 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
             assignedDate: undefined
           }
         : item
-    ));
+    );
+    setInventoryDatabaseItems(updatedDatabaseItems);
+    quickSave('inventoryDatabaseItems', updatedDatabaseItems);
 
     showToast(`Successfully unassigned ${dbItem.name} from inventory (removed all duplicates)`);
   }, [databaseItems]);
@@ -351,10 +391,12 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
       });
     });
     
-    setDatabaseItems(prev => prev.filter(item => !itemIds.includes(item.id)));
+    const updatedDatabaseItems = databaseItems.filter(item => !itemIds.includes(item.id));
+    setInventoryDatabaseItems(updatedDatabaseItems);
+    quickSave('inventoryDatabaseItems', updatedDatabaseItems);
     setSelectedItems(new Set());
     showToast(`Deleted ${itemIds.length} items from database`);
-  }, []);
+  }, [databaseItems, setInventoryDatabaseItems, quickSave]);
 
   // Toggle item selection
   const toggleItemSelection = useCallback((itemId: number | string) => {
@@ -422,11 +464,11 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({ children }
     currentTab,
     
     // Actions
-    setDailyItems,
-    setWeeklyItems,
-    setMonthlyItems,
-    setDatabaseItems,
-    setActivityLog,
+    setDailyItems: setInventoryDailyItems,
+    setWeeklyItems: setInventoryWeeklyItems,
+    setMonthlyItems: setInventoryMonthlyItems,
+    setDatabaseItems: setInventoryDatabaseItems,
+    setActivityLog: setInventoryActivityLog,
     addActivityEntry,
     updateItemStock,
     reportWaste,

@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Upload, Plus, Download, Search, Edit3, Trash2, X, Check, AlertTriangle } from 'lucide-react';
 import { useInventory } from '../InventoryContext';
 import { getCategoryIcon } from '../utils';
-import { InventoryFrequency, InventoryCategory, DatabaseItem } from '../types';
+import { InventoryFrequency, InventoryCategory, DatabaseItem } from '../../types';
 import ImportModal from './ImportModal';
 import ManualItemModal from './ManualItemModal';
 import CategoryModal from './CategoryModal';
