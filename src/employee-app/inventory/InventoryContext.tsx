@@ -382,21 +382,50 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
   const deleteItems = useCallback((itemIds: (number | string)[]) => {
     if (itemIds.length === 0) return;
     
-    // Also remove from inventory lists if assigned
-    itemIds.forEach(itemId => {
-      ['daily', 'weekly', 'monthly'].forEach(freq => {
-        const items = getItemsByFrequency(freq as InventoryFrequency);
-        const updatedItems = items.filter(item => item.databaseId !== itemId);
-        setItemsByFrequency(freq as InventoryFrequency, updatedItems);
-      });
+    // FIXED: Batch all updates to prevent infinite loop
+    const frequencies: InventoryFrequency[] = ['daily', 'weekly', 'monthly'];
+    const updatedItemsByFrequency: Record<InventoryFrequency, InventoryItem[]> = {} as any;
+    
+    // Collect all updates first
+    frequencies.forEach(freq => {
+      const items = getItemsByFrequency(freq);
+      const updatedItems = items.filter(item => !itemIds.includes(item.databaseId || ''));
+      updatedItemsByFrequency[freq] = updatedItems;
     });
     
+    // Apply all updates without calling quickSave for each one
+    updatedItemsByFrequency.daily.length !== dailyItems.length && setInventoryDailyItems(updatedItemsByFrequency.daily);
+    updatedItemsByFrequency.weekly.length !== weeklyItems.length && setInventoryWeeklyItems(updatedItemsByFrequency.weekly);
+    updatedItemsByFrequency.monthly.length !== monthlyItems.length && setInventoryMonthlyItems(updatedItemsByFrequency.monthly);
+    
+    // Update database items
     const updatedDatabaseItems = databaseItems.filter(item => !itemIds.includes(item.id));
     setInventoryDatabaseItems(updatedDatabaseItems);
-    quickSave('inventoryDatabaseItems', updatedDatabaseItems);
+    
+    // Batch all quickSave calls to prevent infinite loop
+    const savePromises: Promise<boolean>[] = [];
+    
+    if (updatedItemsByFrequency.daily.length !== dailyItems.length) {
+      savePromises.push(quickSave('inventoryDailyItems', updatedItemsByFrequency.daily));
+    }
+    if (updatedItemsByFrequency.weekly.length !== weeklyItems.length) {
+      savePromises.push(quickSave('inventoryWeeklyItems', updatedItemsByFrequency.weekly));
+    }
+    if (updatedItemsByFrequency.monthly.length !== monthlyItems.length) {
+      savePromises.push(quickSave('inventoryMonthlyItems', updatedItemsByFrequency.monthly));
+    }
+    savePromises.push(quickSave('inventoryDatabaseItems', updatedDatabaseItems));
+    
+    // Execute all saves in parallel
+    Promise.allSettled(savePromises).then(() => {
+      console.log('✅ All delete operations saved successfully');
+    }).catch(error => {
+      console.warn('⚠️ Some delete operations failed to save:', error);
+    });
+    
     setSelectedItems(new Set());
     showToast(`Deleted ${itemIds.length} items from database`);
-  }, [databaseItems, setInventoryDatabaseItems, quickSave]);
+  }, [databaseItems, dailyItems.length, weeklyItems.length, monthlyItems.length, setInventoryDatabaseItems, setInventoryDailyItems, setInventoryWeeklyItems, setInventoryMonthlyItems, quickSave]);
 
   // Toggle item selection
   const toggleItemSelection = useCallback((itemId: number | string) => {
