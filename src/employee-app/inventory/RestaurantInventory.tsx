@@ -209,9 +209,35 @@ const InventoryContent: React.FC = () => {
   );
 };
 
-const RestaurantInventory: React.FC<InventoryTabProps> = ({ currentUser, connectionStatus }) => {
+const RestaurantInventory: React.FC<InventoryTabProps> = ({ 
+  currentUser, 
+  connectionStatus,
+  inventoryDailyItems,
+  inventoryWeeklyItems,
+  inventoryMonthlyItems,
+  inventoryDatabaseItems,
+  inventoryActivityLog,
+  setInventoryDailyItems,
+  setInventoryWeeklyItems,
+  setInventoryMonthlyItems,
+  setInventoryDatabaseItems,
+  setInventoryActivityLog,
+  quickSave
+}) => {
   return (
-    <InventoryProvider>
+    <InventoryProvider
+      inventoryDailyItems={inventoryDailyItems}
+      inventoryWeeklyItems={inventoryWeeklyItems}
+      inventoryMonthlyItems={inventoryMonthlyItems}
+      inventoryDatabaseItems={inventoryDatabaseItems}
+      inventoryActivityLog={inventoryActivityLog}
+      setInventoryDailyItems={setInventoryDailyItems}
+      setInventoryWeeklyItems={setInventoryWeeklyItems}
+      setInventoryMonthlyItems={setInventoryMonthlyItems}
+      setInventoryDatabaseItems={setInventoryDatabaseItems}
+      setInventoryActivityLog={setInventoryActivityLog}
+      quickSave={quickSave}
+    >
       <InventoryContent />
     </InventoryProvider>
   );

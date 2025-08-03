@@ -2,7 +2,7 @@
 import React from 'react';
 import { Flame, Calendar, Package, Database, BarChart3 } from 'lucide-react';
 import { useInventory } from '../InventoryContext';
-import type { InventoryFrequency } from '../types';
+import type { InventoryFrequency } from '../../types';
 
 const TabNavigation: React.FC = () => {
   const { currentTab, switchTab, dailyItems, weeklyItems, monthlyItems, databaseItems } = useInventory();

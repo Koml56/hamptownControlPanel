@@ -78,6 +78,11 @@ const EmployeeApp: React.FC = () => {
     scheduledPreps,
     prepSelections,
     storeItems: firebaseStoreItems,
+    inventoryDailyItems,
+    inventoryWeeklyItems,
+    inventoryMonthlyItems,
+    inventoryDatabaseItems,
+    inventoryActivityLog,
     setEmployees,
     setTasks,
     setDailyData,
@@ -88,6 +93,11 @@ const EmployeeApp: React.FC = () => {
     setScheduledPreps,
     setPrepSelections,
     setStoreItems: setFirebaseStoreItems,
+    setInventoryDailyItems,
+    setInventoryWeeklyItems,
+    setInventoryMonthlyItems,
+    setInventoryDatabaseItems,
+    setInventoryActivityLog,
     loadFromFirebase,
     saveToFirebase,
     quickSave,
@@ -794,6 +804,17 @@ const EmployeeApp: React.FC = () => {
           <RestaurantInventory
             currentUser={currentUser}
             connectionStatus={connectionStatus}
+            inventoryDailyItems={inventoryDailyItems}
+            inventoryWeeklyItems={inventoryWeeklyItems}
+            inventoryMonthlyItems={inventoryMonthlyItems}
+            inventoryDatabaseItems={inventoryDatabaseItems}
+            inventoryActivityLog={inventoryActivityLog}
+            setInventoryDailyItems={setInventoryDailyItems}
+            setInventoryWeeklyItems={setInventoryWeeklyItems}
+            setInventoryMonthlyItems={setInventoryMonthlyItems}
+            setInventoryDatabaseItems={setInventoryDatabaseItems}
+            setInventoryActivityLog={setInventoryActivityLog}
+            quickSave={quickSave}
           />
         )}
 

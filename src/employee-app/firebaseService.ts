@@ -1,7 +1,7 @@
 // firebaseService.ts - FIXED to include all prep and store fields
 import { FIREBASE_CONFIG } from './constants';
 import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData } from './defaultData';
-import type { Employee, Task, DailyDataMap, TaskAssignments, PrepItem, ScheduledPrep, PrepSelections, StoreItem } from './types';
+import type { Employee, Task, DailyDataMap, TaskAssignments, PrepItem, ScheduledPrep, PrepSelections, StoreItem, InventoryItem, DatabaseItem, ActivityLogEntry } from './types';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, onValue, off } from 'firebase/database';
 
@@ -143,6 +143,17 @@ export class FirebaseService {
         return allData.prepSelections;
       case 'storeItems':
         return allData.storeItems;
+      // Inventory fields
+      case 'inventoryDailyItems':
+        return allData.inventoryDailyItems;
+      case 'inventoryWeeklyItems':
+        return allData.inventoryWeeklyItems;
+      case 'inventoryMonthlyItems':
+        return allData.inventoryMonthlyItems;
+      case 'inventoryDatabaseItems':
+        return allData.inventoryDatabaseItems;
+      case 'inventoryActivityLog':
+        return allData.inventoryActivityLog;
       default:
         console.warn(`Unknown field: ${field}`);
         return null;
@@ -210,6 +221,31 @@ export class FirebaseService {
           totalCount: data?.length || 0,
           availableCount: (data || []).filter((item: any) => item.available).length
         };
+      case 'inventoryDailyItems':
+        return {
+          totalCount: data?.length || 0,
+          criticalCount: (data || []).filter((item: any) => item.currentStock <= item.minLevel * 0.5).length
+        };
+      case 'inventoryWeeklyItems':
+        return {
+          totalCount: data?.length || 0,
+          criticalCount: (data || []).filter((item: any) => item.currentStock <= item.minLevel * 0.5).length
+        };
+      case 'inventoryMonthlyItems':
+        return {
+          totalCount: data?.length || 0,
+          criticalCount: (data || []).filter((item: any) => item.currentStock <= item.minLevel * 0.5).length
+        };
+      case 'inventoryDatabaseItems':
+        return {
+          totalCount: data?.length || 0,
+          assignedCount: (data || []).filter((item: any) => item.isAssigned).length
+        };
+      case 'inventoryActivityLog':
+        return {
+          totalEntries: data?.length || 0,
+          latestEntry: data?.[0]?.timestamp || 'none'
+        };
       default:
         return data;
     }
@@ -230,7 +266,12 @@ export class FirebaseService {
         prepItemsRes,
         scheduledPrepsRes,
         prepSelectionsRes,
-        storeItemsRes
+        storeItemsRes,
+        inventoryDailyRes,
+        inventoryWeeklyRes,
+        inventoryMonthlyRes,
+        inventoryDatabaseRes,
+        inventoryActivityLogRes
       ] = await Promise.all([
         fetch(`${this.baseUrl}/employees.json`),
         fetch(`${this.baseUrl}/tasks.json`),
@@ -241,7 +282,12 @@ export class FirebaseService {
         fetch(`${this.baseUrl}/prepItems.json`),
         fetch(`${this.baseUrl}/scheduledPreps.json`),
         fetch(`${this.baseUrl}/prepSelections.json`),
-        fetch(`${this.baseUrl}/storeItems.json`)
+        fetch(`${this.baseUrl}/storeItems.json`),
+        fetch(`${this.baseUrl}/inventoryDailyItems.json`),
+        fetch(`${this.baseUrl}/inventoryWeeklyItems.json`),
+        fetch(`${this.baseUrl}/inventoryMonthlyItems.json`),
+        fetch(`${this.baseUrl}/inventoryDatabaseItems.json`),
+        fetch(`${this.baseUrl}/inventoryActivityLog.json`)
       ]);
       
       const employeesData = await employeesRes.json();
@@ -254,6 +300,11 @@ export class FirebaseService {
       const scheduledPrepsData = await scheduledPrepsRes.json();
       const prepSelectionsData = await prepSelectionsRes.json();
       const storeItemsData = await storeItemsRes.json();
+      const inventoryDailyData = await inventoryDailyRes.json();
+      const inventoryWeeklyData = await inventoryWeeklyRes.json();
+      const inventoryMonthlyData = await inventoryMonthlyRes.json();
+      const inventoryDatabaseData = await inventoryDatabaseRes.json();
+      const inventoryActivityLogData = await inventoryActivityLogRes.json();
       
       // Migrate employees data to include points if missing
       const migratedEmployees = employeesData ? employeesData.map((emp: any) => ({
@@ -289,7 +340,13 @@ export class FirebaseService {
         prepItems: prepItemsData || [],
         scheduledPreps: scheduledPrepsData || [],
         prepSelections: prepSelectionsData || {},
-        storeItems: storeItemsData || []
+        storeItems: storeItemsData || [],
+        // Inventory data
+        inventoryDailyItems: inventoryDailyData || [],
+        inventoryWeeklyItems: inventoryWeeklyData || [],
+        inventoryMonthlyItems: inventoryMonthlyData || [],
+        inventoryDatabaseItems: inventoryDatabaseData || [],
+        inventoryActivityLog: inventoryActivityLogData || []
       };
       
     } catch (error) {
@@ -339,6 +396,12 @@ export class FirebaseService {
     scheduledPreps: ScheduledPrep[];
     prepSelections: PrepSelections;
     storeItems: StoreItem[];
+    // Inventory fields
+    inventoryDailyItems: InventoryItem[];
+    inventoryWeeklyItems: InventoryItem[];
+    inventoryMonthlyItems: InventoryItem[];
+    inventoryDatabaseItems: DatabaseItem[];
+    inventoryActivityLog: ActivityLogEntry[];
   }) {
     console.log('🔥 Saving all data to Firebase...');
 
@@ -353,7 +416,12 @@ export class FirebaseService {
       'prepItems',
       'scheduledPreps', 
       'prepSelections',
-      'storeItems'
+      'storeItems',
+      'inventoryDailyItems',
+      'inventoryWeeklyItems',
+      'inventoryMonthlyItems',
+      'inventoryDatabaseItems',
+      'inventoryActivityLog'
     ];
 
     const success = await this.batchSave(fields, data);
@@ -400,6 +468,14 @@ export class FirebaseService {
         return ['completedTasks'];
       case 'scheduledPreps':
         return ['prepSelections']; // Prep completions might affect selections
+      case 'inventoryDailyItems':
+        return ['inventoryActivityLog']; // Daily items affect activity log
+      case 'inventoryWeeklyItems':
+        return ['inventoryActivityLog']; // Weekly items affect activity log
+      case 'inventoryMonthlyItems':
+        return ['inventoryActivityLog']; // Monthly items affect activity log
+      case 'inventoryDatabaseItems':
+        return ['inventoryDailyItems', 'inventoryWeeklyItems', 'inventoryMonthlyItems']; // Database changes might affect assigned items
       default:
         return [];
     }

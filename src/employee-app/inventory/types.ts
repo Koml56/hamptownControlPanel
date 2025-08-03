@@ -1,55 +1,29 @@
 // src/employee-app/inventory/types.ts
-export type InventoryFrequency = 'daily' | 'weekly' | 'monthly' | 'database';
-export type InventoryCategory = 'produce' | 'meat' | 'dairy' | 'bread' | 'beverages' | 'cooking' | 'baking' | 'grains' | 'cleaning' | 'supplies' | 'packaging' | 'tukku' | 'uncategorized';
-export type StockStatus = 'critical' | 'low' | 'normal';
-export type WasteReason = 'expired' | 'overcooked' | 'dropped' | 'overordered' | 'customer-return' | 'other';
-export type ActivityType = 'count_update' | 'waste' | 'import' | 'manual_add';
-
-export interface InventoryItem {
-  id: number | string;
-  name: string;
-  category: InventoryCategory;
-  currentStock: number;
-  minLevel: number;
-  unit: string;
-  lastUsed: string;
-  cost: number;
-  ean?: string;
-  frequency?: InventoryFrequency;
-  databaseId?: number | string; // Link to original database item
-}
-
-export interface DatabaseItem {
-  id: number | string;
-  name: string;
-  ean?: string;
-  unit?: string;
-  cost?: number;
-  costWithTax?: number;
-  type?: InventoryCategory | string; // Allow any string for uncategorized items
-  frequency: InventoryFrequency;
-  // Assignment tracking
-  assignedTo?: InventoryFrequency; // Which frequency it's assigned to (daily/weekly/monthly)
-  assignedCategory?: InventoryCategory; // Which category it's assigned to
-  assignedDate?: string; // When it was assigned
-  isAssigned?: boolean; // Whether it's currently assigned to any inventory list
-}
-
-export interface ActivityLogEntry {
-  id: number | string;
-  type: ActivityType;
-  item: string;
-  quantity: number;
-  unit: string;
-  employee: string;
-  timestamp: string;
-  notes?: string;
-  reason?: WasteReason;
-}
+// Import inventory types from main types.ts for Firebase integration
+import type {
+  InventoryFrequency,
+  InventoryCategory,
+  InventoryItem,
+  DatabaseItem,
+  ActivityLogEntry,
+  WasteReason
+} from '../types';
 
 export interface InventoryTabProps {
   currentUser: any;
   connectionStatus: string;
+  // Firebase props
+  inventoryDailyItems: InventoryItem[];
+  inventoryWeeklyItems: InventoryItem[];
+  inventoryMonthlyItems: InventoryItem[];
+  inventoryDatabaseItems: DatabaseItem[];
+  inventoryActivityLog: ActivityLogEntry[];
+  setInventoryDailyItems: (items: InventoryItem[]) => void;
+  setInventoryWeeklyItems: (items: InventoryItem[]) => void;
+  setInventoryMonthlyItems: (items: InventoryItem[]) => void;
+  setInventoryDatabaseItems: (items: DatabaseItem[]) => void;
+  setInventoryActivityLog: (log: ActivityLogEntry[]) => void;
+  quickSave: (field: string, data: any) => Promise<boolean>;
 }
 
 export interface InventoryContextType {

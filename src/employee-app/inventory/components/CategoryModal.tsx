@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import { useInventory } from '../InventoryContext';
-import { InventoryFrequency, InventoryCategory } from '../types';
+import { InventoryFrequency, InventoryCategory } from '../../types';
 
 interface CategoryModalProps {
   onClose: () => void;

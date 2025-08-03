@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useInventory } from '../InventoryContext';
-import { InventoryFrequency } from '../types';
+import { InventoryFrequency } from '../../types';
 import ScrollPicker from './ScrollPicker';
 
 interface CountModalProps {
