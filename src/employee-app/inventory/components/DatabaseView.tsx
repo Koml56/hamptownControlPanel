@@ -177,14 +177,16 @@ const DatabaseView: React.FC = () => {
   const handleSelectAll = () => {
     if (selectAll) {
       clearSelection();
+      setSelectAll(false);
     } else {
+      // FIXED: Select all filtered items properly
       filteredItems.forEach(item => {
         if (!selectedItems.has(item.id)) {
           toggleItemSelection(item.id);
         }
       });
+      setSelectAll(true);
     }
-    setSelectAll(!selectAll);
   };
 
   const handleDeleteClick = () => {
@@ -195,6 +197,7 @@ const DatabaseView: React.FC = () => {
   const confirmDelete = () => {
     deleteItems(Array.from(selectedItems));
     setShowDeleteConfirm(false);
+    setSelectAll(false); // FIXED: Reset select all state after deletion
   };
 
   const handleItemClick = (item: DatabaseItem, event: React.MouseEvent) => {

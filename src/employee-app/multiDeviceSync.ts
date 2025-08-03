@@ -1,6 +1,6 @@
 // multiDeviceSync.ts - Optimized for performance and reliability with full prep/store support
 import { FIREBASE_CONFIG } from './constants';
-import type { Employee, Task, DailyDataMap, TaskAssignments, PrepItem, ScheduledPrep, PrepSelections, StoreItem } from './types';
+import type { Employee, Task, DailyDataMap, TaskAssignments, PrepItem, ScheduledPrep, PrepSelections, StoreItem, InventoryItem, DatabaseItem, ActivityLogEntry } from './types';
 
 export interface DeviceInfo {
   id: string;
@@ -34,6 +34,12 @@ export interface SyncData {
   scheduledPreps?: ScheduledPrep[];
   prepSelections?: PrepSelections;
   storeItems?: StoreItem[];
+  // FIXED: Add inventory fields for multi-device sync
+  inventoryDailyItems?: InventoryItem[];
+  inventoryWeeklyItems?: InventoryItem[];
+  inventoryMonthlyItems?: InventoryItem[];
+  inventoryDatabaseItems?: DatabaseItem[];
+  inventoryActivityLog?: ActivityLogEntry[];
 }
 
 export class MultiDeviceSyncService {
@@ -306,9 +312,9 @@ export class MultiDeviceSyncService {
     };
   }
 
-  // FIXED: Process data updates for ALL fields including prep and store data
+  // FIXED: Process data updates for ALL fields including prep, store and inventory data
   private processDataUpdate(data: any): void {
-    // FIXED: Include all relevant fields including prep and store data
+    // FIXED: Include all relevant fields including prep, store and inventory data
     const relevantFields = [
       'employees', 
       'tasks', 
@@ -319,7 +325,13 @@ export class MultiDeviceSyncService {
       'prepItems',
       'scheduledPreps',
       'prepSelections',
-      'storeItems'
+      'storeItems',
+      // FIXED: Add inventory fields for multi-device sync
+      'inventoryDailyItems',
+      'inventoryWeeklyItems', 
+      'inventoryMonthlyItems',
+      'inventoryDatabaseItems',
+      'inventoryActivityLog'
     ];
     
     for (const field of relevantFields) {
@@ -519,7 +531,13 @@ export class MultiDeviceSyncService {
         'prepItems',
         'scheduledPreps',
         'prepSelections',
-        'storeItems'
+        'storeItems',
+        // FIXED: Include inventory fields for multi-device sync
+        'inventoryDailyItems',
+        'inventoryWeeklyItems',
+        'inventoryMonthlyItems', 
+        'inventoryDatabaseItems',
+        'inventoryActivityLog'
       ];
       
       const promises = fieldsToFetch.map(field => 
