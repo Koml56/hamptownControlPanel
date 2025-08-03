@@ -1,5 +1,5 @@
 // src/employee-app/inventory/components/DatabaseView.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Upload, Plus, Download, Search, Edit3, Trash2, X, Check, AlertTriangle } from 'lucide-react';
 import { useInventory } from '../InventoryContext';
 import { getCategoryIcon } from '../utils';
@@ -174,6 +174,12 @@ const DatabaseView: React.FC = () => {
     return matchesType && matchesSearch;
   });
 
+  // Reset selection when filter or search changes
+  useEffect(() => {
+    clearSelection();
+    setSelectAll(false);
+  }, [filterType, searchQuery, clearSelection]);
+
   const handleSelectAll = () => {
     if (selectAll) {
       clearSelection();
@@ -186,6 +192,19 @@ const DatabaseView: React.FC = () => {
         }
       });
       setSelectAll(true);
+    }
+  };
+
+  // Get appropriate label for "Select All" based on current filter
+  const getSelectAllLabel = () => {
+    const hasFilter = filterType !== 'all';
+    const totalItems = databaseItems.length;
+    const visibleItems = filteredItems.length;
+    
+    if (!hasFilter) {
+      return `Select All (${totalItems})`;
+    } else {
+      return `Select All Visible (${visibleItems} of ${totalItems})`;
     }
   };
 
@@ -333,7 +352,7 @@ const DatabaseView: React.FC = () => {
                 onChange={handleSelectAll}
                 className="rounded"
               />
-              <label className="text-sm text-gray-600">Select All</label>
+              <label className="text-sm text-gray-600">{getSelectAllLabel()}</label>
             </div>
             <select 
               value={filterType}
