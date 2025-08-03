@@ -112,7 +112,8 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     notes?: string
   ) => {
     const items = getItemsByFrequency(frequency);
-    const item = items.find(i => i.id === itemId);
+    // Handle both string and number IDs by comparing their string representations
+    const item = items.find(i => i.id.toString() === itemId.toString());
     
     if (!item) {
       showToast('Item not found!');
@@ -121,7 +122,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
 
     const oldStock = item.currentStock;
     const updatedItems = items.map(i => 
-      i.id === itemId 
+      i.id.toString() === itemId.toString()
         ? { ...i, currentStock: newStock, lastUsed: new Date().toISOString().split('T')[0] }
         : i
     );
@@ -150,7 +151,8 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     notes?: string
   ) => {
     const items = getItemsByFrequency(frequency);
-    const item = items.find(i => i.id === itemId);
+    // Handle both string and number IDs by comparing their string representations
+    const item = items.find(i => i.id.toString() === itemId.toString());
     
     if (!item) {
       showToast('Item not found!');
@@ -163,7 +165,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     }
 
     const updatedItems = items.map(i => 
-      i.id === itemId 
+      i.id.toString() === itemId.toString()
         ? { ...i, currentStock: i.currentStock - amount }
         : i
     );
