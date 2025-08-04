@@ -3,7 +3,7 @@ import React from 'react';
 import { useInventory } from '../InventoryContext';
 
 interface BulkActionsBarProps {
-  onAssignCategory: () => void;
+  onAssignCategory: (frequency?: string) => void;
   onDelete: () => void;
 }
 
@@ -27,19 +27,19 @@ const BulkActionsBar: React.FC<BulkActionsBarProps> = ({ onAssignCategory, onDel
           
           <div className="grid grid-cols-3 gap-2">
             <button 
-              onClick={onAssignCategory}
+              onClick={() => onAssignCategory('daily')}
               className="bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600 transition-colors flex items-center justify-center"
             >
               🔥 Daily
             </button>
             <button 
-              onClick={onAssignCategory}
+              onClick={() => onAssignCategory('weekly')}
               className="bg-yellow-500 text-white px-2 py-1 rounded text-xs hover:bg-yellow-600 transition-colors flex items-center justify-center"
             >
               📅 Weekly
             </button>
             <button 
-              onClick={onAssignCategory}
+              onClick={() => onAssignCategory('monthly')}
               className="bg-green-500 text-white px-2 py-1 rounded text-xs hover:bg-green-600 transition-colors flex items-center justify-center"
             >
               📦 Monthly
@@ -71,19 +71,19 @@ const BulkActionsBar: React.FC<BulkActionsBarProps> = ({ onAssignCategory, onDel
             <div className="h-4 w-px bg-gray-300"></div>
             <div className="flex space-x-2">
               <button 
-                onClick={onAssignCategory}
+                onClick={() => onAssignCategory('daily')}
                 className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 transition-colors"
               >
                 🔥 Daily
               </button>
               <button 
-                onClick={onAssignCategory}
+                onClick={() => onAssignCategory('weekly')}
                 className="bg-yellow-500 text-white px-3 py-1 rounded text-sm hover:bg-yellow-600 transition-colors"
               >
                 📅 Weekly
               </button>
               <button 
-                onClick={onAssignCategory}
+                onClick={() => onAssignCategory('monthly')}
                 className="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 transition-colors"
               >
                 📦 Monthly
