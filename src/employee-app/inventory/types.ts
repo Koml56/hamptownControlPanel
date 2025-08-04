@@ -36,7 +36,7 @@ export interface InventoryContextType {
   selectedItems: Set<number | string>;
   
   // UI State
-  currentTab: InventoryFrequency | 'reports' | 'missing';
+  currentTab: InventoryFrequency | 'reports';
   
   // Actions
   setDailyItems: (items: InventoryItem[]) => void;
@@ -56,5 +56,5 @@ export interface InventoryContextType {
   toggleItemSelection: (itemId: number | string) => void;
   selectMultipleItems: (itemIds: (number | string)[]) => void;
   clearSelection: () => void;
-  switchTab: (tab: InventoryFrequency | 'reports' | 'missing') => void;
+  switchTab: (tab: InventoryFrequency | 'reports') => void;
 }

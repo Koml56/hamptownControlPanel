@@ -9,7 +9,6 @@ import DailyView from './components/DailyView';
 import WeeklyView from './components/WeeklyView';
 import MonthlyView from './components/MonthlyView';
 import ReportsView from './components/ReportsView';
-import MissingItemsView from './components/MissingItemsView';
 import ToastContainer from './components/ToastContainer';
 
 // Simple Header Component - No background wrapper
@@ -107,12 +106,6 @@ const InventoryHeader: React.FC = () => {
 const TabNavigation: React.FC = () => {
   const { currentTab, switchTab, dailyItems, weeklyItems, monthlyItems, databaseItems } = useInventory();
 
-  // Calculate missing items count
-  const allItems = [...dailyItems, ...weeklyItems, ...monthlyItems];
-  const criticalCount = allItems.filter(item => getStockStatus(item).status === 'critical').length;
-  const lowStockCount = allItems.filter(item => getStockStatus(item).status === 'low').length;
-  const missingItemsCount = criticalCount + lowStockCount; // Total items needing attention
-
   const tabs = [
     {
       id: 'daily' as const,
@@ -141,13 +134,6 @@ const TabNavigation: React.FC = () => {
       icon: Database,
       count: databaseItems.length,
       color: 'blue'
-    },
-    {
-      id: 'missing' as const,
-      label: 'Missing Items',
-      icon: AlertTriangle,
-      count: missingItemsCount,
-      color: 'orange'
     },
     {
       id: 'reports' as const,
@@ -204,8 +190,6 @@ const InventoryContent: React.FC = () => {
         return <MonthlyView />;
       case 'database':
         return <DatabaseView />;
-      case 'missing':
-        return <MissingItemsView />;
       case 'reports':
         return <ReportsView />;
       default:
