@@ -341,12 +341,12 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
             </div>
             
             {/* Device count badge - show when multiple devices */}
-            {connectionStatus === 'connected' && deviceCount > 1 && (
+            {connectionStatus === 'connected' && deviceCount > 1 ? (
               <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full backdrop-blur-xl bg-blue-500/95 
                             border border-white/60 shadow-md flex items-center justify-center text-xs font-bold text-white">
                 {deviceCount}
               </div>
-            )}
+            ) : null}
             
             {/* Pulse rings when syncing */}
             {showSyncPulse && (
@@ -361,11 +361,11 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
             )}
 
             {/* Додаємо індикатор конфліктів */}
-            {conflictCount && conflictCount > 0 && (
+            {conflictCount && conflictCount > 0 ? (
               <div className="absolute -top-2 -right-2 bg-red-600 text-white text-xs px-2 py-0.5 rounded-full animate-pulse z-50">
                 {conflictCount} conflict{conflictCount > 1 ? 's' : ''}
               </div>
-            )}
+            ) : null}
           </div>
         </div>
 
