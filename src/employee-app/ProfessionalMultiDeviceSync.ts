@@ -56,7 +56,7 @@ interface SyncQueueItem {
   priority: 'high' | 'normal' | 'low';
 }
 
-export class UnifiedMultiDeviceSync {
+export class ProfessionalMultiDeviceSync {
   private baseUrl = FIREBASE_CONFIG.databaseURL;
   private deviceId: string;
   private deviceInfo: DeviceInfo;
