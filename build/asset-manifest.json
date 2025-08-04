@@ -1,10 +1,9 @@
 {
   "files": {
-    "main.js": "/hamptownControlPanel/static/js/main.3425ae76.js",
-    "index.html": "/hamptownControlPanel/index.html",
-    "main.3425ae76.js.map": "/hamptownControlPanel/static/js/main.3425ae76.js.map"
+    "main.js": "/hamptownControlPanel/static/js/main.4c3928e5.js",
+    "index.html": "/hamptownControlPanel/index.html"
   },
   "entrypoints": [
-    "static/js/main.3425ae76.js"
+    "static/js/main.4c3928e5.js"
   ]
 }

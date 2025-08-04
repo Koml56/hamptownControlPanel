@@ -54,6 +54,7 @@ export interface InventoryContextType {
   cleanupDuplicates: () => void;
   deleteItems: (itemIds: (number | string)[]) => void;
   toggleItemSelection: (itemId: number | string) => void;
+  selectMultipleItems: (itemIds: (number | string)[]) => void;
   clearSelection: () => void;
   switchTab: (tab: InventoryFrequency | 'reports') => void;
 }

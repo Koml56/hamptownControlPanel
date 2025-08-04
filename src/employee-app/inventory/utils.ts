@@ -124,8 +124,22 @@ export const formatTime = (date: Date | string): string => {
   return d.toLocaleString();
 };
 
+// Counter to ensure unique IDs even when called in rapid succession
+let idCounter = 0;
+
 export const generateId = (): number => {
-  return Date.now() + Math.floor(Math.random() * 1000);
+  // Reset counter if it gets too large to prevent overflow
+  if (idCounter >= 100000) {
+    idCounter = 0;
+  }
+  
+  // Use timestamp (in seconds) and counter for better uniqueness without overflow
+  const timestamp = Math.floor(Date.now() / 1000); // Use seconds instead of milliseconds
+  const counter = ++idCounter;
+  
+  // Combine timestamp and counter: timestamp * 100000 + counter
+  // This ensures unique IDs as long as counter doesn't exceed 100000
+  return timestamp * 100000 + counter;
 };
 
 export const formatCurrency = (amount: number): string => {

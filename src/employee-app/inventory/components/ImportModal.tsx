@@ -142,7 +142,7 @@ const ImportModal: React.FC<ImportModalProps> = ({ onClose }) => {
     
     const newItems: ParsedItem[] = dataRows.map((row, i) => {
       const item: ParsedItem = {
-        id: generateId() + i,
+        id: generateId(), // Use unique ID for each item without adding index
         name: row[nameIdx]?.toString().trim() || '',
         ean: eanIdx !== -1 ? (row[eanIdx]?.toString().trim() || '') : '',
         unit: unitIdx !== -1 ? (row[unitIdx]?.toString().trim() || '') : '',

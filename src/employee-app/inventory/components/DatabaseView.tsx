@@ -145,6 +145,7 @@ const DatabaseView: React.FC = () => {
     databaseItems, 
     selectedItems, 
     toggleItemSelection, 
+    selectMultipleItems,
     clearSelection,
     deleteItems,
     assignToCategory,
@@ -180,17 +181,29 @@ const DatabaseView: React.FC = () => {
     setSelectAll(false);
   }, [filterType, searchQuery, clearSelection]);
 
+  // Update select all state when selection changes
+  useEffect(() => {
+    if (filteredItems.length === 0) {
+      setSelectAll(false);
+      return;
+    }
+    
+    const allVisibleSelected = filteredItems.every(item => selectedItems.has(item.id));
+    const someVisibleSelected = filteredItems.some(item => selectedItems.has(item.id));
+    
+    // Update select all state based on whether all visible items are selected
+    setSelectAll(allVisibleSelected && someVisibleSelected);
+  }, [selectedItems, filteredItems]);
+
   const handleSelectAll = () => {
     if (selectAll) {
       clearSelection();
       setSelectAll(false);
     } else {
-      // FIXED: Select all filtered items properly
-      filteredItems.forEach(item => {
-        if (!selectedItems.has(item.id)) {
-          toggleItemSelection(item.id);
-        }
-      });
+      // FIXED: Use bulk selection for better performance
+      const filteredItemIds = filteredItems.map(item => item.id);
+      clearSelection(); // Clear first to avoid conflicts
+      selectMultipleItems(filteredItemIds); // Then select all visible items
       setSelectAll(true);
     }
   };
