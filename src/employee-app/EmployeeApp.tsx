@@ -1,5 +1,5 @@
 // EmployeeApp.tsx - Updated with Restaurant Inventory tab integration
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   CheckSquare, 
   TrendingUp, 
@@ -31,6 +31,8 @@ import { handleAdminLogin } from './adminFunctions';
 import { offlineQueue, resolveTaskConflicts } from './taskOperations';
 import { applyEmployeeOperation, resolveEmployeeConflicts } from './employeeOperations';
 import type { SyncOperation } from './OperationManager';
+import { MultiDeviceSyncService } from './multiDeviceSync';
+import type { DeviceInfo, SyncEvent } from './multiDeviceSync';
 
 // Types and Constants
 import { getFormattedDate } from './utils';
@@ -169,6 +171,15 @@ const EmployeeApp: React.FC = () => {
   const [showDailyResetNotification, setShowDailyResetNotification] = useState(false);
   const [conflictCount, setConflictCount] = useState(0);
 
+  // Multi-device sync state
+  const [activeDevices, setActiveDevices] = useState<DeviceInfo[]>([]);
+  const [syncEvents, setSyncEvents] = useState<SyncEvent[]>([]);
+  const [deviceCount, setDeviceCount] = useState(1);
+  const [isMultiDeviceEnabled, setIsMultiDeviceEnabled] = useState(true);
+  
+  // Multi-device sync service
+  const syncServiceRef = useRef<MultiDeviceSyncService | null>(null);
+
   // State for task operations history
   const [taskOperations, setTaskOperations] = useState<SyncOperation[]>([]);
   // State for employee operations history
@@ -190,6 +201,49 @@ const EmployeeApp: React.FC = () => {
       mounted = false;
     };
   }, []);
+
+  // Initialize Multi-Device Sync Service
+  useEffect(() => {
+    if (!syncServiceRef.current && currentUser) {
+      console.log('🔄 Initializing Multi-Device Sync Service...');
+      
+      syncServiceRef.current = new MultiDeviceSyncService(currentUser.name);
+      
+      // Set up event handlers
+      syncServiceRef.current.onDeviceCountChanged((count, devices) => {
+        setDeviceCount(count);
+        setActiveDevices(devices);
+      });
+      
+      syncServiceRef.current.onSyncEventReceived((event) => {
+        setSyncEvents(prev => [event, ...prev.slice(0, 9)]); // Keep last 10 events
+      });
+      
+      // Set up field change listeners for real-time sync
+      syncServiceRef.current.onFieldChange('completedTasks', (data) => {
+        if (data instanceof Set) {
+          setCompletedTasks(data);
+        } else if (Array.isArray(data)) {
+          setCompletedTasks(new Set(data));
+        }
+      });
+      
+      syncServiceRef.current.onFieldChange('taskAssignments', setTaskAssignments);
+      syncServiceRef.current.onFieldChange('employees', setEmployees);
+      syncServiceRef.current.onFieldChange('tasks', setTasks);
+      syncServiceRef.current.onFieldChange('dailyData', setDailyData);
+      
+      // Connect the service
+      syncServiceRef.current.connect().catch(console.error);
+    }
+    
+    return () => {
+      if (syncServiceRef.current) {
+        syncServiceRef.current.disconnect();
+        syncServiceRef.current = null;
+      }
+    };
+  }, [currentUser]);
 
   // Set up periodic auto-save (every 5 minutes)
   // Set up periodic auto-save (every 5 minutes) with logging for cleaning tasks
@@ -468,6 +522,45 @@ const EmployeeApp: React.FC = () => {
   };
 
   const currentEmployee = employees.find(emp => emp.id === currentUser.id);
+
+  // Multi-device sync helper functions
+  const toggleMultiDeviceSync = useCallback(() => {
+    setIsMultiDeviceEnabled(prev => !prev);
+    if (syncServiceRef.current) {
+      if (isMultiDeviceEnabled) {
+        syncServiceRef.current.disconnect();
+      } else {
+        syncServiceRef.current.connect();
+      }
+    }
+  }, [isMultiDeviceEnabled]);
+
+  const refreshFromAllDevices = useCallback(async () => {
+    if (syncServiceRef.current) {
+      try {
+        console.log('🔄 Refreshing data from all devices...');
+        const syncData = await syncServiceRef.current.refreshDataFromAllDevices();
+        
+        // Apply the synced data
+        if (syncData.employees) setEmployees(syncData.employees);
+        if (syncData.tasks) setTasks(syncData.tasks);
+        if (syncData.dailyData) setDailyData(syncData.dailyData);
+        if (syncData.completedTasks) {
+          if (Array.isArray(syncData.completedTasks)) {
+            setCompletedTasks(new Set(syncData.completedTasks));
+          }
+        }
+        if (syncData.taskAssignments) setTaskAssignments(syncData.taskAssignments);
+        
+        console.log('✅ Data refreshed from all devices');
+      } catch (error) {
+        console.error('❌ Failed to refresh from all devices:', error);
+      }
+    } else {
+      // Fallback to regular Firebase refresh
+      await loadFromFirebase();
+    }
+  }, [loadFromFirebase, setEmployees, setTasks, setDailyData, setCompletedTasks, setTaskAssignments]);
 
   // DAILY RESET LOGIC with distributed synchronization
   useEffect(() => {
@@ -823,13 +916,19 @@ const EmployeeApp: React.FC = () => {
           </div>
         )}
 
-        {/* Enhanced Sync Status Indicator */}
+        {/* Enhanced Sync Status Indicator with Multi-Device Support */}
         <SyncStatusIndicator
           isLoading={isLoading}
           lastSync={lastSync}
           connectionStatus={connectionStatus}
           loadFromFirebase={loadFromFirebase}
           conflictCount={conflictCount}
+          activeDevices={activeDevices}
+          syncEvents={syncEvents}
+          deviceCount={deviceCount}
+          isMultiDeviceEnabled={isMultiDeviceEnabled}
+          toggleMultiDeviceSync={toggleMultiDeviceSync}
+          refreshFromAllDevices={refreshFromAllDevices}
         />
 
         {/* Tab Content */}
@@ -856,6 +955,7 @@ const EmployeeApp: React.FC = () => {
             setTaskAssignments={setTaskAssignmentsWithSave}
             setDailyData={setDailyDataWithSave}
             setEmployees={setEmployeesWithSave}
+            saveToFirebase={saveToFirebase}
           />
         )}
 

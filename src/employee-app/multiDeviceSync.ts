@@ -65,6 +65,10 @@ export class MultiDeviceSyncService {
   private syncTimer: NodeJS.Timeout | null = null;
   private isSyncing = false;
 
+  // ANTI-LOOP: Track our own operations to prevent sync loops
+  private ourOperations = new Set<string>();
+  private operationTimeout = 30000; // 30 seconds to track our operations
+
   constructor(userName: string = 'Unknown User') {
     this.deviceId = this.generateDeviceId();
     this.deviceInfo = this.createDeviceInfo(userName);
@@ -200,7 +204,7 @@ export class MultiDeviceSyncService {
     }
   }
 
-  // PERFORMANCE: Non-blocking presence update
+  // ENHANCED: Non-blocking presence update with improved device counting
   private async updatePresence(isActive: boolean): Promise<void> {
     this.deviceInfo = {
       ...this.deviceInfo,
@@ -216,12 +220,18 @@ export class MultiDeviceSyncService {
         body: JSON.stringify(this.deviceInfo)
       }).then(response => {
         if (response.ok) {
-          // Update device count asynchronously
-          this.getActiveDevices().then(devices => {
-            if (this.onDeviceCountChange) {
-              this.onDeviceCountChange(devices.length, devices);
-            }
-          }).catch(console.warn);
+          // ENHANCED: Update device count asynchronously with debouncing
+          if (this.deviceCountTimeout) {
+            clearTimeout(this.deviceCountTimeout);
+          }
+          this.deviceCountTimeout = setTimeout(() => {
+            this.getActiveDevices().then(devices => {
+              if (this.onDeviceCountChange) {
+                console.log(`📱 Device count updated: ${devices.length} devices connected`);
+                this.onDeviceCountChange(devices.length, devices);
+              }
+            }).catch(console.warn);
+          }, 1000); // Debounce device count updates
         }
       }).catch(console.warn);
 
@@ -229,6 +239,8 @@ export class MultiDeviceSyncService {
       console.warn('⚠️ Presence update failed:', error);
     }
   }
+
+  private deviceCountTimeout: NodeJS.Timeout | null = null;
 
   private async removePresence(): Promise<void> {
     try {
@@ -312,7 +324,7 @@ export class MultiDeviceSyncService {
     };
   }
 
-  // FIXED: Process data updates for ALL fields including prep, store and inventory data
+  // ENHANCED: Process data updates for ALL fields including prep, store and inventory data with loop prevention
   private processDataUpdate(data: any): void {
     // FIXED: Include all relevant fields including prep, store and inventory data
     const relevantFields = [
@@ -342,7 +354,16 @@ export class MultiDeviceSyncService {
         const now = Date.now();
         const lastUpdate = this.lastDataTimestamp.get(field) || 0;
         
-        if (now - lastUpdate > 2000) { // Only update every 2 seconds
+        // ENHANCED: Longer throttle period to prevent loops
+        if (now - lastUpdate > 3000) { // Only update every 3 seconds (increased from 2)
+          
+          // ANTI-LOOP: Check if this is our own operation coming back
+          const operationKey = `${field}_${JSON.stringify(data[field]).slice(0, 100)}`;
+          if (this.ourOperations.has(operationKey)) {
+            console.log(`🔄 [SYNC] ${field} update ignored - this was our own operation`);
+            continue;
+          }
+          
           this.lastDataTimestamp.set(field, now);
           
           let processedData = data[field];
@@ -350,20 +371,47 @@ export class MultiDeviceSyncService {
             processedData = new Set(processedData);
           }
           
-          callback(processedData);
+          console.log(`🔄 [SYNC] Received ${field} update from Firebase:`, 
+                     Array.isArray(data[field]) ? data[field] : Object.keys(data[field] || {}).length);
           
-          // Emit sync event
-          this.emitSyncEvent({
-            type: 'data_update',
-            timestamp: now,
-            deviceId: 'remote',
-            deviceName: 'Remote Device',
-            field,
-            description: `${field} updated`
-          });
+          // ENHANCED: Check if data actually changed before calling callback
+          const dataChanged = this.hasDataChanged(field, processedData);
+          if (dataChanged) {
+            console.log(`🔄 [SYNC] ${field.charAt(0).toUpperCase() + field.slice(1)} actually changed, updating state`);
+            callback(processedData);
+          } else {
+            console.log(`🔄 [SYNC] ${field.charAt(0).toUpperCase() + field.slice(1)} unchanged, keeping current state`);
+          }
+          
+          // Emit sync event only if data changed
+          if (dataChanged) {
+            this.emitSyncEvent({
+              type: 'data_update',
+              timestamp: now,
+              deviceId: 'remote',
+              deviceName: 'Remote Device',
+              field,
+              description: `${field} updated`
+            });
+          }
         }
       }
     }
+  }
+
+  // Helper to check if data actually changed (prevent unnecessary updates)
+  private lastKnownData = new Map<string, any>();
+  
+  private hasDataChanged(field: string, newData: any): boolean {
+    const lastData = this.lastKnownData.get(field);
+    const newDataStr = JSON.stringify(newData);
+    const lastDataStr = JSON.stringify(lastData);
+    
+    if (newDataStr !== lastDataStr) {
+      this.lastKnownData.set(field, newData);
+      return true;
+    }
+    return false;
   }
 
   private stopListening(): void {
@@ -401,19 +449,28 @@ export class MultiDeviceSyncService {
     }, delay);
   }
 
-  // PERFORMANCE: Batched sync operations
+  // ENHANCED: Batched sync operations with loop prevention
   async syncData(field: string, data: any): Promise<void> {
+    // ANTI-LOOP: Track this as our operation
+    const operationKey = `${field}_${JSON.stringify(data).slice(0, 100)}`;
+    this.ourOperations.add(operationKey);
+    
+    // Auto-cleanup operation tracking after timeout
+    setTimeout(() => {
+      this.ourOperations.delete(operationKey);
+    }, this.operationTimeout);
+    
     // Add to sync queue instead of immediate sync
     this.syncQueue.set(field, data);
     
-    // Debounce sync operations
+    // Debounce sync operations (increased delay to prevent rapid fire)
     if (this.syncTimer) {
       clearTimeout(this.syncTimer);
     }
     
     this.syncTimer = setTimeout(() => {
       this.processSyncQueue();
-    }, 1000); // Batch syncs after 1 second
+    }, 1500); // Increased from 1 second to 1.5 seconds
   }
 
   private async processSyncQueue(): Promise<void> {
