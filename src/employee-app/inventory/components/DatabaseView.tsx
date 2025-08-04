@@ -156,6 +156,12 @@ const DatabaseView: React.FC = () => {
   const [showImportModal, setShowImportModal] = useState(false);
   const [showManualModal, setShowManualModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [preSelectedFrequency, setPreSelectedFrequency] = useState<string | undefined>(undefined);
+
+  const handleAssignCategory = (frequency?: string) => {
+    setPreSelectedFrequency(frequency);
+    setShowCategoryModal(true);
+  };
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [editingItem, setEditingItem] = useState<DatabaseItem | null>(null);
   const [filterType, setFilterType] = useState('all');
@@ -478,7 +484,7 @@ const DatabaseView: React.FC = () => {
 
       {/* Bulk Actions Bar */}
       <BulkActionsBar 
-        onAssignCategory={() => setShowCategoryModal(true)}
+        onAssignCategory={handleAssignCategory}
         onDelete={handleDeleteClick}
       />
 
@@ -522,7 +528,15 @@ const DatabaseView: React.FC = () => {
       {/* Modals */}
       {showImportModal && <ImportModal onClose={() => setShowImportModal(false)} />}
       {showManualModal && <ManualItemModal onClose={() => setShowManualModal(false)} />}
-      {showCategoryModal && <CategoryModal onClose={() => setShowCategoryModal(false)} />}
+      {showCategoryModal && (
+        <CategoryModal 
+          onClose={() => {
+            setShowCategoryModal(false);
+            setPreSelectedFrequency(undefined);
+          }}
+          preSelectedFrequency={preSelectedFrequency}
+        />
+      )}
       {editingItem && (
         <ItemEditModal 
           item={editingItem}

@@ -6,11 +6,14 @@ import { InventoryFrequency, InventoryCategory } from '../../types';
 
 interface CategoryModalProps {
   onClose: () => void;
+  preSelectedFrequency?: string;
 }
 
-const CategoryModal: React.FC<CategoryModalProps> = ({ onClose }) => {
+const CategoryModal: React.FC<CategoryModalProps> = ({ onClose, preSelectedFrequency }) => {
   const { databaseItems, selectedItems, assignToCategory } = useInventory();
-  const [frequency, setFrequency] = useState<InventoryFrequency>('daily');
+  const [frequency, setFrequency] = useState<InventoryFrequency>(
+    (preSelectedFrequency as InventoryFrequency) || 'daily'
+  );
   const [category, setCategory] = useState<InventoryCategory>('produce');
   const [minLevel, setMinLevel] = useState(5);
   const [initialStock, setInitialStock] = useState(0);
@@ -33,18 +36,31 @@ const CategoryModal: React.FC<CategoryModalProps> = ({ onClose }) => {
         </div>
         
         <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Frequency</label>
-            <select 
-              value={frequency}
-              onChange={(e) => setFrequency(e.target.value as InventoryFrequency)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="daily">🔥 Daily Items</option>
-              <option value="weekly">📅 Weekly Items</option>
-              <option value="monthly">📦 Monthly Items</option>
-            </select>
-          </div>
+          {!preSelectedFrequency && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Frequency</label>
+              <select 
+                value={frequency}
+                onChange={(e) => setFrequency(e.target.value as InventoryFrequency)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="daily">🔥 Daily Items</option>
+                <option value="weekly">📅 Weekly Items</option>
+                <option value="monthly">📦 Monthly Items</option>
+              </select>
+            </div>
+          )}
+          
+          {preSelectedFrequency && (
+            <div className="bg-blue-50 p-3 rounded-lg">
+              <div className="text-sm font-medium text-blue-800 mb-1">Selected Frequency:</div>
+              <div className="text-lg font-semibold text-blue-700">
+                {preSelectedFrequency === 'daily' && '🔥 Daily Items'}
+                {preSelectedFrequency === 'weekly' && '📅 Weekly Items'}
+                {preSelectedFrequency === 'monthly' && '📦 Monthly Items'}
+              </div>
+            </div>
+          )}
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
