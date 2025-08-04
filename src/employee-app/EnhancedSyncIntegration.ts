@@ -56,8 +56,6 @@ export class EnhancedSyncIntegration {
     this.syncService.onDeviceCountChanged((count, devices) => {
       this.syncState.deviceCount = count;
       console.log(`📱 Active devices: ${count}`, devices.map(d => d.name));
-      // Emit sync state update to notify React components
-      this.emitSyncStateUpdate();
     });
 
     // Sync events

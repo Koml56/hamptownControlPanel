@@ -112,17 +112,15 @@ export class ProfessionalMultiDeviceSync {
   }
 
   private generateUniqueDeviceId(): string {
-    // Generate a unique device ID for each tab/instance instead of sharing from localStorage
-    // This ensures multiple tabs from the same browser are treated as separate devices
-    const timestamp = Date.now().toString(36);
-    const random = crypto.getRandomValues(new Uint32Array(2))
-      .reduce((acc, val) => acc + val.toString(36), '');
-    const tabId = `prof_${timestamp}_${random}`;
-    
-    // Store for this session only (not in localStorage to avoid sharing between tabs)
-    sessionStorage.setItem('professional_device_id', tabId);
-    
-    return tabId;
+    let deviceId = localStorage.getItem('professional_device_id');
+    if (!deviceId) {
+      const timestamp = Date.now().toString(36);
+      const random = crypto.getRandomValues(new Uint32Array(2))
+        .reduce((acc, val) => acc + val.toString(36), '');
+      deviceId = `prof_${timestamp}_${random}`;
+      localStorage.setItem('professional_device_id', deviceId);
+    }
+    return deviceId;
   }
 
   private createDeviceInfo(userName: string): DeviceInfo {
@@ -296,14 +294,9 @@ export class ProfessionalMultiDeviceSync {
     
     for (const field of relevantFields) {
       if (data[field] && this.syncCallbacks.has(field)) {
-        const newChecksum = this.calculateChecksum(data[field]);
-        const pendingChecksum = this.dataChecksums.get(`${field}_pending`);
-        
-        // Skip updates if this is our own data that we just sent
-        if (pendingChecksum && newChecksum === pendingChecksum) {
-          console.log(`⏭️ Skipping own update for ${field} (checksum match)`);
-          // Clear the pending checksum since we confirmed our update was processed
-          this.dataChecksums.delete(`${field}_pending`);
+        // Skip updates from this device to prevent loops
+        if (this.pendingUpdates.has(field)) {
+          console.log(`⏭️ Skipping own update for ${field}`);
           continue;
         }
         
@@ -314,6 +307,7 @@ export class ProfessionalMultiDeviceSync {
         if (now - lastUpdate > 1000) { // 1 second throttle
           this.lastDataTimestamp.set(field, now);
           
+          const newChecksum = this.calculateChecksum(data[field]);
           const oldChecksum = this.dataChecksums.get(field);
           
           if (newChecksum !== oldChecksum) {
@@ -424,8 +418,8 @@ export class ProfessionalMultiDeviceSync {
       retry: 0
     };
     
-    // Store the data we're sending for comparison (instead of just blocking field)
-    this.dataChecksums.set(`${field}_pending`, syncItem.checksum);
+    // Mark as pending to prevent processing our own update
+    this.pendingUpdates.add(field);
     
     this.syncQueue.set(field, syncItem);
     
@@ -474,6 +468,11 @@ export class ProfessionalMultiDeviceSync {
           // Update local checksum
           this.dataChecksums.set(field, item.checksum);
           
+          // Remove from pending updates after successful sync
+          setTimeout(() => {
+            this.pendingUpdates.delete(field);
+          }, 2000);
+          
           console.log(`✅ Enhanced sync completed for ${field}`);
           
           this.emitSyncEvent({
@@ -497,8 +496,7 @@ export class ProfessionalMultiDeviceSync {
               this.processSyncQueueEnhanced();
             }, 1000 * Math.pow(2, item.retry));
           } else {
-            // Clear the pending checksum on permanent failure
-            this.dataChecksums.delete(`${field}_pending`);
+            this.pendingUpdates.delete(field);
             this.emitSyncEvent({
               type: 'error',
               timestamp: Date.now(),
