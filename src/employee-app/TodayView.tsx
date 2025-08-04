@@ -41,7 +41,7 @@ const TodayView: React.FC<TodayViewProps> = ({
         completed: p.completed
       }))
     });
-  }, [todayDateString, scheduledPreps, todayScheduledPreps]);
+  }, [todayDateString, scheduledPreps.length, todayScheduledPreps.length]);
 
   const completedToday = todayScheduledPreps.filter(prep => prep.completed).length;
   const totalToday = todayScheduledPreps.length;

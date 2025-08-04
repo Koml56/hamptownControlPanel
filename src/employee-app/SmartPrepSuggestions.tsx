@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Lightbulb, TrendingUp, Star, Zap, Brain, Target, Timer, Shield, BookOpen, BarChart3 } from 'lucide-react';
+import { Calendar, Clock, Lightbulb, TrendingUp, AlertTriangle, CheckCircle2, Star, Zap, Brain, Target, Timer, Flame, Shield, BookOpen, BarChart3 } from 'lucide-react';
 
 interface PrepItem {
   id: number;

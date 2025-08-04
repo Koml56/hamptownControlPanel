@@ -182,6 +182,12 @@ export const exportToCSV = (data: any[], filename: string): void => {
 };
 
 export const validateExcelFile = (file: File): { valid: boolean; error?: string } => {
+  const validTypes = [
+    'application/vnd.ms-excel', // .xls
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+    'text/csv' // .csv
+  ];
+  
   const validExtensions = ['.xls', '.xlsx', '.csv'];
   const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
   

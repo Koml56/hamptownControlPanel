@@ -138,7 +138,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     });
 
     showToast(`Successfully updated ${item.name} count to ${newStock} ${item.unit}!`);
-  }, [getItemsByFrequency, setItemsByFrequency, addActivityEntry]);
+  }, [addActivityEntry]);
 
   // Report waste
   const reportWaste = useCallback((
@@ -182,7 +182,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     });
 
     showToast(`Successfully reported waste of ${amount} ${item.unit} ${item.name}!`);
-  }, [getItemsByFrequency, setItemsByFrequency, addActivityEntry]);
+  }, [addActivityEntry]);
 
   // Import from Excel with Firebase sync
   const importFromExcel = useCallback((data: any[]) => {
@@ -415,7 +415,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     quickSave('inventoryDatabaseItems', updatedDatabaseItems);
 
     showToast(`Successfully unassigned ${dbItem.name} from inventory (removed all duplicates)`);
-  }, [databaseItems, getItemsByFrequency, quickSave, setInventoryDatabaseItems, setItemsByFrequency]);
+  }, [databaseItems]);
 
   // Delete items from database
   const deleteItems = useCallback((itemIds: (number | string)[]) => {
@@ -464,7 +464,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     
     setSelectedItems(new Set());
     showToast(`Deleted ${itemIds.length} items from database`);
-  }, [databaseItems, dailyItems.length, weeklyItems.length, monthlyItems.length, setInventoryDatabaseItems, setInventoryDailyItems, setInventoryWeeklyItems, setInventoryMonthlyItems, quickSave, getItemsByFrequency]);
+  }, [databaseItems, dailyItems.length, weeklyItems.length, monthlyItems.length, setInventoryDatabaseItems, setInventoryDailyItems, setInventoryWeeklyItems, setInventoryMonthlyItems, quickSave]);
 
   // Toggle item selection
   const toggleItemSelection = useCallback((itemId: number | string) => {

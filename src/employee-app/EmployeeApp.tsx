@@ -23,18 +23,19 @@ import AdminPanel from './AdminPanel';
 import DailyReports from './DailyReports';
 import PrepListPrototype from './PrepListPrototype';
 import RestaurantInventory from './inventory/RestaurantInventory'; // NEW: Inventory component
-import ProfessionalSyncStatus from './ProfessionalSyncStatus';
+import SyncStatusIndicator from './SyncStatusIndicator';
 
-// Hooks and Functions - Updated to use professional sync
-import { useAuth } from './hooks';
-import { useProfessionalSync } from './useProfessionalSync';
+// Hooks and Functions
+import { useFirebaseData, useAuth, useTaskRealtimeSync } from './hooks';
 import { handleAdminLogin } from './adminFunctions';
+import { offlineQueue, resolveTaskConflicts } from './taskOperations';
+import { applyEmployeeOperation, resolveEmployeeConflicts } from './employeeOperations';
+import type { SyncOperation } from './OperationManager';
 
 // Types and Constants
 import { getFormattedDate } from './utils';
 import { getDefaultStoreItems } from './defaultData';
 import type { ActiveTab, Employee, Task, DailyDataMap, TaskAssignments, StoreItem } from './types';
-import type { PrepItem, ScheduledPrep, PrepSelections } from './prep-types';
 
 // Extend ActiveTab type to include inventory
 type ExtendedActiveTab = ActiveTab | 'inventory';
@@ -46,18 +47,11 @@ const EmployeeApp: React.FC = () => {
     firebaseMeta.current = new (require('./firebaseService').FirebaseService)();
   }
 
-  // Get user info first
+  // Firebase and Auth hooks with multi-device sync
   const {
-    currentUser,
-    isAdmin,
-    setIsAdmin,
-    switchUser,
-    logoutAdmin
-  } = useAuth();
-
-  // Professional multi-device sync with enhanced capabilities
-  const {
-    // Data state
+    isLoading,
+    lastSync,
+    connectionStatus,
     employees,
     tasks,
     dailyData,
@@ -73,8 +67,6 @@ const EmployeeApp: React.FC = () => {
     inventoryMonthlyItems,
     inventoryDatabaseItems,
     inventoryActivityLog,
-    
-    // Setters
     setEmployees,
     setTasks,
     setDailyData,
@@ -90,21 +82,81 @@ const EmployeeApp: React.FC = () => {
     setInventoryMonthlyItems,
     setInventoryDatabaseItems,
     setInventoryActivityLog,
-    
-    // Sync operations
+    loadFromFirebase,
+    saveToFirebase,
     quickSave,
+    applyTaskSyncOperation
+  } = useFirebaseData();
+
+  // Real-time cleaning tasks sync with debouncing to prevent oscillation
+  useEffect(() => {
+    if (!firebaseMeta.current) return;
     
-    // Sync status
-    syncState,
-    activeDevices
-  } = useProfessionalSync(currentUser?.name || 'Unknown User');
+    // Debounce incoming real-time updates to prevent rapid oscillation between devices
+    let completedTasksTimeout: NodeJS.Timeout;
+    let assignmentsTimeout: NodeJS.Timeout;
+    
+    const unsubscribeCompleted = firebaseMeta.current.onCompletedTasksChange((newCompleted: number[] | Set<number>) => {
+      clearTimeout(completedTasksTimeout);
+      completedTasksTimeout = setTimeout(() => {
+        console.log('🔄 [SYNC] Received completedTasks update from Firebase:', newCompleted);
+        
+        // Create new set from received data
+        const newSet = new Set(Array.isArray(newCompleted) ? newCompleted : Array.from(newCompleted));
+        
+        // Use callback to get current state for comparison
+        setCompletedTasks(currentTasks => {
+          const currentArray = Array.from(currentTasks);
+          const newArray = Array.from(newSet);
+          
+          // Only update if there's an actual difference
+          if (currentArray.length !== newArray.length || !currentArray.every(id => newSet.has(id))) {
+            console.log('🔄 [SYNC] CompletedTasks actually changed, updating state');
+            return newSet;
+          } else {
+            console.log('🔄 [SYNC] CompletedTasks unchanged, keeping current state');
+            return currentTasks;
+          }
+        });
+      }, 150); // 150ms debounce to prevent oscillation
+    });
+    
+    const unsubscribeAssignments = firebaseMeta.current.onTaskAssignmentsChange((newAssignments: any) => {
+      clearTimeout(assignmentsTimeout);
+      assignmentsTimeout = setTimeout(() => {
+        console.log('🔄 [SYNC] Received taskAssignments update from Firebase:', newAssignments);
+        
+        // Use callback to get current state for comparison
+        setTaskAssignments(currentAssignments => {
+          const currentStr = JSON.stringify(currentAssignments);
+          const newStr = JSON.stringify(newAssignments || {});
+          
+          if (currentStr !== newStr) {
+            console.log('🔄 [SYNC] TaskAssignments actually changed, updating state');
+            return newAssignments || {};
+          } else {
+            console.log('🔄 [SYNC] TaskAssignments unchanged, keeping current state');
+            return currentAssignments;
+          }
+        });
+      }, 150); // 150ms debounce to prevent oscillation
+    });
+    
+    return () => {
+      clearTimeout(completedTasksTimeout);
+      clearTimeout(assignmentsTimeout);
+      if (unsubscribeCompleted) unsubscribeCompleted();
+      if (unsubscribeAssignments) unsubscribeAssignments();
+    };
+  }, [setCompletedTasks, setTaskAssignments]); // Only depend on setters
 
-  // Extract sync state properties for compatibility with existing code
-  const isLoading = syncState.isLoading;
-  const connectionStatus = syncState.isConnected ? 'connected' : (syncState.error ? 'error' : 'connecting');
-
-  // Professional sync handles all real-time updates automatically
-  // No need for manual Firebase subscription management
+  const {
+    currentUser,
+    isAdmin,
+    setIsAdmin,
+    switchUser,
+    logoutAdmin
+  } = useAuth();
 
   // UI State
   const [userMood, setUserMood] = useState(3);
@@ -115,13 +167,61 @@ const EmployeeApp: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState(getFormattedDate(new Date()));
   const [storeItems, setStoreItems] = useState<StoreItem[]>(getDefaultStoreItems());
   const [showDailyResetNotification, setShowDailyResetNotification] = useState(false);
+  const [conflictCount, setConflictCount] = useState(0);
 
-  // Professional sync handles initialization automatically
-  // No manual initialization needed
+  // State for task operations history
+  const [taskOperations, setTaskOperations] = useState<SyncOperation[]>([]);
+  // State for employee operations history
+  const [employeeOperations, setEmployeeOperations] = useState<SyncOperation[]>([]);
+
+  // Initialize on mount - with better control
+  useEffect(() => {
+    let mounted = true;
+    const initializeApp = async () => {
+      if (mounted && employees.length === 0) {
+        console.log('🚀 Initializing app...');
+        await loadFromFirebase();
+      }
+    };
+    
+    initializeApp();
+    
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // Set up periodic auto-save (every 5 minutes)
-  // Professional sync handles auto-save automatically with optimal batching
-  // No need for manual periodic saves
+  // Set up periodic auto-save (every 5 minutes) with logging for cleaning tasks
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      if (connectionStatus === 'connected' && !isLoading) {
+        console.log('🧹 [AUTO-SAVE] Cleaning tasks: Initiating periodic auto-save...');
+        try {
+          await saveToFirebase();
+          // Verification: reload and compare
+          const verify = async () => {
+            const data = await firebaseMeta.current.getCleaningTasksData?.();
+            if (data) {
+              const completedMatch = Array.from(completedTasks).every(t => data.completedTasks?.includes?.(t));
+              const assignmentsMatch = JSON.stringify(taskAssignments) === JSON.stringify(data.taskAssignments);
+              if (completedMatch && assignmentsMatch) {
+                console.log('✅ [AUTO-SAVE] Cleaning tasks verified after save.');
+              } else {
+                console.warn('⚠️ [AUTO-SAVE] Cleaning tasks verification failed.', { completedMatch, assignmentsMatch, data });
+              }
+            } else {
+              console.warn('⚠️ [AUTO-SAVE] Cleaning tasks verification: No data returned.');
+            }
+          };
+          verify();
+        } catch (err) {
+          console.error('❌ [AUTO-SAVE] Cleaning tasks save failed:', err);
+        }
+      }
+    }, 300000); // 5 minutes
+    return () => clearInterval(interval);
+  }, [connectionStatus, isLoading, saveToFirebase, completedTasks, taskAssignments]);
 
   // Check for daily reset notification - improved logic with better debouncing
   useEffect(() => {
@@ -176,83 +276,138 @@ const EmployeeApp: React.FC = () => {
     }
   }, [firebaseStoreItems]);
 
-  // Professional sync handles task operations and conflict resolution automatically
+  // Calculate conflicts
+  useEffect(() => {
+    const conflicts = taskOperations.length - resolveTaskConflicts(taskOperations).length;
+    setConflictCount(conflicts);
+  }, [taskOperations]);
 
-  // Professional sync handles auto-save, so these can be simpler
-  const setEmployeesWithSave = (value: React.SetStateAction<Employee[]>) => {
-    if (typeof value === 'function') {
-      setEmployees(value(employees));
-    } else {
-      setEmployees(value);
-    }
-  };
-  const setTasksWithSave = (value: React.SetStateAction<Task[]>) => {
-    if (typeof value === 'function') {
-      setTasks(value(tasks));
-    } else {
-      setTasks(value);
-    }
-  };
-  const setDailyDataWithSave = (value: React.SetStateAction<DailyDataMap>) => {
-    if (typeof value === 'function') {
-      setDailyData(value(dailyData));
-    } else {
-      setDailyData(value);
-    }
-  };
+  useEffect(() => {
+    const conflicts = employeeOperations.length - resolveEmployeeConflicts(employeeOperations).length;
+    setConflictCount(prev => prev + conflicts);
+  }, [employeeOperations]);
 
-  // Create compatibility function for components that still expect saveToFirebase
-  const saveToFirebase = async () => {
-    // Professional sync handles this automatically
-    console.log('📦 Legacy saveToFirebase called - professional sync handles this automatically');
+  // Handle task operations
+  const handleTaskOperation = useCallback((op: SyncOperation) => {
+    setTaskOperations(prev => [...prev, op]);
+    applyTaskSyncOperation(op);
+  }, [applyTaskSyncOperation]);
+
+  // Subscribe to WebSocket
+  useTaskRealtimeSync(handleTaskOperation);
+
+  // Handle local task operations
+  const handleLocalTaskOperation = (op: SyncOperation) => {
+    setTaskOperations(prev => [...prev, op]);
   };
 
-  // Professional sync handles verification and retries automatically
-  const setCompletedTasksWithSave = setCompletedTasks;
-  const setTaskAssignmentsWithSave = (value: React.SetStateAction<TaskAssignments>) => {
-    if (typeof value === 'function') {
-      setTaskAssignments(value(taskAssignments));
-    } else {
-      setTaskAssignments(value);
+  // Handle employee operations
+  const handleEmployeeOperation = useCallback((op: SyncOperation) => {
+    setEmployeeOperations(prev => [...prev, op]);
+    applyEmployeeOperation(employees, op);
+  }, [employees]);
+
+  // Offline queue handler
+  useEffect(() => {
+    const handleOnline = () => {
+      offlineQueue.processQueue(async (op) => {
+        // wsManager.sendOperation(op, 'normal');
+      });
+    };
+    window.addEventListener('online', handleOnline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+    };
+  }, []);
+
+  // Optimized data change handler
+  const handleDataChange = useCallback(() => {
+    if (connectionStatus === 'connected') {
+      saveToFirebase();
     }
-  };
-  const setCustomRolesWithSave = (value: React.SetStateAction<string[]>) => {
-    if (typeof value === 'function') {
-      setCustomRoles(value(customRoles));
-    } else {
-      setCustomRoles(value);
+  }, [connectionStatus, saveToFirebase]);
+
+  // Enhanced setters that trigger save
+  const setEmployeesWithSave = useCallback((value: React.SetStateAction<Employee[]>) => {
+    setEmployees(value);
+    handleDataChange();
+  }, [setEmployees, handleDataChange]);
+
+  const setTasksWithSave = useCallback((value: React.SetStateAction<Task[]>) => {
+    setTasks(value);
+    handleDataChange();
+  }, [setTasks, handleDataChange]);
+
+  const setDailyDataWithSave = useCallback((updater: (prev: DailyDataMap) => DailyDataMap) => {
+    setDailyData(updater);
+    handleDataChange();
+  }, [setDailyData, handleDataChange]);
+
+  // Enhanced setters for cleaning tasks with logging and verification
+  // Critical QuickSave flow for completedTasks (instant, confirmed, verified)
+  const setCompletedTasksWithSave = useCallback(async (tasks: Set<number>) => {
+    console.log('🔥 [CRITICAL-SAVE] Cleaning tasks: About to save completedTasks:', Array.from(tasks));
+    try {
+      const result = await quickSave('completedTasks', Array.from(tasks));
+      if (result === true) {
+        console.log('🔒 [CRITICAL-SAVE] CompletedTasks QuickSave confirmed by Firebase.');
+        setCompletedTasks(tasks);
+        // Verification
+        const data = await firebaseMeta.current.getCleaningTasksData?.();
+        if (data) {
+          const completedMatch = Array.from(tasks).every(t => data.completedTasks?.includes?.(t));
+          if (completedMatch) {
+            console.log('✅ [CRITICAL-SAVE] Completed tasks successfully verified in Firebase.');
+          } else {
+            console.warn('⚠️ [CRITICAL-SAVE] Completed tasks verification failed.', { tasks, data });
+          }
+        }
+      } else {
+        console.error('❌ [CRITICAL-SAVE] CompletedTasks QuickSave failed:', result);
+      }
+    } catch (err) {
+      console.error('❌ [CRITICAL-SAVE] CompletedTasks QuickSave error:', err);
     }
-  };
-  const setStoreItemsWithSave = (value: React.SetStateAction<StoreItem[]>) => {
+  }, [quickSave, setCompletedTasks]);
+
+  // Critical QuickSave flow for taskAssignments (instant, confirmed, verified)
+  const setTaskAssignmentsWithSave = useCallback(async (updater: (prev: TaskAssignments) => TaskAssignments) => {
+    const newAssignments = typeof updater === 'function' ? updater({ ...taskAssignments }) : updater;
+    console.log('🔥 [CRITICAL-SAVE] Cleaning tasks: About to save taskAssignments:', newAssignments);
+    try {
+      const result = await quickSave('taskAssignments', newAssignments);
+      if (result === true) {
+        console.log('🔒 [CRITICAL-SAVE] TaskAssignments QuickSave confirmed by Firebase.');
+        setTaskAssignments(() => newAssignments);
+        // Verification
+        const data = await firebaseMeta.current.getCleaningTasksData?.();
+        if (data) {
+          const assignmentsMatch = JSON.stringify(newAssignments) === JSON.stringify(data.taskAssignments);
+          if (assignmentsMatch) {
+            console.log('✅ [CRITICAL-SAVE] Task assignments successfully verified in Firebase.');
+          } else {
+            console.warn('⚠️ [CRITICAL-SAVE] Task assignments verification failed.', { newAssignments, data });
+          }
+        }
+      } else {
+        console.error('❌ [CRITICAL-SAVE] TaskAssignments QuickSave failed:', result);
+      }
+    } catch (err) {
+      console.error('❌ [CRITICAL-SAVE] TaskAssignments QuickSave error:', err);
+    }
+  }, [quickSave, setTaskAssignments, taskAssignments]);
+
+  const setCustomRolesWithSave = useCallback((value: React.SetStateAction<string[]>) => {
+    setCustomRoles(value);
+    handleDataChange();
+  }, [setCustomRoles, handleDataChange]);
+
+  const setStoreItemsWithSave = useCallback((value: React.SetStateAction<StoreItem[]>) => {
     const newItems = typeof value === 'function' ? value(storeItems) : value;
     setStoreItems(newItems);
-    setFirebaseStoreItems(newItems);
-  };
-
-  // Create wrapper functions for prep setters to handle function updaters
-  const setPrepItemsWithSave = (value: React.SetStateAction<PrepItem[]>) => {
-    if (typeof value === 'function') {
-      setPrepItems(value(prepItems));
-    } else {
-      setPrepItems(value);
-    }
-  };
-  const setScheduledPrepsWithSave = (value: React.SetStateAction<ScheduledPrep[]>) => {
-    if (typeof value === 'function') {
-      setScheduledPreps(value(scheduledPreps));
-    } else {
-      setScheduledPreps(value);
-    }
-  };
-  const setPrepSelectionsWithSave = (value: React.SetStateAction<PrepSelections>) => {
-    if (typeof value === 'function') {
-      setPrepSelections(value(prepSelections));
-    } else {
-      setPrepSelections(value);
-    }
-  };
-
-
+    setFirebaseStoreItems(() => newItems);
+    handleDataChange();
+  }, [storeItems, setFirebaseStoreItems, handleDataChange]);
 
   // Manual reset function for testing (admin only)
   const handleManualReset = useCallback(() => {
@@ -272,7 +427,7 @@ const EmployeeApp: React.FC = () => {
     localStorage.removeItem('resetCheckedToday');
     
     setCompletedTasks(new Set());
-    setTaskAssignments({});
+    setTaskAssignments(() => ({}));
     localStorage.setItem('lastTaskResetDate', today);
     
     console.log('✅ MANUAL RESET: Cleared both completed tasks AND task assignments');
@@ -382,13 +537,10 @@ const EmployeeApp: React.FC = () => {
       }, 2000);
       return () => clearTimeout(timer);
     }
-  }, [isLoading, connectionStatus, employees.length, completedTasks.size, taskAssignments, quickSave]);
+  }, [isLoading, connectionStatus, employees.length, completedTasks.size, Object.keys(taskAssignments).length, quickSave]);
 
   // Check for daily reset on visibility change
   useEffect(() => {
-    const completedTasksSize = completedTasks.size;
-    const taskAssignmentsLength = Object.keys(taskAssignments).length;
-    
     const handleVisibilityChange = async () => {
       if (!document.hidden && !isLoading && connectionStatus === 'connected') {
         const today = getFormattedDate(new Date());
@@ -398,7 +550,7 @@ const EmployeeApp: React.FC = () => {
           lastResetDate,
           needsReset: lastResetDate !== today
         });
-        if (lastResetDate !== today && (completedTasksSize > 0 || taskAssignmentsLength > 0)) {
+        if (lastResetDate !== today && (completedTasks.size > 0 || Object.keys(taskAssignments).length > 0)) {
           setTimeout(async () => {
             try {
               const saveResults = await Promise.all([
@@ -419,25 +571,22 @@ const EmployeeApp: React.FC = () => {
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [isLoading, connectionStatus, taskAssignments, completedTasks.size, quickSave]);
+  }, [isLoading, connectionStatus, completedTasks.size, Object.keys(taskAssignments).length, quickSave]);
 
   // Debug helper
   useEffect(() => {
-    const completedTasksSize = completedTasks.size;
-    const taskAssignmentsLength = Object.keys(taskAssignments).length;
-    
     if (!isLoading && connectionStatus === 'connected') {
       console.log('📊 DAILY RESET DEBUG:', {
         currentDate: getFormattedDate(new Date()),
         lastResetDate: localStorage.getItem('lastTaskResetDate'),
-        completedTasksCount: completedTasksSize,
-        taskAssignmentsCount: taskAssignmentsLength,
+        completedTasksCount: completedTasks.size,
+        taskAssignmentsCount: Object.keys(taskAssignments).length,
         isLoading,
         connectionStatus,
         employeeCount: employees.length
       });
     }
-  }, [taskAssignments, completedTasks.size, isLoading, connectionStatus, employees.length]);
+  }, [completedTasks.size, Object.keys(taskAssignments).length, isLoading, connectionStatus]);
 
   // Manual trigger for testing
   useEffect(() => {
@@ -674,11 +823,13 @@ const EmployeeApp: React.FC = () => {
           </div>
         )}
 
-        {/* Professional Sync Status Indicator */}
-        <ProfessionalSyncStatus
-          syncState={syncState}
-          activeDevices={activeDevices}
-          className="mb-6"
+        {/* Enhanced Sync Status Indicator */}
+        <SyncStatusIndicator
+          isLoading={isLoading}
+          lastSync={lastSync}
+          connectionStatus={connectionStatus}
+          loadFromFirebase={loadFromFirebase}
+          conflictCount={conflictCount}
         />
 
         {/* Tab Content */}
@@ -715,9 +866,9 @@ const EmployeeApp: React.FC = () => {
             prepItems={prepItems}
             scheduledPreps={scheduledPreps}
             prepSelections={prepSelections}
-            setPrepItems={setPrepItemsWithSave}
-            setScheduledPreps={setScheduledPrepsWithSave}
-            setPrepSelections={setPrepSelectionsWithSave}
+            setPrepItems={setPrepItems}
+            setScheduledPreps={setScheduledPreps}
+            setPrepSelections={setPrepSelections}
             quickSave={quickSave}
           />
         )}
@@ -764,7 +915,7 @@ const EmployeeApp: React.FC = () => {
             setTasks={setTasksWithSave}
             setCustomRoles={setCustomRolesWithSave}
             setStoreItems={setStoreItemsWithSave}
-            setPrepItems={setPrepItemsWithSave}
+            setPrepItems={setPrepItems}
             quickSave={quickSave}
           />
         )}

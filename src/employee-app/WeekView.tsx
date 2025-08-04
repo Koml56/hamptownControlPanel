@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Check } from 'lucide-react';
 import type { ScheduledPrep, Recipe } from './prep-types';
 import { timeSlots, priorities } from './prep-constants';
-import { getDateString } from './prep-utils';
+import { getDateString, formatDate, getWeekDates } from './prep-utils';
 
 interface WeekViewProps {
   scheduledPreps: ScheduledPrep[];
