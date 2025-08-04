@@ -11,12 +11,11 @@ import type {
   Priority,
   PrepSelections
 } from './prep-types';
-import { categories, timeSlots, priorities, PREP_STYLES } from './prep-constants';
+import { categories, PREP_STYLES } from './prep-constants';
 import { getDefaultPrepItems } from './prep-default-data';
 import {
   getDateString,
   formatDate,
-  getWeekDates,
   getSelectionKey,
   generateUniqueId
 } from './prep-utils';
@@ -59,12 +58,10 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
   const [showPriorityOptions, setShowPriorityOptions] = useState<number | string | null>(null);
   const [showTimeOptions, setShowTimeOptions] = useState<number | string | null>(null);
   const [assignmentStep, setAssignmentStep] = useState<Record<number, string | null>>({});
-  const [showSuggestedPreps, setShowSuggestedPreps] = useState(true);
   const [movedPrepsNotification, setMovedPrepsNotification] = useState<number>(0);
 
   // FIXED: Track if we're in the middle of a save operation to prevent race conditions
   const [isSaving, setIsSaving] = useState(false);
-  const [syncPaused, setSyncPaused] = useState(false);
 
   // Detect admin mode by checking for admin UI elements
   const [isAdminMode, setIsAdminMode] = useState(false);
@@ -202,7 +199,6 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
     }
 
     setIsSaving(true);
-    setSyncPaused(true); // PAUSE SYNC during save operation
 
     try {
       // Find the prep item to update
@@ -252,8 +248,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
         
         // ENHANCED: Wait longer before re-enabling sync to ensure save propagates
         setTimeout(async () => {
-          setSyncPaused(false);
-          console.log('🔄 SYNC RESUMED after save completion');
+          console.log('🔄 Save completion verification');
           
           // Verify what we actually saved
           try {
@@ -294,14 +289,12 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
         console.error('❌ Failed to save prep completion to Firebase');
         // Revert the state change if save failed
         setScheduledPreps(() => scheduledPreps);
-        setSyncPaused(false);
       }
 
     } catch (error) {
       console.error('❌ Error toggling prep completion:', error);
       // Revert the state change if there was an error
       setScheduledPreps(() => scheduledPreps);
-      setSyncPaused(false);
     } finally {
       setIsSaving(false);
     }
