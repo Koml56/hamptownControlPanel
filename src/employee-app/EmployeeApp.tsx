@@ -28,8 +28,8 @@ import SyncStatusIndicator from './SyncStatusIndicator';
 // Hooks and Functions
 import { useFirebaseData, useAuth, useTaskRealtimeSync } from './hooks';
 import { handleAdminLogin } from './adminFunctions';
-import { offlineQueue, resolveTaskConflicts } from './taskOperations';
-import { applyEmployeeOperation, resolveEmployeeConflicts } from './employeeOperations';
+// Remove unused imports
+import { resolveTaskConflicts, offlineQueue } from './taskOperations';
 import type { SyncOperation } from './OperationManager';
 
 // Types and Constants
@@ -171,8 +171,6 @@ const EmployeeApp: React.FC = () => {
 
   // State for task operations history
   const [taskOperations, setTaskOperations] = useState<SyncOperation[]>([]);
-  // State for employee operations history
-  const [employeeOperations, setEmployeeOperations] = useState<SyncOperation[]>([]);
 
   // Initialize on mount - with better control
   useEffect(() => {
@@ -189,7 +187,7 @@ const EmployeeApp: React.FC = () => {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [employees.length, loadFromFirebase]);
 
   // Set up periodic auto-save (every 5 minutes)
   // Set up periodic auto-save (every 5 minutes) with logging for cleaning tasks
@@ -282,11 +280,6 @@ const EmployeeApp: React.FC = () => {
     setConflictCount(conflicts);
   }, [taskOperations]);
 
-  useEffect(() => {
-    const conflicts = employeeOperations.length - resolveEmployeeConflicts(employeeOperations).length;
-    setConflictCount(prev => prev + conflicts);
-  }, [employeeOperations]);
-
   // Handle task operations
   const handleTaskOperation = useCallback((op: SyncOperation) => {
     setTaskOperations(prev => [...prev, op]);
@@ -295,17 +288,6 @@ const EmployeeApp: React.FC = () => {
 
   // Subscribe to WebSocket
   useTaskRealtimeSync(handleTaskOperation);
-
-  // Handle local task operations
-  const handleLocalTaskOperation = (op: SyncOperation) => {
-    setTaskOperations(prev => [...prev, op]);
-  };
-
-  // Handle employee operations
-  const handleEmployeeOperation = useCallback((op: SyncOperation) => {
-    setEmployeeOperations(prev => [...prev, op]);
-    applyEmployeeOperation(employees, op);
-  }, [employees]);
 
   // Offline queue handler
   useEffect(() => {
@@ -537,10 +519,13 @@ const EmployeeApp: React.FC = () => {
       }, 2000);
       return () => clearTimeout(timer);
     }
-  }, [isLoading, connectionStatus, employees.length, completedTasks.size, Object.keys(taskAssignments).length, quickSave]);
+  }, [isLoading, connectionStatus, employees.length, completedTasks.size, taskAssignments, quickSave]);
 
   // Check for daily reset on visibility change
   useEffect(() => {
+    const completedTasksSize = completedTasks.size;
+    const taskAssignmentsLength = Object.keys(taskAssignments).length;
+    
     const handleVisibilityChange = async () => {
       if (!document.hidden && !isLoading && connectionStatus === 'connected') {
         const today = getFormattedDate(new Date());
@@ -550,7 +535,7 @@ const EmployeeApp: React.FC = () => {
           lastResetDate,
           needsReset: lastResetDate !== today
         });
-        if (lastResetDate !== today && (completedTasks.size > 0 || Object.keys(taskAssignments).length > 0)) {
+        if (lastResetDate !== today && (completedTasksSize > 0 || taskAssignmentsLength > 0)) {
           setTimeout(async () => {
             try {
               const saveResults = await Promise.all([
@@ -571,22 +556,25 @@ const EmployeeApp: React.FC = () => {
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [isLoading, connectionStatus, completedTasks.size, Object.keys(taskAssignments).length, quickSave]);
+  }, [isLoading, connectionStatus, taskAssignments, completedTasks.size, quickSave]);
 
   // Debug helper
   useEffect(() => {
+    const completedTasksSize = completedTasks.size;
+    const taskAssignmentsLength = Object.keys(taskAssignments).length;
+    
     if (!isLoading && connectionStatus === 'connected') {
       console.log('📊 DAILY RESET DEBUG:', {
         currentDate: getFormattedDate(new Date()),
         lastResetDate: localStorage.getItem('lastTaskResetDate'),
-        completedTasksCount: completedTasks.size,
-        taskAssignmentsCount: Object.keys(taskAssignments).length,
+        completedTasksCount: completedTasksSize,
+        taskAssignmentsCount: taskAssignmentsLength,
         isLoading,
         connectionStatus,
         employeeCount: employees.length
       });
     }
-  }, [completedTasks.size, Object.keys(taskAssignments).length, isLoading, connectionStatus]);
+  }, [taskAssignments, completedTasks.size, isLoading, connectionStatus, employees.length]);
 
   // Manual trigger for testing
   useEffect(() => {

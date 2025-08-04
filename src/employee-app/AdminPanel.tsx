@@ -13,7 +13,7 @@ import {
   updateStoreItem,
   deleteStoreItem
 } from './adminFunctions';
-import type { Employee, Task, StoreItem, PrepItem, Recipe, AdminPanelProps } from './types';
+import type { Task, StoreItem, PrepItem, Recipe, AdminPanelProps } from './types';
 import debounce from 'lodash/debounce';
 
 const AdminPanel: React.FC<AdminPanelProps> = ({
@@ -224,8 +224,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const [localTaskEdits, setLocalTaskEdits] = useState<Record<number, Partial<Task>>>({});
 
-  const debouncedUpdateTask = React.useCallback(
-    debounce((id: number, field: keyof Task, value: string) => {
+  const debouncedUpdateTask = React.useMemo(
+    () => debounce((id: number, field: keyof Task, value: string) => {
       updateTask(id, field, value, setTasks);
       setLocalTaskEdits(prev => {
         const { [id]: removed, ...rest } = prev;

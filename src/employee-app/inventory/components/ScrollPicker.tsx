@@ -1,5 +1,5 @@
 // src/employee-app/inventory/components/ScrollPicker.tsx
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 
 interface ScrollPickerProps {
   value: number;
@@ -27,10 +27,13 @@ const ScrollPicker: React.FC<ScrollPickerProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Generate values array
-  const values: number[] = [];
-  for (let i = min; i <= max; i += step) {
-    values.push(i);
-  }
+  const values = useMemo(() => {
+    const result: number[] = [];
+    for (let i = min; i <= max; i += step) {
+      result.push(i);
+    }
+    return result;
+  }, [min, max, step]);
 
   const itemHeight = 48; // Height of each item in pixels
   const containerHeight = 192; // Total height of the picker
