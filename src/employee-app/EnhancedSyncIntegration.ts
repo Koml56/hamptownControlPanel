@@ -1,334 +1,296 @@
-// EnhancedSyncIntegration.ts - Professional integration layer for multi-device sync
-import { ProfessionalMultiDeviceSync, SyncEvent, DeviceInfo } from './ProfessionalMultiDeviceSync';
-import type { Employee, Task, TaskAssignments } from './types';
+// SyncIntegration.ts - Integration layer for the unified sync system
+import { UnifiedMultiDeviceSync, DeviceInfo, SyncEvent, SyncData } from './UnifiedMultiDeviceSync';
+import type { 
+  Employee, Task, DailyDataMap, TaskAssignments, PrepItem, ScheduledPrep, 
+  PrepSelections, StoreItem, InventoryItem, DatabaseItem, ActivityLogEntry 
+} from './types';
 
-interface SyncState {
+export interface SyncState {
   isConnected: boolean;
+  isInitialized: boolean;
   deviceCount: number;
   lastSync: number;
-  connectionQuality: string;
+  connectionQuality: 'excellent' | 'good' | 'poor';
   syncEvents: SyncEvent[];
-  conflicts: number;
+  error?: string;
+  isListening: boolean;
+  queueSize: number;
+  deviceId: string;
 }
 
-interface ConflictResolutionStrategy {
-  employees: 'newest' | 'merge' | 'manual';
-  tasks: 'newest' | 'merge' | 'manual';
-  inventory: 'newest' | 'merge' | 'manual';
-  default: 'newest' | 'merge' | 'manual';
+export interface SyncConfig {
+  enableAutoSync: boolean;
+  syncInterval: number;
+  maxRetries: number;
+  batchDelay: number;
+  enableOfflineMode: boolean;
 }
 
-export class EnhancedSyncIntegration {
-  private syncService: ProfessionalMultiDeviceSync;
-  private syncState: SyncState;
-  private conflictStrategy: ConflictResolutionStrategy;
+export class SyncIntegration {
+  private syncService: UnifiedMultiDeviceSync;
   private syncCallbacks: Map<string, (data: any) => void> = new Map();
+  private syncState: SyncState;
   private eventHistory: SyncEvent[] = [];
-  private readonly maxEventHistory = 100;
+  private maxEventHistory = 100;
+  private onSyncStateChange?: (state: SyncState) => void;
+  private config: SyncConfig;
+  
+  constructor(userName: string = 'Unknown User', config?: Partial<SyncConfig>) {
+    this.config = {
+      enableAutoSync: true,
+      syncInterval: 1000,
+      maxRetries: 10,
+      batchDelay: 500,
+      enableOfflineMode: true,
+      ...config
+    };
 
-  constructor(userName: string = 'Unknown User') {
-    this.syncService = new ProfessionalMultiDeviceSync(userName);
-    
     this.syncState = {
       isConnected: false,
+      isInitialized: false,
       deviceCount: 0,
       lastSync: 0,
-      connectionQuality: 'excellent',
+      connectionQuality: 'poor',
       syncEvents: [],
-      conflicts: 0
+      isListening: false,
+      queueSize: 0,
+      deviceId: ''
     };
 
-    this.conflictStrategy = {
-      employees: 'merge',
-      tasks: 'merge', 
-      inventory: 'newest',
-      default: 'newest'
-    };
-
+    this.syncService = new UnifiedMultiDeviceSync(userName);
     this.setupEventHandlers();
-    this.setupConflictResolution();
     
-    console.log('🎯 Enhanced Sync Integration initialized');
+    console.log('🔧 Sync Integration initialized with config:', this.config);
   }
 
   private setupEventHandlers(): void {
     // Device count changes
-    this.syncService.onDeviceCountChanged((count, devices) => {
+    this.syncService.onDeviceCountChanged((count: number, devices: DeviceInfo[]) => {
       this.syncState.deviceCount = count;
-      console.log(`📱 Active devices: ${count}`, devices.map(d => d.name));
-      // Emit sync state update to notify React components
       this.emitSyncStateUpdate();
+      
+      console.log(`📱 Device count updated: ${count} active devices`);
     });
 
     // Sync events
-    this.syncService.onSyncEventReceived((event) => {
-      this.handleSyncEvent(event);
+    this.syncService.onSyncEventReceived((event: SyncEvent) => {
+      this.addEventToHistory(event);
+      this.updateSyncStateFromEvent(event);
+      this.emitSyncStateUpdate();
+    });
+
+    // Connection state changes
+    this.syncService.onConnectionStateChanged((isConnected: boolean, quality: string) => {
+      this.syncState.isConnected = isConnected;
+      this.syncState.connectionQuality = quality as 'excellent' | 'good' | 'poor';
+      this.syncState.isInitialized = isConnected;
+      
+      if (isConnected) {
+        this.syncState.error = undefined;
+      }
+      
+      this.emitSyncStateUpdate();
+      
+      console.log(`🔌 Connection state: ${isConnected ? 'connected' : 'disconnected'} (${quality})`);
     });
   }
 
-  private setupConflictResolution(): void {
-    this.syncService.onConflictResolution((field, localData, remoteData) => {
-      return this.resolveConflict(field, localData, remoteData);
-    });
-  }
-
-  private handleSyncEvent(event: SyncEvent): void {
-    // Add to event history
+  private addEventToHistory(event: SyncEvent): void {
     this.eventHistory.unshift(event);
+    
+    // Keep only the latest events
     if (this.eventHistory.length > this.maxEventHistory) {
       this.eventHistory = this.eventHistory.slice(0, this.maxEventHistory);
     }
+    
+    // Update sync state events (keep last 10 for UI)
+    this.syncState.syncEvents = this.eventHistory.slice(0, 10);
+  }
 
-    // Update sync state
+  private updateSyncStateFromEvent(event: SyncEvent): void {
+    const stats = this.syncService.getSyncStats();
+    
     this.syncState.lastSync = event.timestamp;
-    this.syncState.syncEvents = this.eventHistory.slice(0, 10); // Keep last 10 events
-
-    // Handle different event types
-    switch (event.type) {
-      case 'device_join':
-        console.log(`👋 Device joined: ${event.deviceName}`);
-        break;
-      case 'device_leave':
-        console.log(`👋 Device left: ${event.deviceName}`);
-        break;
-      case 'conflict_resolution':
-        this.syncState.conflicts++;
-        console.log(`⚖️ Conflict resolved for ${event.field}`);
-        break;
-      case 'error':
-        console.warn(`❌ Sync error: ${event.description}`);
-        break;
-    }
-
-    // Emit to listeners
-    this.emitSyncStateUpdate();
-  }
-
-  private resolveConflict(field: string, localData: any, remoteData: any): any {
-    const strategy = this.getConflictStrategy(field);
+    this.syncState.isListening = stats.isListening;
+    this.syncState.queueSize = stats.queueSize;
+    this.syncState.deviceId = stats.deviceId;
     
-    console.log(`⚖️ Resolving conflict for ${field} using strategy: ${strategy}`);
-
-    switch (strategy) {
-      case 'newest':
-        return this.resolveByNewest(localData, remoteData);
-      case 'merge':
-        return this.resolveByMerge(field, localData, remoteData);
-      case 'manual':
-        return this.resolveManually(field, localData, remoteData);
-      default:
-        return remoteData; // Default to remote data
+    // Handle error events
+    if (event.type === 'error') {
+      this.syncState.error = event.description;
+      this.syncState.connectionQuality = 'poor';
+    } else if (event.type === 'connection_restored') {
+      this.syncState.error = undefined;
+      this.syncState.connectionQuality = 'excellent';
     }
   }
 
-  private getConflictStrategy(field: string): 'newest' | 'merge' | 'manual' {
-    if (field.includes('employee')) return this.conflictStrategy.employees;
-    if (field.includes('task')) return this.conflictStrategy.tasks;
-    if (field.includes('inventory')) return this.conflictStrategy.inventory;
-    return this.conflictStrategy.default;
+  private emitSyncStateUpdate(): void {
+    if (this.onSyncStateChange) {
+      this.onSyncStateChange({ ...this.syncState });
+    }
   }
 
-  private resolveByNewest(localData: any, remoteData: any): any {
-    // Simple timestamp-based resolution
-    const localTime = this.getDataTimestamp(localData);
-    const remoteTime = this.getDataTimestamp(remoteData);
-    
-    return localTime > remoteTime ? localData : remoteData;
-  }
+  // === PUBLIC API ===
 
-  private resolveByMerge(field: string, localData: any, remoteData: any): any {
+  // Initialization and connection
+  async initialize(): Promise<void> {
     try {
-      switch (field) {
-        case 'employees':
-          return this.mergeEmployees(localData, remoteData);
-        case 'tasks':
-          return this.mergeTasks(localData, remoteData);
-        case 'completedTasks':
-          return this.mergeCompletedTasks(localData, remoteData);
-        case 'taskAssignments':
-          return this.mergeTaskAssignments(localData, remoteData);
-        default:
-          // For arrays, merge by unique ID
-          if (Array.isArray(localData) && Array.isArray(remoteData)) {
-            return this.mergeArraysByID(localData, remoteData);
-          }
-          // For objects, merge properties
-          if (typeof localData === 'object' && typeof remoteData === 'object') {
-            return { ...remoteData, ...localData };
-          }
-          return remoteData;
-      }
-    } catch (error) {
-      console.warn(`⚠️ Merge failed for ${field}, using remote data:`, error);
-      return remoteData;
-    }
-  }
-
-  private mergeEmployees(local: Employee[], remote: Employee[]): Employee[] {
-    const merged = [...remote];
-    
-    local.forEach(localEmp => {
-      const existingIndex = merged.findIndex(emp => emp.id === localEmp.id);
-      if (existingIndex >= 0) {
-        // Keep the one with more recent data (higher points or more recent activity)
-        const existing = merged[existingIndex];
-        if (localEmp.points >= existing.points) {
-          merged[existingIndex] = localEmp;
-        }
-      } else {
-        merged.push(localEmp);
-      }
-    });
-
-    return merged;
-  }
-
-  private mergeTasks(local: Task[], remote: Task[]): Task[] {
-    const merged = [...remote];
-    
-    local.forEach(localTask => {
-      const existingIndex = merged.findIndex(task => task.id === localTask.id);
-      if (existingIndex >= 0) {
-        // Merge task properties, keeping local changes for description and points
-        merged[existingIndex] = {
-          ...merged[existingIndex],
-          ...localTask
-        };
-      } else {
-        merged.push(localTask);
-      }
-    });
-
-    return merged;
-  }
-
-  private mergeCompletedTasks(local: Set<number> | number[], remote: Set<number> | number[]): Set<number> {
-    const localArray = Array.isArray(local) ? local : Array.from(local);
-    const remoteArray = Array.isArray(remote) ? remote : Array.from(remote);
-    
-    // Union of both sets
-    return new Set([...localArray, ...remoteArray]);
-  }
-
-  private mergeTaskAssignments(local: TaskAssignments, remote: TaskAssignments): TaskAssignments {
-    return { ...remote, ...local };
-  }
-
-  private mergeArraysByID(local: any[], remote: any[]): any[] {
-    const merged = [...remote];
-    
-    local.forEach(localItem => {
-      if (localItem.id) {
-        const existingIndex = merged.findIndex(item => item.id === localItem.id);
-        if (existingIndex >= 0) {
-          merged[existingIndex] = localItem;
-        } else {
-          merged.push(localItem);
-        }
-      }
-    });
-
-    return merged;
-  }
-
-  private resolveManually(field: string, localData: any, remoteData: any): any {
-    // For now, return remote data and log for manual review
-    console.warn(`🔍 Manual conflict resolution needed for ${field}`);
-    // In a real implementation, this would trigger a UI for manual resolution
-    return remoteData;
-  }
-
-  private getDataTimestamp(data: any): number {
-    // Try to extract timestamp from data structure
-    if (data && typeof data === 'object') {
-      if (data.lastModified) return data.lastModified;
-      if (data.timestamp) return data.timestamp;
-      if (data.updatedAt) return data.updatedAt;
-    }
-    return Date.now();
-  }
-
-  // Public API
-  async connect(): Promise<void> {
-    try {
-      await this.syncService.connect();
-      this.syncState.isConnected = true;
+      console.log('🚀 Initializing sync integration...');
+      
+      // The UnifiedMultiDeviceSync auto-connects in constructor
+      // We just need to wait for the connection to be established
+      
+      this.syncState.isInitialized = true;
       this.emitSyncStateUpdate();
+      
+      console.log('✅ Sync integration initialized successfully');
+      
     } catch (error) {
-      console.error('❌ Enhanced sync connection failed:', error);
-      this.syncState.isConnected = false;
+      console.error('❌ Sync integration initialization failed:', error);
+      this.syncState.error = `Initialization failed: ${error}`;
+      this.emitSyncStateUpdate();
       throw error;
     }
   }
 
-  async disconnect(): Promise<void> {
-    await this.syncService.disconnect();
+  async connect(): Promise<void> {
+    await this.syncService.connect();
+  }
+
+  disconnect(): void {
+    this.syncService.disconnect();
     this.syncState.isConnected = false;
+    this.syncState.isInitialized = false;
     this.emitSyncStateUpdate();
   }
 
   // Field subscription management
   subscribeToField(field: string, callback: (data: any) => void): void {
+    console.log(`📡 Subscribing to field: ${field}`);
+    
+    // Store callback for management
     this.syncCallbacks.set(field, callback);
+    
+    // Subscribe through the sync service
     this.syncService.onFieldChange(field, callback);
   }
 
   unsubscribeFromField(field: string): void {
+    console.log(`📡 Unsubscribing from field: ${field}`);
+    
     this.syncCallbacks.delete(field);
     this.syncService.offFieldChange(field);
   }
 
   // Data synchronization
-  async syncField(field: string, data: any): Promise<void> {
+  async syncField(field: string, data: any, priority: 'high' | 'normal' | 'low' = 'normal'): Promise<void> {
+    if (!this.config.enableAutoSync) {
+      console.log(`⏸️ Auto-sync disabled, skipping ${field}`);
+      return;
+    }
+
     try {
-      await this.syncService.syncData(field, data);
+      await this.syncService.syncData(field, data, priority);
+      console.log(`📤 Queued ${field} for sync (${priority} priority)`);
     } catch (error) {
       console.error(`❌ Failed to sync ${field}:`, error);
+      this.syncState.error = `Sync failed for ${field}: ${error}`;
+      this.emitSyncStateUpdate();
       throw error;
     }
   }
 
   // Bulk sync for multiple fields
   async syncMultipleFields(updates: Record<string, any>): Promise<void> {
-    const promises = Object.entries(updates).map(([field, data]) => 
-      this.syncField(field, data)
-    );
-    
-    await Promise.allSettled(promises);
+    if (!this.config.enableAutoSync) {
+      console.log('⏸️ Auto-sync disabled, skipping bulk sync');
+      return;
+    }
+
+    try {
+      await this.syncService.syncMultipleFields(updates);
+      console.log(`📤 Queued ${Object.keys(updates).length} fields for bulk sync`);
+    } catch (error) {
+      console.error('❌ Bulk sync failed:', error);
+      this.syncState.error = `Bulk sync failed: ${error}`;
+      this.emitSyncStateUpdate();
+      throw error;
+    }
   }
 
-  // Data refresh
-  async refreshAllData(): Promise<any> {
+  // Data refresh and retrieval
+  async refreshAllData(): Promise<SyncData> {
     try {
-      return await this.syncService.refreshDataFromAllDevices();
+      console.log('🔄 Refreshing all data from remote...');
+      const data = await this.syncService.refreshAllData();
+      console.log('✅ Data refresh completed');
+      return data;
     } catch (error) {
       console.error('❌ Failed to refresh data:', error);
+      this.syncState.error = `Data refresh failed: ${error}`;
+      this.emitSyncStateUpdate();
       throw error;
     }
   }
 
   // Device management
   async getActiveDevices(): Promise<DeviceInfo[]> {
-    return await this.syncService.getActiveDevices();
+    try {
+      // Get device info from the sync service stats
+      const stats = this.syncService.getSyncStats();
+      
+      // For now, return basic device info
+      // The actual device count is updated via the callback
+      return [this.syncService.getDeviceInfo()];
+    } catch (error) {
+      console.error('❌ Failed to get active devices:', error);
+      return [];
+    }
   }
 
   updateUser(userName: string): void {
     this.syncService.updateCurrentUser(userName);
+    console.log(`👤 Updated user to: ${userName}`);
   }
 
-  // Diagnostics and monitoring
+  // Configuration management
+  updateConfig(newConfig: Partial<SyncConfig>): void {
+    this.config = { ...this.config, ...newConfig };
+    console.log('⚙️ Sync config updated:', this.config);
+  }
+
+  getConfig(): SyncConfig {
+    return { ...this.config };
+  }
+
+  // State and diagnostics
   getSyncState(): SyncState {
     const stats = this.syncService.getSyncStats();
+    
     return {
       ...this.syncState,
       isConnected: stats.isConnected,
-      lastSync: stats.lastSync,
-      connectionQuality: stats.connectionQuality
+      lastSync: stats.lastSync || this.syncState.lastSync,
+      isListening: stats.isListening,
+      queueSize: stats.queueSize,
+      deviceId: stats.deviceId,
+      connectionQuality: stats.connectionQuality as 'excellent' | 'good' | 'poor'
     };
   }
 
   async checkDataIntegrity(): Promise<Map<string, boolean>> {
-    return await this.syncService.checkDataIntegrity();
+    try {
+      console.log('🔍 Checking data integrity...');
+      const results = await this.syncService.checkDataIntegrity();
+      console.log('✅ Data integrity check completed');
+      return results;
+    } catch (error) {
+      console.error('❌ Data integrity check failed:', error);
+      this.syncState.error = `Integrity check failed: ${error}`;
+      this.emitSyncStateUpdate();
+      throw error;
+    }
   }
 
   getEventHistory(): SyncEvent[] {
@@ -339,68 +301,246 @@ export class EnhancedSyncIntegration {
     this.eventHistory = [];
     this.syncState.syncEvents = [];
     this.emitSyncStateUpdate();
+    console.log('🗑️ Event history cleared');
   }
 
-  // Configuration
-  setConflictStrategy(strategies: Partial<ConflictResolutionStrategy>): void {
-    this.conflictStrategy = { ...this.conflictStrategy, ...strategies };
-    console.log('⚖️ Conflict resolution strategies updated:', this.conflictStrategy);
-  }
-
-  // State change notifications
-  private stateChangeCallbacks: ((state: SyncState) => void)[] = [];
-
-  onSyncStateChange(callback: (state: SyncState) => void): void {
-    this.stateChangeCallbacks.push(callback);
-  }
-
-  private emitSyncStateUpdate(): void {
-    const currentState = this.getSyncState();
-    this.stateChangeCallbacks.forEach(callback => {
-      try {
-        callback(currentState);
-      } catch (error) {
-        console.warn('⚠️ Sync state callback error:', error);
-      }
-    });
-  }
-
-  // Performance monitoring
-  getPerformanceMetrics(): {
-    avgSyncTime: number;
-    syncSuccessRate: number;
-    conflictRate: number;
-    eventCount: number;
-  } {
-    const syncEvents = this.eventHistory.filter(e => e.type === 'data_update');
-    const conflictEvents = this.eventHistory.filter(e => e.type === 'conflict_resolution');
-    const errorEvents = this.eventHistory.filter(e => e.type === 'error');
-
-    return {
-      avgSyncTime: 0, // Would need to track sync durations
-      syncSuccessRate: syncEvents.length / (syncEvents.length + errorEvents.length) || 1,
-      conflictRate: conflictEvents.length / syncEvents.length || 0,
-      eventCount: this.eventHistory.length
-    };
-  }
-
-  // Recovery and error handling
-  async recoverFromError(): Promise<void> {
-    console.log('🔄 Attempting error recovery...');
-    
+  // Force operations
+  async forceSyncAll(): Promise<void> {
     try {
-      // Disconnect and reconnect
-      await this.disconnect();
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      await this.connect();
-      
-      // Refresh all data
-      await this.refreshAllData();
-      
-      console.log('✅ Error recovery completed');
+      console.log('⚡ Force syncing all pending data...');
+      await this.syncService.forceSyncAll();
+      console.log('✅ Force sync completed');
     } catch (error) {
-      console.error('❌ Error recovery failed:', error);
+      console.error('❌ Force sync failed:', error);
+      this.syncState.error = `Force sync failed: ${error}`;
+      this.emitSyncStateUpdate();
       throw error;
     }
   }
+
+  // Event subscription
+  onSyncStateChanged(callback: (state: SyncState) => void): void {
+    this.onSyncStateChange = callback;
+    
+    // Immediately call with current state
+    setTimeout(() => callback(this.getSyncState()), 0);
+  }
+
+  // Utility methods for common sync operations
+  async syncEmployees(employees: Employee[]): Promise<void> {
+    await this.syncField('employees', employees, 'high');
+  }
+
+  async syncTasks(tasks: Task[]): Promise<void> {
+    await this.syncField('tasks', tasks, 'high');
+  }
+
+  async syncDailyData(dailyData: DailyDataMap): Promise<void> {
+    await this.syncField('dailyData', dailyData, 'normal');
+  }
+
+  async syncCompletedTasks(completedTasks: Set<number> | number[]): Promise<void> {
+    const data = completedTasks instanceof Set ? Array.from(completedTasks) : completedTasks;
+    await this.syncField('completedTasks', data, 'high');
+  }
+
+  async syncTaskAssignments(taskAssignments: TaskAssignments): Promise<void> {
+    await this.syncField('taskAssignments', taskAssignments, 'normal');
+  }
+
+  async syncCustomRoles(customRoles: string[]): Promise<void> {
+    await this.syncField('customRoles', customRoles, 'low');
+  }
+
+  async syncPrepItems(prepItems: PrepItem[]): Promise<void> {
+    await this.syncField('prepItems', prepItems, 'normal');
+  }
+
+  async syncScheduledPreps(scheduledPreps: ScheduledPrep[]): Promise<void> {
+    await this.syncField('scheduledPreps', scheduledPreps, 'normal');
+  }
+
+  async syncPrepSelections(prepSelections: PrepSelections): Promise<void> {
+    await this.syncField('prepSelections', prepSelections, 'normal');
+  }
+
+  async syncStoreItems(storeItems: StoreItem[]): Promise<void> {
+    await this.syncField('storeItems', storeItems, 'normal');
+  }
+
+  async syncInventoryDailyItems(items: InventoryItem[]): Promise<void> {
+    await this.syncField('inventoryDailyItems', items, 'normal');
+  }
+
+  async syncInventoryWeeklyItems(items: InventoryItem[]): Promise<void> {
+    await this.syncField('inventoryWeeklyItems', items, 'normal');
+  }
+
+  async syncInventoryMonthlyItems(items: InventoryItem[]): Promise<void> {
+    await this.syncField('inventoryMonthlyItems', items, 'normal');
+  }
+
+  async syncInventoryDatabaseItems(items: DatabaseItem[]): Promise<void> {
+    await this.syncField('inventoryDatabaseItems', items, 'low');
+  }
+
+  async syncInventoryActivityLog(log: ActivityLogEntry[]): Promise<void> {
+    await this.syncField('inventoryActivityLog', log, 'low');
+  }
+
+  // Batch sync common operations
+  async syncAllCriticalData(data: {
+    employees?: Employee[];
+    tasks?: Task[];
+    completedTasks?: Set<number> | number[];
+    taskAssignments?: TaskAssignments;
+  }): Promise<void> {
+    const updates: Record<string, any> = {};
+    
+    if (data.employees) updates.employees = data.employees;
+    if (data.tasks) updates.tasks = data.tasks;
+    if (data.completedTasks) {
+      updates.completedTasks = data.completedTasks instanceof Set 
+        ? Array.from(data.completedTasks) 
+        : data.completedTasks;
+    }
+    if (data.taskAssignments) updates.taskAssignments = data.taskAssignments;
+    
+    await this.syncMultipleFields(updates);
+  }
+
+  async syncAllPrepData(data: {
+    prepItems?: PrepItem[];
+    scheduledPreps?: ScheduledPrep[];
+    prepSelections?: PrepSelections;
+  }): Promise<void> {
+    const updates: Record<string, any> = {};
+    
+    if (data.prepItems) updates.prepItems = data.prepItems;
+    if (data.scheduledPreps) updates.scheduledPreps = data.scheduledPreps;
+    if (data.prepSelections) updates.prepSelections = data.prepSelections;
+    
+    await this.syncMultipleFields(updates);
+  }
+
+  async syncAllInventoryData(data: {
+    inventoryDailyItems?: InventoryItem[];
+    inventoryWeeklyItems?: InventoryItem[];
+    inventoryMonthlyItems?: InventoryItem[];
+    inventoryDatabaseItems?: DatabaseItem[];
+    inventoryActivityLog?: ActivityLogEntry[];
+  }): Promise<void> {
+    const updates: Record<string, any> = {};
+    
+    if (data.inventoryDailyItems) updates.inventoryDailyItems = data.inventoryDailyItems;
+    if (data.inventoryWeeklyItems) updates.inventoryWeeklyItems = data.inventoryWeeklyItems;
+    if (data.inventoryMonthlyItems) updates.inventoryMonthlyItems = data.inventoryMonthlyItems;
+    if (data.inventoryDatabaseItems) updates.inventoryDatabaseItems = data.inventoryDatabaseItems;
+    if (data.inventoryActivityLog) updates.inventoryActivityLog = data.inventoryActivityLog;
+    
+    await this.syncMultipleFields(updates);
+  }
+
+  // Health check and recovery
+  async performHealthCheck(): Promise<{
+    isHealthy: boolean;
+    issues: string[];
+    recommendations: string[];
+  }> {
+    const issues: string[] = [];
+    const recommendations: string[] = [];
+    
+    const state = this.getSyncState();
+    
+    // Check connection
+    if (!state.isConnected) {
+      issues.push('Not connected to sync service');
+      recommendations.push('Check internet connection and try reconnecting');
+    }
+    
+    // Check queue size
+    if (state.queueSize > 10) {
+      issues.push(`Large sync queue: ${state.queueSize} items`);
+      recommendations.push('Consider force syncing to clear queue');
+    }
+    
+    // Check last sync time
+    const timeSinceLastSync = Date.now() - state.lastSync;
+    if (timeSinceLastSync > 300000) { // 5 minutes
+      issues.push('No recent sync activity');
+      recommendations.push('Check connection and sync status');
+    }
+    
+    // Check for errors
+    if (state.error) {
+      issues.push(`Error: ${state.error}`);
+      recommendations.push('Check logs and try reconnecting');
+    }
+    
+    return {
+      isHealthy: issues.length === 0,
+      issues,
+      recommendations
+    };
+  }
+
+  async recoverFromError(): Promise<void> {
+    try {
+      console.log('🔧 Attempting sync recovery...');
+      
+      // Clear any existing errors
+      this.syncState.error = undefined;
+      
+      // Disconnect and reconnect
+      this.disconnect();
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      await this.connect();
+      
+      // Force sync any pending data
+      await this.forceSyncAll();
+      
+      console.log('✅ Sync recovery completed');
+      
+    } catch (error) {
+      console.error('❌ Sync recovery failed:', error);
+      this.syncState.error = `Recovery failed: ${error}`;
+      this.emitSyncStateUpdate();
+      throw error;
+    }
+  }
+}
+
+// Export a singleton instance for global use
+let globalSyncIntegration: SyncIntegration | null = null;
+
+export function getSyncIntegration(userName?: string): SyncIntegration {
+  if (!globalSyncIntegration) {
+    globalSyncIntegration = new SyncIntegration(userName || 'Unknown User');
+  }
+  return globalSyncIntegration;
+}
+
+export function resetSyncIntegration(): void {
+  if (globalSyncIntegration) {
+    globalSyncIntegration.disconnect();
+    globalSyncIntegration = null;
+  }
+}
+
+// Hook for React components
+export function useSyncIntegration(userName?: string) {
+  const syncIntegration = getSyncIntegration(userName);
+  
+  return {
+    syncIntegration,
+    syncState: syncIntegration.getSyncState(),
+    subscribeToField: syncIntegration.subscribeToField.bind(syncIntegration),
+    unsubscribeFromField: syncIntegration.unsubscribeFromField.bind(syncIntegration),
+    syncField: syncIntegration.syncField.bind(syncIntegration),
+    refreshData: syncIntegration.refreshAllData.bind(syncIntegration),
+    forceSyncAll: syncIntegration.forceSyncAll.bind(syncIntegration),
+    checkIntegrity: syncIntegration.checkDataIntegrity.bind(syncIntegration),
+    performHealthCheck: syncIntegration.performHealthCheck.bind(syncIntegration),
+    recoverFromError: syncIntegration.recoverFromError.bind(syncIntegration)
+  };
 }
