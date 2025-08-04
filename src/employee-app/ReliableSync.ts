@@ -79,10 +79,17 @@ export class ReliableSync {
   }
 
   private generateDeviceId(): string {
-    let deviceId = localStorage.getItem('reliableSync_deviceId');
+    // Generate unique device ID for each tab/instance
+    // Use sessionStorage instead of localStorage to ensure each tab gets unique ID
+    let deviceId = sessionStorage.getItem('reliableSync_deviceId');
     if (!deviceId) {
-      deviceId = `device_${Date.now().toString(36)}_${Math.random().toString(36).substr(2, 6)}`;
-      localStorage.setItem('reliableSync_deviceId', deviceId);
+      // Enhanced uniqueness with timestamp, random number, and additional entropy
+      const timestamp = Date.now().toString(36);
+      const random1 = Math.random().toString(36).substr(2, 6);
+      const random2 = Math.random().toString(36).substr(2, 4);
+      const random3 = Math.random().toString(36).substr(2, 3);
+      deviceId = `device_${timestamp}_${random1}_${random2}_${random3}`;
+      sessionStorage.setItem('reliableSync_deviceId', deviceId);
     }
     return deviceId;
   }

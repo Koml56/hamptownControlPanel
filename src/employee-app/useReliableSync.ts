@@ -160,169 +160,154 @@ export function useReliableSync(userName: string): ReliableSyncHook {
     };
   }, []);
 
-  // Create setters that automatically sync data
+  // Create setters that automatically sync data IMMEDIATELY
   const setEmployees = useCallback((value: Employee[]) => {
     setEmployeesState(value);
     if (syncService.current) {
-      setTimeout(() => {
-        syncService.current!.syncData('employees', value).catch(error => {
-          console.error('Failed to sync employees:', error);
-        });
-      }, 500);
+      // Immediate sync without delay for real-time updates
+      syncService.current.syncData('employees', value).catch(error => {
+        console.error('Failed to sync employees:', error);
+      });
     }
   }, []);
 
   const setTasks = useCallback((value: Task[]) => {
     setTasksState(value);
     if (syncService.current) {
-      setTimeout(() => {
-        syncService.current!.syncData('tasks', value).catch(error => {
-          console.error('Failed to sync tasks:', error);
-        });
-      }, 500);
+      // Immediate sync without delay for real-time updates
+      syncService.current.syncData('tasks', value).catch(error => {
+        console.error('Failed to sync tasks:', error);
+      });
     }
   }, []);
 
   const setDailyData = useCallback((value: DailyDataMap) => {
     setDailyDataState(value);
     if (syncService.current) {
-      setTimeout(() => {
-        syncService.current!.syncData('dailyData', value).catch(error => {
-          console.error('Failed to sync dailyData:', error);
-        });
-      }, 500);
+      // Immediate sync without delay for real-time updates
+      syncService.current.syncData('dailyData', value).catch(error => {
+        console.error('Failed to sync dailyData:', error);
+      });
     }
   }, []);
 
   const setCompletedTasks = useCallback((value: Set<number>) => {
     setCompletedTasksState(value);
     if (syncService.current) {
-      setTimeout(() => {
-        syncService.current!.syncData('completedTasks', value).catch(error => {
-          console.error('Failed to sync completedTasks:', error);
-        });
-      }, 500);
+      // CRITICAL: Immediate sync for checkboxes without any delay
+      syncService.current.syncData('completedTasks', value).catch(error => {
+        console.error('Failed to sync completedTasks:', error);
+      });
     }
   }, []);
 
   const setTaskAssignments = useCallback((value: TaskAssignments) => {
     setTaskAssignmentsState(value);
     if (syncService.current) {
-      setTimeout(() => {
-        syncService.current!.syncData('taskAssignments', value).catch(error => {
-          console.error('Failed to sync taskAssignments:', error);
-        });
-      }, 500);
+      // Immediate sync without delay for real-time updates
+      syncService.current.syncData('taskAssignments', value).catch(error => {
+        console.error('Failed to sync taskAssignments:', error);
+      });
     }
   }, []);
 
   const setCustomRoles = useCallback((value: string[]) => {
     setCustomRolesState(value);
     if (syncService.current) {
-      setTimeout(() => {
-        syncService.current!.syncData('customRoles', value).catch(error => {
-          console.error('Failed to sync customRoles:', error);
-        });
-      }, 500);
+      // Immediate sync without delay for real-time updates
+      syncService.current.syncData('customRoles', value).catch(error => {
+        console.error('Failed to sync customRoles:', error);
+      });
     }
   }, []);
 
   const setPrepItems = useCallback((value: PrepItem[]) => {
     setPrepItemsState(value);
     if (syncService.current) {
-      setTimeout(() => {
-        syncService.current!.syncData('prepItems', value).catch(error => {
-          console.error('Failed to sync prepItems:', error);
-        });
-      }, 500);
+      // Immediate sync without delay for real-time updates
+      syncService.current.syncData('prepItems', value).catch(error => {
+        console.error('Failed to sync prepItems:', error);
+      });
     }
   }, []);
 
   const setScheduledPreps = useCallback((value: ScheduledPrep[]) => {
     setScheduledPrepsState(value);
     if (syncService.current) {
-      setTimeout(() => {
-        syncService.current!.syncData('scheduledPreps', value).catch(error => {
-          console.error('Failed to sync scheduledPreps:', error);
-        });
-      }, 500);
+      // Immediate sync without delay for real-time updates
+      syncService.current.syncData('scheduledPreps', value).catch(error => {
+        console.error('Failed to sync scheduledPreps:', error);
+      });
     }
   }, []);
 
   const setPrepSelections = useCallback((value: PrepSelections) => {
     setPrepSelectionsState(value);
     if (syncService.current) {
-      setTimeout(() => {
-        syncService.current!.syncData('prepSelections', value).catch(error => {
-          console.error('Failed to sync prepSelections:', error);
-        });
-      }, 500);
+      // Immediate sync without delay for real-time updates
+      syncService.current.syncData('prepSelections', value).catch(error => {
+        console.error('Failed to sync prepSelections:', error);
+      });
     }
   }, []);
 
   const setStoreItems = useCallback((value: StoreItem[]) => {
     setStoreItemsState(value);
     if (syncService.current) {
-      setTimeout(() => {
-        syncService.current!.syncData('storeItems', value).catch(error => {
-          console.error('Failed to sync storeItems:', error);
-        });
-      }, 500);
+      // Immediate sync without delay for real-time updates
+      syncService.current.syncData('storeItems', value).catch(error => {
+        console.error('Failed to sync storeItems:', error);
+      });
     }
   }, []);
 
   const setInventoryDailyItems = useCallback((value: InventoryItem[]) => {
     setInventoryDailyItemsState(value);
     if (syncService.current) {
-      setTimeout(() => {
-        syncService.current!.syncData('inventoryDailyItems', value).catch(error => {
-          console.error('Failed to sync inventoryDailyItems:', error);
-        });
-      }, 500);
+      // Immediate sync without delay for real-time updates
+      syncService.current.syncData('inventoryDailyItems', value).catch(error => {
+        console.error('Failed to sync inventoryDailyItems:', error);
+      });
     }
   }, []);
 
   const setInventoryWeeklyItems = useCallback((value: InventoryItem[]) => {
     setInventoryWeeklyItemsState(value);
     if (syncService.current) {
-      setTimeout(() => {
-        syncService.current!.syncData('inventoryWeeklyItems', value).catch(error => {
-          console.error('Failed to sync inventoryWeeklyItems:', error);
-        });
-      }, 500);
+      // Immediate sync without delay for real-time updates
+      syncService.current.syncData('inventoryWeeklyItems', value).catch(error => {
+        console.error('Failed to sync inventoryWeeklyItems:', error);
+      });
     }
   }, []);
 
   const setInventoryMonthlyItems = useCallback((value: InventoryItem[]) => {
     setInventoryMonthlyItemsState(value);
     if (syncService.current) {
-      setTimeout(() => {
-        syncService.current!.syncData('inventoryMonthlyItems', value).catch(error => {
-          console.error('Failed to sync inventoryMonthlyItems:', error);
-        });
-      }, 500);
+      // Immediate sync without delay for real-time updates
+      syncService.current.syncData('inventoryMonthlyItems', value).catch(error => {
+        console.error('Failed to sync inventoryMonthlyItems:', error);
+      });
     }
   }, []);
 
   const setInventoryDatabaseItems = useCallback((value: DatabaseItem[]) => {
     setInventoryDatabaseItemsState(value);
     if (syncService.current) {
-      setTimeout(() => {
-        syncService.current!.syncData('inventoryDatabaseItems', value).catch(error => {
-          console.error('Failed to sync inventoryDatabaseItems:', error);
-        });
-      }, 500);
+      // Immediate sync without delay for real-time updates
+      syncService.current.syncData('inventoryDatabaseItems', value).catch(error => {
+        console.error('Failed to sync inventoryDatabaseItems:', error);
+      });
     }
   }, []);
 
   const setInventoryActivityLog = useCallback((value: ActivityLogEntry[]) => {
     setInventoryActivityLogState(value);
     if (syncService.current) {
-      setTimeout(() => {
-        syncService.current!.syncData('inventoryActivityLog', value).catch(error => {
-          console.error('Failed to sync inventoryActivityLog:', error);
-        });
-      }, 500);
+      // Immediate sync without delay for real-time updates
+      syncService.current.syncData('inventoryActivityLog', value).catch(error => {
+        console.error('Failed to sync inventoryActivityLog:', error);
+      });
     }
   }, []);
 

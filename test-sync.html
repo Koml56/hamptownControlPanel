@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Tab Sync Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .status.connected { background: #d4edda; color: #155724; }
+        .status.disconnected { background: #f8d7da; color: #721c24; }
+        .status.loading { background: #fff3cd; color: #856404; }
+        .checkbox-test {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .task-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: white;
+            cursor: pointer;
+        }
+        .task-checkbox.completed {
+            background: #d4edda;
+            border-color: #c3e6cb;
+        }
+        .task-checkbox input[type="checkbox"] {
+            transform: scale(1.2);
+        }
+        .device-info {
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .sync-events {
+            max-height: 200px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 11px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .instructions {
+            background: #cce5ff;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🔄 Multi-Tab Sync Test</h1>
+        
+        <div class="instructions">
+            <h3>📋 Test Instructions:</h3>
+            <ol>
+                <li><strong>Open this page in 2+ browser tabs</strong></li>
+                <li><strong>Check/uncheck task checkboxes in one tab</strong></li>
+                <li><strong>Verify changes appear immediately in other tabs</strong></li>
+                <li><strong>Test rapid clicking and concurrent changes</strong></li>
+            </ol>
+        </div>
+
+        <div id="connectionStatus" class="status loading">🔄 Connecting...</div>
+        
+        <div class="device-info">
+            <strong>Device Info:</strong><br>
+            <span id="deviceInfo">Loading...</span>
+        </div>
+
+        <h3>✅ Task Checkboxes (Simulating Cleaning Tasks)</h3>
+        <div class="checkbox-test" id="taskCheckboxes">
+            <!-- Checkboxes will be populated by JavaScript -->
+        </div>
+
+        <h3>📊 Sync Status</h3>
+        <div>
+            <strong>Active Devices:</strong> <span id="deviceCount">0</span><br>
+            <strong>Last Sync:</strong> <span id="lastSync">Never</span><br>
+            <strong>Sync Events:</strong>
+        </div>
+        <div class="sync-events" id="syncEvents">No events yet...</div>
+
+        <h3>🧪 Test Actions</h3>
+        <button onclick="checkRandomTask()">Check Random Task</button>
+        <button onclick="uncheckAllTasks()">Uncheck All Tasks</button>
+        <button onclick="checkAllTasks()">Check All Tasks</button>
+        <button onclick="simulateRapidClicks()">Rapid Click Test</button>
+        <button onclick="refreshData()">Refresh Data</button>
+    </div>
+
+    <script type="module">
+        // Import the sync system (this is a simplified version for testing)
+        // In real implementation, this would import from the actual React app
+
+        class MockReliableSync {
+            constructor(userName) {
+                this.deviceId = this.generateDeviceId();
+                this.userName = userName;
+                this.isConnected = false;
+                this.syncState = {
+                    isConnected: false,
+                    deviceCount: 1,
+                    lastSync: 0,
+                    syncEvents: []
+                };
+                this.fieldCallbacks = new Map();
+                this.stateCallbacks = new Set();
+                
+                // Mock data
+                this.completedTasks = new Set();
+                this.taskAssignments = {};
+                
+                console.log('🔄 MockReliableSync initialized:', {
+                    deviceId: this.deviceId.substring(0, 12) + '...',
+                    user: userName
+                });
+            }
+
+            generateDeviceId() {
+                let deviceId = sessionStorage.getItem('reliableSync_deviceId');
+                if (!deviceId) {
+                    const timestamp = Date.now().toString(36);
+                    const random1 = Math.random().toString(36).substr(2, 6);
+                    const random2 = Math.random().toString(36).substr(2, 4);
+                    const random3 = Math.random().toString(36).substr(2, 3);
+                    deviceId = `device_${timestamp}_${random1}_${random2}_${random3}`;
+                    sessionStorage.setItem('reliableSync_deviceId', deviceId);
+                }
+                return deviceId;
+            }
+
+            async connect() {
+                setTimeout(() => {
+                    this.isConnected = true;
+                    this.syncState.isConnected = true;
+                    this.syncState.lastSync = Date.now();
+                    this.emitSyncStateUpdate();
+                    this.addSyncEvent('device_join', 'Device connected successfully');
+                }, 100);
+            }
+
+            async syncData(field, data) {
+                if (!this.isConnected) return;
+                
+                console.log(`📤 Syncing ${field}:`, data);
+                
+                // Simulate immediate local update
+                if (field === 'completedTasks') {
+                    this.completedTasks = data instanceof Set ? data : new Set(data);
+                }
+                
+                // Simulate network sync with slight delay
+                setTimeout(() => {
+                    this.syncState.lastSync = Date.now();
+                    this.addSyncEvent('data_update', `${field} synced successfully`);
+                    this.emitSyncStateUpdate();
+                    
+                    // Simulate receiving update from other devices
+                    this.simulateRemoteUpdate(field, data);
+                }, 50);
+            }
+
+            simulateRemoteUpdate(field, data) {
+                // Simulate other tabs receiving this update
+                const event = new CustomEvent('sync-update', {
+                    detail: { field, data, deviceId: this.deviceId }
+                });
+                window.dispatchEvent(event);
+            }
+
+            onFieldChange(field, callback) {
+                this.fieldCallbacks.set(field, callback);
+            }
+
+            onSyncStateChange(callback) {
+                this.stateCallbacks.add(callback);
+            }
+
+            emitSyncStateUpdate() {
+                this.stateCallbacks.forEach(callback => {
+                    try {
+                        callback(this.syncState);
+                    } catch (error) {
+                        console.warn('Error in sync state callback:', error);
+                    }
+                });
+            }
+
+            addSyncEvent(type, description) {
+                const event = {
+                    type,
+                    timestamp: Date.now(),
+                    deviceId: this.deviceId.substring(0, 12) + '...',
+                    description
+                };
+                this.syncState.syncEvents.unshift(event);
+                if (this.syncState.syncEvents.length > 10) {
+                    this.syncState.syncEvents = this.syncState.syncEvents.slice(0, 10);
+                }
+            }
+
+            getDeviceInfo() {
+                return {
+                    id: this.deviceId,
+                    user: this.userName,
+                    platform: 'desktop',
+                    browserInfo: navigator.userAgent.split(' ').slice(-2).join(' ')
+                };
+            }
+
+            getSyncState() {
+                return this.syncState;
+            }
+        }
+
+        // Initialize sync
+        const sync = new MockReliableSync(`Tab ${Math.random().toString(36).substr(2, 4)}`);
+        
+        // UI Elements
+        const statusEl = document.getElementById('connectionStatus');
+        const deviceInfoEl = document.getElementById('deviceInfo');
+        const deviceCountEl = document.getElementById('deviceCount');
+        const lastSyncEl = document.getElementById('lastSync');
+        const syncEventsEl = document.getElementById('syncEvents');
+        const taskCheckboxesEl = document.getElementById('taskCheckboxes');
+
+        // Test tasks
+        const testTasks = [
+            { id: 1, name: 'Clean Kitchen', points: 10 },
+            { id: 2, name: 'Mop Floors', points: 15 },
+            { id: 3, name: 'Empty Trash', points: 5 },
+            { id: 4, name: 'Clean Bathrooms', points: 20 },
+            { id: 5, name: 'Wipe Tables', points: 8 },
+            { id: 6, name: 'Stock Supplies', points: 12 }
+        ];
+
+        // Initialize UI
+        function initializeUI() {
+            const deviceInfo = sync.getDeviceInfo();
+            deviceInfoEl.innerHTML = `
+                ID: ${deviceInfo.id}<br>
+                User: ${deviceInfo.user}<br>
+                Platform: ${deviceInfo.platform}<br>
+                Browser: ${deviceInfo.browserInfo}
+            `;
+
+            // Create task checkboxes
+            taskCheckboxesEl.innerHTML = testTasks.map(task => `
+                <div class="task-checkbox" onclick="toggleTask(${task.id})">
+                    <input type="checkbox" id="task-${task.id}" onchange="toggleTask(${task.id})">
+                    <label for="task-${task.id}">${task.name} (${task.points}pts)</label>
+                </div>
+            `).join('');
+        }
+
+        // Update UI based on sync state
+        function updateUI() {
+            const state = sync.getSyncState();
+            
+            statusEl.className = `status ${state.isConnected ? 'connected' : 'disconnected'}`;
+            statusEl.textContent = state.isConnected ? '✅ Connected' : '❌ Disconnected';
+            
+            deviceCountEl.textContent = state.deviceCount;
+            lastSyncEl.textContent = state.lastSync ? new Date(state.lastSync).toLocaleTimeString() : 'Never';
+            
+            // Update sync events
+            syncEventsEl.innerHTML = state.syncEvents.map(event => 
+                `[${new Date(event.timestamp).toLocaleTimeString()}] ${event.type}: ${event.description}`
+            ).join('<br>') || 'No events yet...';
+
+            // Update checkboxes based on completed tasks
+            testTasks.forEach(task => {
+                const checkbox = document.getElementById(`task-${task.id}`);
+                const container = checkbox.parentElement;
+                const isCompleted = sync.completedTasks.has(task.id);
+                
+                checkbox.checked = isCompleted;
+                container.classList.toggle('completed', isCompleted);
+            });
+        }
+
+        // Task toggle function
+        window.toggleTask = function(taskId) {
+            const newCompletedTasks = new Set(sync.completedTasks);
+            
+            if (newCompletedTasks.has(taskId)) {
+                newCompletedTasks.delete(taskId);
+                console.log(`❌ Unchecking task ${taskId}`);
+            } else {
+                newCompletedTasks.add(taskId);
+                console.log(`✅ Checking task ${taskId}`);
+            }
+            
+            sync.syncData('completedTasks', newCompletedTasks);
+            updateUI();
+        };
+
+        // Test functions
+        window.checkRandomTask = function() {
+            const uncheckedTasks = testTasks.filter(task => !sync.completedTasks.has(task.id));
+            if (uncheckedTasks.length > 0) {
+                const randomTask = uncheckedTasks[Math.floor(Math.random() * uncheckedTasks.length)];
+                toggleTask(randomTask.id);
+            }
+        };
+
+        window.uncheckAllTasks = function() {
+            sync.syncData('completedTasks', new Set());
+            updateUI();
+        };
+
+        window.checkAllTasks = function() {
+            sync.syncData('completedTasks', new Set(testTasks.map(t => t.id)));
+            updateUI();
+        };
+
+        window.simulateRapidClicks = function() {
+            console.log('🚀 Starting rapid click test...');
+            let count = 0;
+            const interval = setInterval(() => {
+                checkRandomTask();
+                count++;
+                if (count >= 5) {
+                    clearInterval(interval);
+                    console.log('✅ Rapid click test completed');
+                }
+            }, 200);
+        };
+
+        window.refreshData = function() {
+            sync.addSyncEvent('manual_refresh', 'Data refreshed manually');
+            updateUI();
+        };
+
+        // Listen for sync updates from other tabs
+        window.addEventListener('sync-update', (event) => {
+            const { field, data, deviceId } = event.detail;
+            
+            // Don't process our own updates
+            if (deviceId === sync.deviceId) return;
+            
+            console.log('📥 Received update from another tab:', field, data);
+            
+            if (field === 'completedTasks') {
+                sync.completedTasks = data instanceof Set ? data : new Set(data);
+                sync.addSyncEvent('remote_update', `Received ${field} update from another tab`);
+                updateUI();
+            }
+        });
+
+        // Setup sync callbacks
+        sync.onSyncStateChange(updateUI);
+        sync.onFieldChange('completedTasks', (data) => {
+            sync.completedTasks = data instanceof Set ? data : new Set(data);
+            updateUI();
+        });
+
+        // Initialize everything
+        initializeUI();
+        sync.connect().then(() => {
+            console.log('🎉 Sync system ready for testing!');
+            updateUI();
+        });
+
+        // Update UI periodically
+        setInterval(updateUI, 1000);
+    </script>
+</body>
+</html>
