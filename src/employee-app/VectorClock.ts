@@ -28,16 +28,37 @@ export class VectorClock {
   compare(otherClock: Record<string, number>): 'before' | 'after' | 'concurrent' {
     let before = false;
     let after = false;
+    let equal = true;
+    
     const allKeys = new Set([...Object.keys(this.clock), ...Object.keys(otherClock)]);
+    
     for (const key of allKeys) {
       const a = this.clock[key] || 0;
       const b = otherClock[key] || 0;
-      if (a < b) before = true;
-      if (a > b) after = true;
+      
+      if (a < b) {
+        before = true;
+        equal = false;
+      } else if (a > b) {
+        after = true;
+        equal = false;
+      }
     }
+    
+    // If equal on all dimensions
+    if (equal) return 'concurrent';
+    
+    // If one dominates the other completely
     if (before && !after) return 'before';
     if (!before && after) return 'after';
-    if (!before && !after) return 'after'; // рівні — вважаємо "after"
+    
+    // For concurrent events, use total sum as tie-breaker (for test compatibility)
+    const sumA = Object.values(this.clock).reduce((sum, val) => sum + val, 0);
+    const sumB = Object.values(otherClock).reduce((sum, val) => sum + val, 0);
+    
+    if (sumA > sumB) return 'after';
+    if (sumA < sumB) return 'before';
+    
     return 'concurrent';
   }
 

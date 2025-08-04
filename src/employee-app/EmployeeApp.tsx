@@ -46,21 +46,7 @@ const EmployeeApp: React.FC = () => {
   if (!firebaseMeta.current) {
     firebaseMeta.current = new (require('./firebaseService').FirebaseService)();
   }
-  // Real-time cleaning tasks sync
-  useEffect(() => {
-    if (!firebaseMeta.current) return;
-    const unsubscribeCompleted = firebaseMeta.current.onCompletedTasksChange((newCompleted: number[] | Set<number>) => {
-      // Accept both array and Set
-      setCompletedTasks(new Set(Array.isArray(newCompleted) ? newCompleted : Array.from(newCompleted)));
-    });
-    const unsubscribeAssignments = firebaseMeta.current.onTaskAssignmentsChange((newAssignments: any) => {
-      setTaskAssignments(() => newAssignments || {});
-    });
-    return () => {
-      if (unsubscribeCompleted) unsubscribeCompleted();
-      if (unsubscribeAssignments) unsubscribeAssignments();
-    };
-  }, []);
+
   // Firebase and Auth hooks with multi-device sync
   const {
     isLoading,
@@ -101,6 +87,68 @@ const EmployeeApp: React.FC = () => {
     quickSave,
     applyTaskSyncOperation
   } = useFirebaseData();
+
+  // Real-time cleaning tasks sync with debouncing to prevent oscillation
+  useEffect(() => {
+    if (!firebaseMeta.current) return;
+    
+    // Debounce incoming real-time updates to prevent rapid oscillation between devices
+    let completedTasksTimeout: NodeJS.Timeout;
+    let assignmentsTimeout: NodeJS.Timeout;
+    
+    const unsubscribeCompleted = firebaseMeta.current.onCompletedTasksChange((newCompleted: number[] | Set<number>) => {
+      clearTimeout(completedTasksTimeout);
+      completedTasksTimeout = setTimeout(() => {
+        console.log('🔄 [SYNC] Received completedTasks update from Firebase:', newCompleted);
+        
+        // Create new set from received data
+        const newSet = new Set(Array.isArray(newCompleted) ? newCompleted : Array.from(newCompleted));
+        
+        // Use callback to get current state for comparison
+        setCompletedTasks(currentTasks => {
+          const currentArray = Array.from(currentTasks);
+          const newArray = Array.from(newSet);
+          
+          // Only update if there's an actual difference
+          if (currentArray.length !== newArray.length || !currentArray.every(id => newSet.has(id))) {
+            console.log('🔄 [SYNC] CompletedTasks actually changed, updating state');
+            return newSet;
+          } else {
+            console.log('🔄 [SYNC] CompletedTasks unchanged, keeping current state');
+            return currentTasks;
+          }
+        });
+      }, 150); // 150ms debounce to prevent oscillation
+    });
+    
+    const unsubscribeAssignments = firebaseMeta.current.onTaskAssignmentsChange((newAssignments: any) => {
+      clearTimeout(assignmentsTimeout);
+      assignmentsTimeout = setTimeout(() => {
+        console.log('🔄 [SYNC] Received taskAssignments update from Firebase:', newAssignments);
+        
+        // Use callback to get current state for comparison
+        setTaskAssignments(currentAssignments => {
+          const currentStr = JSON.stringify(currentAssignments);
+          const newStr = JSON.stringify(newAssignments || {});
+          
+          if (currentStr !== newStr) {
+            console.log('🔄 [SYNC] TaskAssignments actually changed, updating state');
+            return newAssignments || {};
+          } else {
+            console.log('🔄 [SYNC] TaskAssignments unchanged, keeping current state');
+            return currentAssignments;
+          }
+        });
+      }, 150); // 150ms debounce to prevent oscillation
+    });
+    
+    return () => {
+      clearTimeout(completedTasksTimeout);
+      clearTimeout(assignmentsTimeout);
+      if (unsubscribeCompleted) unsubscribeCompleted();
+      if (unsubscribeAssignments) unsubscribeAssignments();
+    };
+  }, [setCompletedTasks, setTaskAssignments]); // Only depend on setters
 
   const {
     currentUser,
@@ -421,8 +469,7 @@ const EmployeeApp: React.FC = () => {
 
   const currentEmployee = employees.find(emp => emp.id === currentUser.id);
 
-  // DAILY RESET LOGIC
-  // DAILY RESET LOGIC (Firebase shared)
+  // DAILY RESET LOGIC with distributed synchronization
   useEffect(() => {
     const performAutomaticDailyReset = async () => {
       const today = getFormattedDate(new Date());
@@ -434,27 +481,56 @@ const EmployeeApp: React.FC = () => {
         completedTasksCount: completedTasks.size,
         taskAssignmentsCount: Object.keys(taskAssignments).length
       });
+      
       if (lastResetDate !== today && (completedTasks.size > 0 || Object.keys(taskAssignments).length > 0)) {
-        console.log('🌅 [CROSS-DEVICE] NEW DAY DETECTED: Performing automatic daily reset');
+        console.log('🌅 [CROSS-DEVICE] NEW DAY DETECTED: Attempting synchronized daily reset');
+        
+        // Distributed lock mechanism to prevent simultaneous resets from multiple devices
+        const lockKey = `daily_reset_lock_${today}`;
+        const deviceId = localStorage.getItem('deviceId') || `device-${Date.now()}`;
+        const lockExpiry = Date.now() + 30000; // 30 second lock
+        
         try {
-          const saveResults = await Promise.all([
-            quickSave('completedTasks', []),
-            quickSave('taskAssignments', {})
-          ]);
-          if (saveResults.every(result => result === true)) {
-            await firebaseMeta.current.setLastTaskResetDate(today);
-            setShowDailyResetNotification(true);
-            setTimeout(() => {
-              setShowDailyResetNotification(false);
-            }, 8000);
+          // Try to acquire the lock
+          const lockResult = await firebaseMeta.current.acquireResetLock?.(lockKey, deviceId, lockExpiry);
+          
+          if (lockResult === true) {
+            console.log('🔒 [CROSS-DEVICE] Reset lock acquired, performing reset');
+            
+            const saveResults = await Promise.all([
+              quickSave('completedTasks', []),
+              quickSave('taskAssignments', {})
+            ]);
+            
+            if (saveResults.every(result => result === true)) {
+              await firebaseMeta.current.setLastTaskResetDate(today);
+              console.log('✅ [CROSS-DEVICE] Daily reset completed successfully');
+              setShowDailyResetNotification(true);
+              setTimeout(() => {
+                setShowDailyResetNotification(false);
+              }, 8000);
+            } else {
+              console.error('❌ [CROSS-DEVICE] AUTOMATIC RESET: Failed to save to Firebase');
+            }
+            
+            // Release the lock
+            await firebaseMeta.current.releaseResetLock?.(lockKey, deviceId);
+            console.log('🔓 [CROSS-DEVICE] Reset lock released');
           } else {
-            console.error('❌ [CROSS-DEVICE] AUTOMATIC RESET: Failed to save to Firebase');
+            console.log('⏳ [CROSS-DEVICE] Another device is handling the daily reset, skipping');
           }
         } catch (error) {
           console.error('❌ [CROSS-DEVICE] AUTOMATIC RESET: Error during reset:', error);
+          // Try to release lock on error
+          try {
+            await firebaseMeta.current.releaseResetLock?.(lockKey, deviceId);
+          } catch (releaseError) {
+            console.error('❌ [CROSS-DEVICE] Failed to release lock after error:', releaseError);
+          }
         }
       }
     };
+    
     if (!isLoading && connectionStatus === 'connected' && employees.length > 0) {
       const timer = setTimeout(() => {
         performAutomaticDailyReset();
