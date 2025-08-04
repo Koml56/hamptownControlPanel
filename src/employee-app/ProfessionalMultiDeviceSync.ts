@@ -112,15 +112,17 @@ export class ProfessionalMultiDeviceSync {
   }
 
   private generateUniqueDeviceId(): string {
-    let deviceId = localStorage.getItem('professional_device_id');
-    if (!deviceId) {
-      const timestamp = Date.now().toString(36);
-      const random = crypto.getRandomValues(new Uint32Array(2))
-        .reduce((acc, val) => acc + val.toString(36), '');
-      deviceId = `prof_${timestamp}_${random}`;
-      localStorage.setItem('professional_device_id', deviceId);
-    }
-    return deviceId;
+    // Generate a unique device ID for each tab/instance instead of sharing from localStorage
+    // This ensures multiple tabs from the same browser are treated as separate devices
+    const timestamp = Date.now().toString(36);
+    const random = crypto.getRandomValues(new Uint32Array(2))
+      .reduce((acc, val) => acc + val.toString(36), '');
+    const tabId = `prof_${timestamp}_${random}`;
+    
+    // Store for this session only (not in localStorage to avoid sharing between tabs)
+    sessionStorage.setItem('professional_device_id', tabId);
+    
+    return tabId;
   }
 
   private createDeviceInfo(userName: string): DeviceInfo {
