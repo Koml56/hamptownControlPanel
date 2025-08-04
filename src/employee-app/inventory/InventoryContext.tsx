@@ -187,15 +187,33 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
 
   // Import from Excel with Firebase sync
   const importFromExcel = useCallback((data: any[]) => {
-    const updatedDatabaseItems = [...databaseItems, ...data];
+    console.log('Importing items:', data.length);
+    
+    // Check for duplicate IDs in imported data and existing data
+    const existingIds = new Set(databaseItems.map(item => item.id));
+    const importedIds = new Set();
+    
+    // Filter out any duplicates and ensure unique IDs
+    const uniqueData = data.filter(item => {
+      if (existingIds.has(item.id) || importedIds.has(item.id)) {
+        console.warn('Duplicate ID detected, generating new ID for:', item.name);
+        item.id = generateId(); // Generate new ID for duplicates
+      }
+      importedIds.add(item.id);
+      return true;
+    });
+    
+    console.log('Filtered unique items:', uniqueData.length);
+    
+    const updatedDatabaseItems = [...databaseItems, ...uniqueData];
     setInventoryDatabaseItems(updatedDatabaseItems);
     quickSave('inventoryDatabaseItems', updatedDatabaseItems);
-    showToast(`Imported ${data.length} items to database`);
+    showToast(`Imported ${uniqueData.length} items to database`);
     
     addActivityEntry({
       type: 'import',
       item: 'Excel Import',
-      quantity: data.length,
+      quantity: uniqueData.length,
       unit: 'items',
       employee: 'System'
     });
@@ -233,7 +251,12 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     initialStock: number
   ) => {
     const selectedItemsData = databaseItems.filter(item => itemIds.includes(item.id));
-    console.log('Assigning items:', selectedItemsData.length, 'to', frequency, category);
+    console.log('Assigning items:', selectedItemsData.length, 'items with IDs:', itemIds, 'to', frequency, category);
+    
+    if (selectedItemsData.length === 0) {
+      showToast('No items found to assign');
+      return;
+    }
     
     selectedItemsData.forEach(dbItem => {
       // If item is already assigned, we need to handle it differently
@@ -334,7 +357,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
       employee: 'Current User',
       notes: `${selectedItemsData.some(item => item.isAssigned) ? 'Updated assignment to' : 'Assigned to'} ${frequency} - ${category}`
     });
-  }, [databaseItems, addActivityEntry]);
+  }, [databaseItems, addActivityEntry, getItemsByFrequency, setItemsByFrequency, setInventoryDatabaseItems, quickSave]);
 
   // Unassign item from category - brings it back to unassigned status and removes ALL duplicates
   const unassignFromCategory = useCallback((itemId: number | string) => {
@@ -442,6 +465,15 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     });
   }, []);
 
+  // Select multiple items at once (for bulk operations)
+  const selectMultipleItems = useCallback((itemIds: (number | string)[]) => {
+    setSelectedItems(prev => {
+      const newSet = new Set(prev);
+      itemIds.forEach(id => newSet.add(id));
+      return newSet;
+    });
+  }, []);
+
   // Clear selection
   const clearSelection = useCallback(() => {
     setSelectedItems(new Set());
@@ -451,6 +483,28 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
   const cleanupDuplicates = useCallback(() => {
     let totalCleaned = 0;
     
+    // First, fix duplicate IDs in database items
+    const seenDatabaseIds = new Set<number | string>();
+    const updatedDatabaseItems = databaseItems.map(item => {
+      if (seenDatabaseIds.has(item.id)) {
+        console.warn('Duplicate database ID detected:', item.id, 'for item:', item.name);
+        const newId = generateId();
+        console.log('Assigned new ID:', newId);
+        totalCleaned++;
+        seenDatabaseIds.add(newId);
+        return { ...item, id: newId };
+      }
+      seenDatabaseIds.add(item.id);
+      return item;
+    });
+    
+    // Update database items if any duplicates were found
+    if (totalCleaned > 0) {
+      setInventoryDatabaseItems(updatedDatabaseItems);
+      quickSave('inventoryDatabaseItems', updatedDatabaseItems);
+    }
+    
+    // Then, clean up inventory duplicates based on databaseId
     ['daily', 'weekly', 'monthly'].forEach(freq => {
       const items = getItemsByFrequency(freq as InventoryFrequency);
       const seen = new Set<number | string>();
@@ -472,9 +526,11 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     });
     
     if (totalCleaned > 0) {
-      showToast(`Cleaned up ${totalCleaned} duplicate items from inventory`);
+      showToast(`Cleaned up ${totalCleaned} duplicate items from database and inventory`);
+    } else {
+      showToast('No duplicate items found');
     }
-  }, []);
+  }, [databaseItems, setInventoryDatabaseItems, quickSave, getItemsByFrequency, setItemsByFrequency]);
 
   // Switch tab
   const switchTab = useCallback((tab: InventoryFrequency | 'reports') => {
@@ -510,6 +566,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     cleanupDuplicates,
     deleteItems,
     toggleItemSelection,
+    selectMultipleItems,
     clearSelection,
     switchTab
   };
