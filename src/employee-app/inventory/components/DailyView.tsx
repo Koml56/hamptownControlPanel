@@ -15,6 +15,17 @@ const DailyView: React.FC = () => {
   const [typeFilter, setTypeFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Debug logging for daily items
+  React.useEffect(() => {
+    console.log('🏠 DailyView: Received dailyItems:', dailyItems.length, 'items');
+    console.log('📋 Daily items details:', dailyItems.map(item => ({
+      id: item.id,
+      databaseId: item.databaseId,
+      name: item.name,
+      category: item.category
+    })));
+  }, [dailyItems]);
+
   // Filter items
   const filteredItems = dailyItems.filter(item => {
     const matchesType = typeFilter === 'all' || item.category === typeFilter;

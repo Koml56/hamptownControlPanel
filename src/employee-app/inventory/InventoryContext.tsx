@@ -250,28 +250,64 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     minLevel: number,
     initialStock: number
   ) => {
+    console.log('🔍 assignToCategory called with:', {
+      itemIds,
+      frequency,
+      category,
+      minLevel,
+      initialStock
+    });
+    
     const selectedItemsData = databaseItems.filter(item => itemIds.includes(item.id));
-    console.log('Assigning items:', selectedItemsData.length, 'items with IDs:', itemIds, 'to', frequency, category);
+    console.log('📊 Found selectedItemsData:', selectedItemsData.length, 'items');
+    console.log('📝 Selected items details:', selectedItemsData.map(item => ({
+      id: item.id,
+      name: item.name,
+      isAssigned: item.isAssigned,
+      assignedTo: item.assignedTo
+    })));
     
     if (selectedItemsData.length === 0) {
       showToast('No items found to assign');
       return;
     }
     
-    selectedItemsData.forEach(dbItem => {
-      // If item is already assigned, we need to handle it differently
+    // Get current items for the target frequency ONCE at the beginning
+    let currentTargetItems = getItemsByFrequency(frequency);
+    console.log(`📦 Current ${frequency} items count at start: ${currentTargetItems.length}`);
+    
+    // Collect all new items to add to target frequency
+    const newItemsToAdd: InventoryItem[] = [];
+    
+    // Handle removal from other frequencies (collect all updates)
+    const allFrequencies: InventoryFrequency[] = ['daily', 'weekly', 'monthly'];
+    const frequencyUpdates: Record<InventoryFrequency, InventoryItem[]> = {} as any;
+    
+    // Initialize frequency updates with current items
+    allFrequencies.forEach(freq => {
+      frequencyUpdates[freq] = getItemsByFrequency(freq);
+    });
+
+    selectedItemsData.forEach((dbItem, index) => {
+      console.log(`🔄 Processing item ${index + 1}/${selectedItemsData.length}:`, {
+        id: dbItem.id,
+        name: dbItem.name,
+        isAssigned: dbItem.isAssigned,
+        assignedTo: dbItem.assignedTo
+      });
+      
+      // If item is already assigned, remove from current frequencies
       if (dbItem.isAssigned) {
-        // Find existing inventory item(s) linked to this database item
-        const allFrequencies: InventoryFrequency[] = ['daily', 'weekly', 'monthly'];
+        console.log(`♻️ Item ${dbItem.name} is already assigned to ${dbItem.assignedTo}, handling reassignment...`);
         
         allFrequencies.forEach(freq => {
-          const items = getItemsByFrequency(freq);
-          const existingItems = items.filter(item => item.databaseId === dbItem.id);
+          const existingItems = frequencyUpdates[freq].filter(item => item.databaseId === dbItem.id);
           
           if (existingItems.length > 0) {
+            console.log(`🔍 Found ${existingItems.length} existing items in ${freq} for database item ${dbItem.id}`);
             if (freq === frequency) {
-              // Update existing item in the same frequency
-              const updatedItems = items.map(item => 
+              // Update existing item in the same frequency (don't add new, just update)
+              frequencyUpdates[freq] = frequencyUpdates[freq].map(item => 
                 item.databaseId === dbItem.id 
                   ? { 
                       ...item, 
@@ -282,17 +318,18 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
                     }
                   : item
               );
-              setItemsByFrequency(freq, updatedItems);
+              console.log(`✅ Updated existing item in ${freq}`);
             } else {
               // Remove from different frequency (moving to new frequency)
-              const filteredItems = items.filter(item => item.databaseId !== dbItem.id);
-              setItemsByFrequency(freq, filteredItems);
+              frequencyUpdates[freq] = frequencyUpdates[freq].filter(item => item.databaseId !== dbItem.id);
+              console.log(`🗑️ Removed item from ${freq} (moving to ${frequency})`);
             }
           }
         });
         
-        // If moving to a different frequency, add to new frequency
+        // If moving to a different frequency, prepare to add to new frequency
         if (dbItem.assignedTo !== frequency) {
+          console.log(`➕ Preparing to add item ${dbItem.name} to new frequency: ${frequency}`);
           const newInventoryItem: InventoryItem = {
             id: generateId(),
             name: dbItem.name,
@@ -305,12 +342,11 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
             ean: dbItem.ean || '',
             databaseId: dbItem.id
           };
-          
-          const currentItems = getItemsByFrequency(frequency);
-          setItemsByFrequency(frequency, [...currentItems, newInventoryItem]);
+          newItemsToAdd.push(newInventoryItem);
         }
       } else {
-        // Item not assigned yet, create new inventory item
+        // Item not assigned yet, prepare new inventory item
+        console.log(`🆕 Preparing new inventory item for unassigned item: ${dbItem.name}`);
         const newInventoryItem: InventoryItem = {
           id: generateId(),
           name: dbItem.name,
@@ -323,12 +359,34 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
           ean: dbItem.ean || '',
           databaseId: dbItem.id
         };
-        
-        const currentItems = getItemsByFrequency(frequency);
-        setItemsByFrequency(frequency, [...currentItems, newInventoryItem]);
+        newItemsToAdd.push(newInventoryItem);
+        console.log(`📋 New item prepared:`, {
+          inventoryId: newInventoryItem.id,
+          databaseId: newInventoryItem.databaseId,
+          name: newInventoryItem.name,
+          category: newInventoryItem.category
+        });
       }
     });
     
+    // Add all new items to target frequency
+    if (newItemsToAdd.length > 0) {
+      console.log(`➕ Adding ${newItemsToAdd.length} new items to ${frequency}`);
+      frequencyUpdates[frequency] = [...frequencyUpdates[frequency], ...newItemsToAdd];
+    }
+    
+    // Apply all frequency updates in batch
+    console.log('💾 Applying all frequency updates...');
+    allFrequencies.forEach(freq => {
+      const currentItems = getItemsByFrequency(freq);
+      if (frequencyUpdates[freq].length !== currentItems.length || 
+          JSON.stringify(frequencyUpdates[freq]) !== JSON.stringify(currentItems)) {
+        console.log(`🔄 Updating ${freq}: ${currentItems.length} → ${frequencyUpdates[freq].length} items`);
+        setItemsByFrequency(freq, frequencyUpdates[freq]);
+      }
+    });
+    
+    console.log('📊 Assignment process completed, updating database items...');
     // Update database items to show assignment status with Firebase sync
     const updatedDatabaseItems = databaseItems.map(item => 
       itemIds.includes(item.id) 
@@ -341,10 +399,24 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
           }
         : item
     );
+    console.log('💾 Saving updated database items...');
     setInventoryDatabaseItems(updatedDatabaseItems);
     quickSave('inventoryDatabaseItems', updatedDatabaseItems);
     
     setSelectedItems(new Set());
+    
+    // Final verification - check that items were actually added to the target frequency
+    const finalItems = frequencyUpdates[frequency];
+    const newlyAddedItems = finalItems.filter(item => 
+      selectedItemsData.some(dbItem => dbItem.id === item.databaseId)
+    );
+    console.log(`✅ Final verification: ${newlyAddedItems.length} items will be in ${frequency} list out of ${selectedItemsData.length} expected`);
+    
+    if (newlyAddedItems.length !== selectedItemsData.length) {
+      console.error('❌ ISSUE DETECTED: Not all items were properly prepared for the inventory!');
+      console.log('Expected items:', selectedItemsData.map(item => ({ id: item.id, name: item.name })));
+      console.log('Actually prepared items:', newlyAddedItems.map(item => ({ databaseId: item.databaseId, name: item.name })));
+    }
     
     showToast(`Successfully ${selectedItemsData.some(item => item.isAssigned) ? 'updated' : 'assigned'} ${selectedItemsData.length} items to ${frequency} - ${category}`);
     

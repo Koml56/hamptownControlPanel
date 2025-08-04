@@ -7,6 +7,16 @@ import type { InventoryFrequency } from '../../types';
 const TabNavigation: React.FC = () => {
   const { currentTab, switchTab, dailyItems, weeklyItems, monthlyItems, databaseItems } = useInventory();
 
+  // Debug logging for tab counts
+  React.useEffect(() => {
+    console.log('🏷️ TabNavigation: Item counts updated:', {
+      daily: dailyItems.length,
+      weekly: weeklyItems.length,
+      monthly: monthlyItems.length,
+      database: databaseItems.length
+    });
+  }, [dailyItems.length, weeklyItems.length, monthlyItems.length, databaseItems.length]);
+
   const tabs = [
     {
       id: 'daily' as const,
