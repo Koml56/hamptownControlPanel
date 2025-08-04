@@ -104,7 +104,6 @@ export class ProfessionalMultiDeviceSync {
         this.updatePresence(false);
       } else {
         this.updatePresence(true);
-        this.checkForDataUpdates();
       }
     });
 

@@ -1,9 +1,6 @@
 // EnhancedSyncIntegration.ts - Professional integration layer for multi-device sync
 import { ProfessionalMultiDeviceSync, SyncEvent, DeviceInfo } from './ProfessionalMultiDeviceSync';
-import type { 
-  Employee, Task, DailyDataMap, TaskAssignments, PrepItem, ScheduledPrep, 
-  PrepSelections, StoreItem, InventoryItem, DatabaseItem, ActivityLogEntry 
-} from './types';
+import type { Employee, Task, TaskAssignments } from './types';
 
 interface SyncState {
   isConnected: boolean;
@@ -171,9 +168,9 @@ export class EnhancedSyncIntegration {
     local.forEach(localEmp => {
       const existingIndex = merged.findIndex(emp => emp.id === localEmp.id);
       if (existingIndex >= 0) {
-        // Keep the one with more recent data (higher total points or more recent activity)
+        // Keep the one with more recent data (higher points or more recent activity)
         const existing = merged[existingIndex];
-        if (localEmp.totalPoints >= existing.totalPoints) {
+        if (localEmp.points >= existing.points) {
           merged[existingIndex] = localEmp;
         }
       } else {
