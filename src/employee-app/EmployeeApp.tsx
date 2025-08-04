@@ -350,7 +350,7 @@ const EmployeeApp: React.FC = () => {
             setTaskAssignments({});
             
             // Force immediate sync
-            const saveResults = await quickSave();
+            await quickSave();
             
             console.log('✅ [CROSS-DEVICE] Daily reset completed successfully');
             await firebaseMeta.current.setLastTaskResetDate(today);
@@ -383,7 +383,7 @@ const EmployeeApp: React.FC = () => {
       }, 2000);
       return () => clearTimeout(timer);
     }
-  }, [isLoading, connectionStatus, employees.length, completedTasks.size, taskAssignments, quickSave]);
+  }, [isLoading, connectionStatus, employees.length, completedTasks.size, taskAssignments, quickSave, setCompletedTasks, setTaskAssignments]);
 
   // Check for daily reset on visibility change
   useEffect(() => {
@@ -421,7 +421,7 @@ const EmployeeApp: React.FC = () => {
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [isLoading, connectionStatus, taskAssignments, completedTasks.size, quickSave]);
+  }, [isLoading, connectionStatus, taskAssignments, completedTasks.size, quickSave, setCompletedTasks, setTaskAssignments]);
 
   // Debug helper
   useEffect(() => {
