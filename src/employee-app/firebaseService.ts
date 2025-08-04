@@ -40,6 +40,70 @@ export class FirebaseService {
       return false;
     }
   }
+
+  // Distributed lock for daily reset synchronization
+  async acquireResetLock(lockKey: string, deviceId: string, expiry: number): Promise<boolean> {
+    try {
+      // First check if lock exists and is still valid
+      const checkResponse = await fetch(`${this.baseUrl}/locks/${lockKey}.json`);
+      if (checkResponse.ok) {
+        const existingLock = await checkResponse.json();
+        if (existingLock && existingLock.expiry > Date.now()) {
+          // Lock exists and is still valid
+          return existingLock.deviceId === deviceId;
+        }
+      }
+
+      // Try to acquire the lock using Firebase's atomic operations
+      const lockData = {
+        deviceId,
+        expiry,
+        timestamp: Date.now()
+      };
+
+      const response = await fetch(`${this.baseUrl}/locks/${lockKey}.json`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(lockData)
+      });
+
+      if (!response.ok) throw new Error('Failed to acquire lock');
+      
+      // Verify we got the lock by reading it back
+      const verifyResponse = await fetch(`${this.baseUrl}/locks/${lockKey}.json`);
+      if (!verifyResponse.ok) return false;
+      
+      const verifyLock = await verifyResponse.json();
+      return verifyLock && verifyLock.deviceId === deviceId && verifyLock.expiry === expiry;
+    } catch (error) {
+      console.error('❌ Error acquiring reset lock:', error);
+      return false;
+    }
+  }
+
+  // Release the distributed lock
+  async releaseResetLock(lockKey: string, deviceId: string): Promise<boolean> {
+    try {
+      // Only release if we own the lock
+      const checkResponse = await fetch(`${this.baseUrl}/locks/${lockKey}.json`);
+      if (checkResponse.ok) {
+        const existingLock = await checkResponse.json();
+        if (existingLock && existingLock.deviceId !== deviceId) {
+          console.warn('⚠️ Attempted to release lock owned by another device');
+          return false;
+        }
+      }
+
+      const response = await fetch(`${this.baseUrl}/locks/${lockKey}.json`, {
+        method: 'DELETE'
+      });
+      
+      return response.ok;
+    } catch (error) {
+      console.error('❌ Error releasing reset lock:', error);
+      return false;
+    }
+  }
   // Quick save for immediate data persistence
   async quickSave(field: string, data: any): Promise<boolean> {
     console.log(`🔥 QuickSave: ${field}`);
