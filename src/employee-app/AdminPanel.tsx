@@ -1,30 +1,19 @@
 import React, { useState } from 'react';
-import { Users, CheckSquare, Plus, Trash2, Edit3, Save, Settings, UserPlus, Star, ShoppingBag, Package, ChefHat, Clock, Utensils } from 'lucide-react';
+import { Users, CheckSquare, Plus, Trash2, Edit3, Save, Settings, UserPlus, Star, ShoppingBag, Package, ChefHat, Clock } from 'lucide-react';
 import { getMoodColor } from './utils';
 import { 
   addEmployee, 
   removeEmployee, 
   updateEmployee,
-  addTask,
   updateTask,
   removeTask,
   addCustomRole,
   removeCustomRole,
-  addPrepItem,
-  updatePrepItem,
-  deletePrepItem,
   addStoreItem,
   updateStoreItem,
   deleteStoreItem
 } from './adminFunctions';
-import { 
-  addPrepItemOperation,
-  updatePrepItemOperation,
-  deletePrepItemOperation,
-  applyPrepItemOperation
-} from './prepOperations';
-import { offlineQueue } from './taskOperations';
-import type { Employee, Task, Priority, StoreItem, PrepItem, Recipe, AdminPanelProps } from './types';
+import type { Employee, Task, StoreItem, PrepItem, Recipe, AdminPanelProps } from './types';
 import debounce from 'lodash/debounce';
 
 const AdminPanel: React.FC<AdminPanelProps> = ({

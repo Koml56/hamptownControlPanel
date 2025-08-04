@@ -1,13 +1,11 @@
 // EmployeeApp.tsx - Updated with Restaurant Inventory tab integration
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
-  Users, 
   CheckSquare, 
   TrendingUp, 
   Settings, 
   Lock, 
   LogOut, 
-  Calendar, 
   Database, 
   ChevronDown, 
   X, 

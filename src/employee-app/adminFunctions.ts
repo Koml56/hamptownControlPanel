@@ -1,21 +1,18 @@
 // adminFunctions.ts
 import { ADMIN_PASSWORD } from './constants';
-import type { Employee, Task, Priority, ActiveTab } from './types';
+import type { Employee, Task, ActiveTab } from './types';
 import {
   addTaskOperation,
   updateTaskOperation,
-  completeTaskOperation,
   deleteTaskOperation,
   applyTaskOperation
 } from './taskOperations';
-import type { SyncOperation } from './OperationManager';
 import {
   addEmployeeOperation,
   updateEmployeeOperation,
   deleteEmployeeOperation,
   applyEmployeeOperation
 } from './employeeOperations';
-import { offlineQueue } from './taskOperations';
 
 export const handleAdminLogin = (
   password: string,

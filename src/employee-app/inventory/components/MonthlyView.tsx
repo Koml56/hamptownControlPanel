@@ -1,6 +1,6 @@
 // src/employee-app/inventory/components/MonthlyView.tsx
 import React, { useState } from 'react';
-import { Edit3, Trash2, Search, Filter, Package, Calendar } from 'lucide-react';
+import { Edit3, Trash2, Search, Package, Calendar } from 'lucide-react';
 import { useInventory } from '../InventoryContext';
 import ItemCard from './ItemCard';
 import CountModal from './CountModal';

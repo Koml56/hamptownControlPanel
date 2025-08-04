@@ -1,6 +1,6 @@
 // src/employee-app/inventory/components/DatabaseView.tsx
 import React, { useState, useEffect } from 'react';
-import { Upload, Plus, Download, Search, Edit3, Trash2, X, Check, AlertTriangle } from 'lucide-react';
+import { Upload, Plus, Download, Search, Edit3, Trash2, X, AlertTriangle } from 'lucide-react';
 import { useInventory } from '../InventoryContext';
 import { getCategoryIcon } from '../utils';
 import { InventoryFrequency, InventoryCategory, DatabaseItem } from '../../types';

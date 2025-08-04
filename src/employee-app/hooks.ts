@@ -523,6 +523,7 @@ export const useFirebaseData = () => {
       setPrepSelections(snapshot.val() || {});
     };
     onValue(prepSelectionsRef, handlePrepSelections);
+    
     // StoreItems
     const storeItemsRef = ref(db, 'storeItems');
     const handleStoreItems = (snapshot: any) => {
@@ -530,6 +531,42 @@ export const useFirebaseData = () => {
       setStoreItems(Array.isArray(data) ? data : Object.values(data));
     };
     onValue(storeItemsRef, handleStoreItems);
+
+    // Inventory Items - Real-time synchronization
+    const inventoryDailyItemsRef = ref(db, 'inventoryDailyItems');
+    const handleInventoryDailyItems = (snapshot: any) => {
+      const data = snapshot.val() || [];
+      setInventoryDailyItems(Array.isArray(data) ? data : Object.values(data));
+    };
+    onValue(inventoryDailyItemsRef, handleInventoryDailyItems);
+
+    const inventoryWeeklyItemsRef = ref(db, 'inventoryWeeklyItems');
+    const handleInventoryWeeklyItems = (snapshot: any) => {
+      const data = snapshot.val() || [];
+      setInventoryWeeklyItems(Array.isArray(data) ? data : Object.values(data));
+    };
+    onValue(inventoryWeeklyItemsRef, handleInventoryWeeklyItems);
+
+    const inventoryMonthlyItemsRef = ref(db, 'inventoryMonthlyItems');
+    const handleInventoryMonthlyItems = (snapshot: any) => {
+      const data = snapshot.val() || [];
+      setInventoryMonthlyItems(Array.isArray(data) ? data : Object.values(data));
+    };
+    onValue(inventoryMonthlyItemsRef, handleInventoryMonthlyItems);
+
+    const inventoryDatabaseItemsRef = ref(db, 'inventoryDatabaseItems');
+    const handleInventoryDatabaseItems = (snapshot: any) => {
+      const data = snapshot.val() || [];
+      setInventoryDatabaseItems(Array.isArray(data) ? data : Object.values(data));
+    };
+    onValue(inventoryDatabaseItemsRef, handleInventoryDatabaseItems);
+
+    const inventoryActivityLogRef = ref(db, 'inventoryActivityLog');
+    const handleInventoryActivityLog = (snapshot: any) => {
+      const data = snapshot.val() || [];
+      setInventoryActivityLog(Array.isArray(data) ? data : Object.values(data));
+    };
+    onValue(inventoryActivityLogRef, handleInventoryActivityLog);
     // Cleanup
     return () => {
       off(employeesRef, 'value', handleEmployees);
@@ -542,6 +579,12 @@ export const useFirebaseData = () => {
       off(scheduledPrepsRef, 'value', handleScheduledPreps);
       off(prepSelectionsRef, 'value', handlePrepSelections);
       off(storeItemsRef, 'value', handleStoreItems);
+      // Inventory cleanup
+      off(inventoryDailyItemsRef, 'value', handleInventoryDailyItems);
+      off(inventoryWeeklyItemsRef, 'value', handleInventoryWeeklyItems);
+      off(inventoryMonthlyItemsRef, 'value', handleInventoryMonthlyItems);
+      off(inventoryDatabaseItemsRef, 'value', handleInventoryDatabaseItems);
+      off(inventoryActivityLogRef, 'value', handleInventoryActivityLog);
     };
   }, []);
 

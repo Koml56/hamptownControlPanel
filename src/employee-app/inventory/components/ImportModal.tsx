@@ -1,6 +1,6 @@
 // src/employee-app/inventory/components/ImportModal.tsx
 import React, { useState, useEffect } from 'react';
-import { X, Upload, AlertCircle, CheckCircle, Download } from 'lucide-react';
+import { X, AlertCircle, CheckCircle, Download } from 'lucide-react';
 import { useInventory } from '../InventoryContext';
 import { showToast, generateId } from '../utils';
 
