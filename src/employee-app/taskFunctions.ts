@@ -1,6 +1,33 @@
-// taskFunctions.ts - Fixed to prevent duplicate daily completions
+// taskFunctions.ts - Fixed to prevent duplicate daily completions with debouncing
 import { getFormattedDate } from './utils';
 import type { Task, TaskAssignments, Employee, DailyDataMap } from './types';
+
+// Debouncing mechanism to prevent rapid clicking issues
+const pendingOperations = new Map<number, NodeJS.Timeout>();
+const operationTimestamps = new Map<number, number>();
+
+// Clear any pending operation for a task
+const clearPendingOperation = (taskId: number) => {
+  const timeout = pendingOperations.get(taskId);
+  if (timeout) {
+    clearTimeout(timeout);
+    pendingOperations.delete(taskId);
+  }
+};
+
+// Check if operation should be allowed (debounce rapid clicks)
+const shouldAllowOperation = (taskId: number, minDelay: number = 500): boolean => {
+  const lastOperation = operationTimestamps.get(taskId) || 0;
+  const now = Date.now();
+  
+  if (now - lastOperation < minDelay) {
+    console.warn(`⚠️ Task operation debounced for task ${taskId} - too rapid`);
+    return false;
+  }
+  
+  operationTimestamps.set(taskId, now);
+  return true;
+};
 
 export const saveDailyTaskCompletion = (
   taskId: number,
@@ -175,6 +202,14 @@ export const toggleTaskComplete = (
   setEmployees: (updater: (prev: Employee[]) => Employee[]) => void,
   saveToFirebase?: () => void
 ) => {
+  // DEBOUNCE: Prevent rapid clicking on the same task
+  if (!shouldAllowOperation(taskId, 1000)) {
+    return;
+  }
+
+  // Clear any pending operations for this task
+  clearPendingOperation(taskId);
+
   const wasCompleted = completedTasks.has(taskId);
   const newCompletedTasks = new Set(completedTasks);
   const task = tasks.find(t => t.id === taskId);
@@ -231,17 +266,26 @@ export const toggleTaskComplete = (
   
   setCompletedTasks(newCompletedTasks);
   
-  // Immediately save to Firebase after task completion change
+  // DEBOUNCED: Save to Firebase after task completion change with proper debouncing
   if (saveToFirebase) {
-    console.log('🔥 Immediate save triggered by task completion');
-    setTimeout(() => {
-      console.log('⏰ Executing immediate save now...');
+    console.log('🔥 [CRITICAL-SAVE] Cleaning tasks: About to save taskAssignments:', taskAssignments);
+    console.log(`🔥 [CRITICAL-SAVE] Cleaning tasks: About to save completedTasks:`, Array.from(newCompletedTasks));
+    
+    // Clear any existing pending save for this task
+    clearPendingOperation(taskId);
+    
+    // Schedule a debounced save operation
+    const saveTimeout = setTimeout(() => {
+      console.log('⏰ Executing debounced save for task:', taskId);
       saveToFirebase();
-    }, 200);
+      pendingOperations.delete(taskId);
+    }, 500); // 500ms debounce delay
+    
+    pendingOperations.set(taskId, saveTimeout);
   }
 };
 
-// Handle reassignment of already completed tasks
+// Handle reassignment of already completed tasks with debouncing
 export const reassignCompletedTask = (
   taskId: number,
   newEmployeeId: number,
@@ -254,6 +298,11 @@ export const reassignCompletedTask = (
   setEmployees: (updater: (prev: Employee[]) => Employee[]) => void,
   saveToFirebase?: () => void
 ) => {
+  // DEBOUNCE: Prevent rapid reassignment clicks
+  if (!shouldAllowOperation(taskId, 800)) {
+    return;
+  }
+
   const task = tasks.find(t => t.id === taskId);
   const oldAssignedEmp = getAssignedEmployee(taskId, taskAssignments, employees);
   const newAssignedEmp = employees.find(emp => emp.id === newEmployeeId);
@@ -287,11 +336,20 @@ export const reassignCompletedTask = (
   // This replaces the old completion record with the new employee
   saveDailyTaskCompletion(taskId, newEmployeeId, task.task, task.points, tasks, setDailyData);
 
-  // Save to Firebase
+  // DEBOUNCED: Save to Firebase
   if (saveToFirebase) {
-    console.log('🔥 Immediate save triggered by task reassignment');
-    setTimeout(() => {
+    console.log('🔥 Debounced save triggered by task reassignment');
+    
+    // Clear any existing pending save for this task
+    clearPendingOperation(taskId);
+    
+    // Schedule a debounced save operation
+    const saveTimeout = setTimeout(() => {
+      console.log('⏰ Executing debounced reassignment save for task:', taskId);
       saveToFirebase();
-    }, 200);
+      pendingOperations.delete(taskId);
+    }, 600); // 600ms debounce delay for reassignments
+    
+    pendingOperations.set(taskId, saveTimeout);
   }
 };

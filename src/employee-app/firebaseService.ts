@@ -11,6 +11,11 @@ export class FirebaseService {
   private isCurrentlySaving = false;
   private app = initializeApp(FIREBASE_CONFIG);
   private db = getDatabase(this.app);
+  
+  // Enhanced debouncing for critical saves to prevent rapid fire saves
+  private pendingSaves = new Map<string, NodeJS.Timeout>();
+  private lastSaveTimestamps = new Map<string, number>();
+  private saveAttempts = new Map<string, number>();
 
   // Get the shared lastTaskResetDate from Firebase
   async getLastTaskResetDate(): Promise<string | null> {
@@ -104,10 +109,49 @@ export class FirebaseService {
       return false;
     }
   }
-  // Quick save for immediate data persistence
+  // Enhanced Quick save with smart debouncing and deduplication
   async quickSave(field: string, data: any): Promise<boolean> {
+    const now = Date.now();
+    const lastSave = this.lastSaveTimestamps.get(field) || 0;
+    const timeSinceLastSave = now - lastSave;
+    
+    // Prevent rapid saves (within 2 seconds) of the same field
+    if (timeSinceLastSave < 2000) {
+      console.log(`⏳ Debouncing rapid save for ${field} (${timeSinceLastSave}ms since last save)`);
+      
+      // Clear any pending save for this field
+      const existingTimeout = this.pendingSaves.get(field);
+      if (existingTimeout) {
+        clearTimeout(existingTimeout);
+      }
+      
+      // Schedule a debounced save
+      const timeout = setTimeout(() => {
+        this.executeSave(field, data);
+        this.pendingSaves.delete(field);
+      }, 1500);
+      
+      this.pendingSaves.set(field, timeout);
+      return true;
+    }
+    
+    return this.executeSave(field, data);
+  }
+
+  // Execute the actual save operation
+  private async executeSave(field: string, data: any): Promise<boolean> {
     console.log(`🔥 QuickSave: ${field}`);
     console.log(`🔍 Saving ${field} to Firebase:`, this.getDataSummary(field, data));
+    
+    // Track save attempts to detect issues
+    const attempts = this.saveAttempts.get(field) || 0;
+    this.saveAttempts.set(field, attempts + 1);
+    
+    if (attempts > 5) {
+      console.warn(`⚠️ Too many save attempts for ${field}, throttling...`);
+      this.saveAttempts.set(field, 0); // Reset counter
+      return false;
+    }
 
     try {
       const response = await fetch(`${this.baseUrl}/${field}.json`, {
@@ -124,12 +168,20 @@ export class FirebaseService {
 
       console.log(`🔒 Critical save - waiting for confirmation: ${field}`);
       
-      // Verify the save by reading back the data
-      const verifyResponse = await fetch(`${this.baseUrl}/${field}.json`);
-      const verifiedData = await verifyResponse.json();
+      // Simplified verification - don't re-read the data unless it's critical
+      const isTaskOrAssignment = field === 'completedTasks' || field === 'taskAssignments';
+      if (isTaskOrAssignment) {
+        const verifyResponse = await fetch(`${this.baseUrl}/${field}.json`);
+        const verifiedData = await verifyResponse.json();
+        console.log(`🔍 Verified data in Firebase after save:`, this.getDataSummary(field, verifiedData));
+      }
       
-      console.log(`🔍 Verified data in Firebase after save:`, this.getDataSummary(field, verifiedData));
       console.log(`✅ Critical QuickSave completed: ${field}`);
+      console.log(`🔒 [CRITICAL-SAVE] ${field.charAt(0).toUpperCase() + field.slice(1)} QuickSave confirmed by Firebase.`);
+      
+      // Update timestamp and reset attempt counter on success
+      this.lastSaveTimestamps.set(field, Date.now());
+      this.saveAttempts.set(field, 0);
       
       return true;
     } catch (error) {

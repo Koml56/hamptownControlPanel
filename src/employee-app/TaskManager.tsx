@@ -17,6 +17,7 @@ interface TaskManagerProps {
   setTaskAssignments: (updater: (prev: TaskAssignments) => TaskAssignments) => void;
   setDailyData: (updater: (prev: DailyDataMap) => DailyDataMap) => void;
   setEmployees: (updater: (prev: Employee[]) => Employee[]) => void;
+  saveToFirebase?: () => void;
 }
 
 const TaskManager: React.FC<TaskManagerProps> = ({
@@ -29,7 +30,8 @@ const TaskManager: React.FC<TaskManagerProps> = ({
   setCompletedTasks,
   setTaskAssignments,
   setDailyData,
-  setEmployees
+  setEmployees,
+  saveToFirebase
 }) => {
   // Debug logging
   useEffect(() => {
@@ -52,7 +54,8 @@ const TaskManager: React.FC<TaskManagerProps> = ({
       setCompletedTasks,
       setTaskAssignments,
       setDailyData,
-      setEmployees
+      setEmployees,
+      saveToFirebase
     );
   };
 
@@ -70,7 +73,8 @@ const TaskManager: React.FC<TaskManagerProps> = ({
         employees,
         setTaskAssignments,
         setDailyData,
-        setEmployees
+        setEmployees,
+        saveToFirebase
       );
     } else {
       // Task is not completed - normal assignment
