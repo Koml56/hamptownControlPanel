@@ -294,9 +294,14 @@ export class ProfessionalMultiDeviceSync {
     
     for (const field of relevantFields) {
       if (data[field] && this.syncCallbacks.has(field)) {
-        // Skip updates from this device to prevent loops
-        if (this.pendingUpdates.has(field)) {
-          console.log(`⏭️ Skipping own update for ${field}`);
+        const newChecksum = this.calculateChecksum(data[field]);
+        const pendingChecksum = this.dataChecksums.get(`${field}_pending`);
+        
+        // Skip updates if this is our own data that we just sent
+        if (pendingChecksum && newChecksum === pendingChecksum) {
+          console.log(`⏭️ Skipping own update for ${field} (checksum match)`);
+          // Clear the pending checksum since we confirmed our update was processed
+          this.dataChecksums.delete(`${field}_pending`);
           continue;
         }
         
@@ -307,7 +312,6 @@ export class ProfessionalMultiDeviceSync {
         if (now - lastUpdate > 1000) { // 1 second throttle
           this.lastDataTimestamp.set(field, now);
           
-          const newChecksum = this.calculateChecksum(data[field]);
           const oldChecksum = this.dataChecksums.get(field);
           
           if (newChecksum !== oldChecksum) {
@@ -418,8 +422,8 @@ export class ProfessionalMultiDeviceSync {
       retry: 0
     };
     
-    // Mark as pending to prevent processing our own update
-    this.pendingUpdates.add(field);
+    // Store the data we're sending for comparison (instead of just blocking field)
+    this.dataChecksums.set(`${field}_pending`, syncItem.checksum);
     
     this.syncQueue.set(field, syncItem);
     
@@ -468,11 +472,6 @@ export class ProfessionalMultiDeviceSync {
           // Update local checksum
           this.dataChecksums.set(field, item.checksum);
           
-          // Remove from pending updates after successful sync
-          setTimeout(() => {
-            this.pendingUpdates.delete(field);
-          }, 2000);
-          
           console.log(`✅ Enhanced sync completed for ${field}`);
           
           this.emitSyncEvent({
@@ -496,7 +495,8 @@ export class ProfessionalMultiDeviceSync {
               this.processSyncQueueEnhanced();
             }, 1000 * Math.pow(2, item.retry));
           } else {
-            this.pendingUpdates.delete(field);
+            // Clear the pending checksum on permanent failure
+            this.dataChecksums.delete(`${field}_pending`);
             this.emitSyncEvent({
               type: 'error',
               timestamp: Date.now(),
