@@ -23,11 +23,11 @@ import AdminPanel from './AdminPanel';
 import DailyReports from './DailyReports';
 import PrepListPrototype from './PrepListPrototype';
 import RestaurantInventory from './inventory/RestaurantInventory'; // NEW: Inventory component
-import SyncStatusIndicator from './SyncStatusIndicator';
+import ProfessionalSyncStatus from './ProfessionalSyncStatus';
 
-// Hooks and Functions - Updated to use reliable sync
+// Hooks and Functions - Updated to use professional sync
 import { useAuth } from './hooks';
-import { useReliableSync } from './useReliableSync';
+import { useProfessionalSync } from './useProfessionalSync';
 import { handleAdminLogin } from './adminFunctions';
 
 // Types and Constants
@@ -55,7 +55,7 @@ const EmployeeApp: React.FC = () => {
     logoutAdmin
   } = useAuth();
 
-  // Reliable multi-device sync with guaranteed cross-page synchronization
+  // Professional multi-device sync with enhanced capabilities
   const {
     // Data state
     employees,
@@ -93,19 +93,17 @@ const EmployeeApp: React.FC = () => {
     
     // Sync operations
     quickSave,
-    legacyQuickSave,
-    refreshAllData,
     
     // Sync status
     syncState,
     activeDevices
-  } = useReliableSync(currentUser?.name || 'Unknown User');
+  } = useProfessionalSync(currentUser?.name || 'Unknown User');
 
   // Extract sync state properties for compatibility with existing code
   const isLoading = syncState.isLoading;
   const connectionStatus = syncState.isConnected ? 'connected' : (syncState.error ? 'error' : 'connecting');
 
-  // Reliable sync handles all real-time updates automatically
+  // Professional sync handles all real-time updates automatically
   // No need for manual Firebase subscription management
 
   // UI State
@@ -118,10 +116,11 @@ const EmployeeApp: React.FC = () => {
   const [storeItems, setStoreItems] = useState<StoreItem[]>(getDefaultStoreItems());
   const [showDailyResetNotification, setShowDailyResetNotification] = useState(false);
 
-  // Reliable sync handles initialization automatically
+  // Professional sync handles initialization automatically
   // No manual initialization needed
 
-  // Reliable sync handles auto-save automatically with optimal batching
+  // Set up periodic auto-save (every 5 minutes)
+  // Professional sync handles auto-save automatically with optimal batching
   // No need for manual periodic saves
 
   // Check for daily reset notification - improved logic with better debouncing
@@ -177,9 +176,9 @@ const EmployeeApp: React.FC = () => {
     }
   }, [firebaseStoreItems]);
 
-  // Reliable sync handles task operations and conflict resolution automatically
+  // Professional sync handles task operations and conflict resolution automatically
 
-  // Reliable sync handles auto-save, so these can be simpler
+  // Professional sync handles auto-save, so these can be simpler
   const setEmployeesWithSave = (value: React.SetStateAction<Employee[]>) => {
     if (typeof value === 'function') {
       setEmployees(value(employees));
@@ -284,12 +283,10 @@ const EmployeeApp: React.FC = () => {
     }, 8000);
     
     setTimeout(() => {
-      // First set the state, then let reliable sync handle it
-      setCompletedTasks(new Set());
-      setTaskAssignments({});
-      
-      // Force immediate sync
-      quickSave().then(() => {
+      Promise.all([
+        quickSave('completedTasks', []),
+        quickSave('taskAssignments', {})
+      ]).then(() => {
         console.log('✅ MANUAL RESET: Both completedTasks=[] and taskAssignments={} saved to Firebase');
       }).catch((error) => {
         console.error('❌ MANUAL RESET: Failed to save to Firebase:', error);
@@ -345,19 +342,21 @@ const EmployeeApp: React.FC = () => {
           if (lockResult === true) {
             console.log('🔒 [CROSS-DEVICE] Reset lock acquired, performing reset');
             
-            // Set the state and let reliable sync handle it
-            setCompletedTasks(new Set());
-            setTaskAssignments({});
+            const saveResults = await Promise.all([
+              quickSave('completedTasks', []),
+              quickSave('taskAssignments', {})
+            ]);
             
-            // Force immediate sync
-            const saveResults = await quickSave();
-            
-            console.log('✅ [CROSS-DEVICE] Daily reset completed successfully');
-            await firebaseMeta.current.setLastTaskResetDate(today);
-            setShowDailyResetNotification(true);
-            setTimeout(() => {
-              setShowDailyResetNotification(false);
-            }, 8000);
+            if (saveResults.every(result => result === true)) {
+              await firebaseMeta.current.setLastTaskResetDate(today);
+              console.log('✅ [CROSS-DEVICE] Daily reset completed successfully');
+              setShowDailyResetNotification(true);
+              setTimeout(() => {
+                setShowDailyResetNotification(false);
+              }, 8000);
+            } else {
+              console.error('❌ [CROSS-DEVICE] AUTOMATIC RESET: Failed to save to Firebase');
+            }
             
             // Release the lock
             await firebaseMeta.current.releaseResetLock?.(lockKey, deviceId);
@@ -402,16 +401,15 @@ const EmployeeApp: React.FC = () => {
         if (lastResetDate !== today && (completedTasksSize > 0 || taskAssignmentsLength > 0)) {
           setTimeout(async () => {
             try {
-              // Set the state and let reliable sync handle it
-              setCompletedTasks(new Set());
-              setTaskAssignments({});
-              
-              // Force immediate sync
-              await quickSave();
-              
-              await firebaseMeta.current.setLastTaskResetDate(today);
-              setShowDailyResetNotification(true);
-              setTimeout(() => setShowDailyResetNotification(false), 8000);
+              const saveResults = await Promise.all([
+                quickSave('completedTasks', []),
+                quickSave('taskAssignments', {})
+              ]);
+              if (saveResults.every(result => result === true)) {
+                await firebaseMeta.current.setLastTaskResetDate(today);
+                setShowDailyResetNotification(true);
+                setTimeout(() => setShowDailyResetNotification(false), 8000);
+              }
             } catch (error) {
               console.error('❌ [CROSS-DEVICE] VISIBILITY RESET: Failed:', error);
             }
@@ -449,15 +447,12 @@ const EmployeeApp: React.FC = () => {
       localStorage.setItem('lastTaskResetDate', today);
       
       try {
-        // Set the state and let reliable sync handle it
-        setCompletedTasks(new Set());
-        setTaskAssignments({});
-        
-        // Force immediate sync
-        await quickSave();
-        
-        console.log('✅ Manual trigger completed');
-        return true;
+        const results = await Promise.all([
+          quickSave('completedTasks', []),
+          quickSave('taskAssignments', {})
+        ]);
+        console.log('✅ Manual trigger results:', results);
+        return results;
       } catch (error) {
         console.error('❌ Manual trigger failed:', error);
         return false;
@@ -467,7 +462,7 @@ const EmployeeApp: React.FC = () => {
     return () => {
       delete (window as any).triggerDailyReset;
     };
-  }, [quickSave, setCompletedTasks, setTaskAssignments]);
+  }, [quickSave]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -679,18 +674,11 @@ const EmployeeApp: React.FC = () => {
           </div>
         )}
 
-        {/* Sync Status Indicator */}
-        <SyncStatusIndicator
-          isLoading={isLoading}
-          lastSync={syncState.lastSync ? new Date(syncState.lastSync).toLocaleTimeString() : null}
-          connectionStatus={connectionStatus}
-          loadFromFirebase={refreshAllData}
+        {/* Professional Sync Status Indicator */}
+        <ProfessionalSyncStatus
+          syncState={syncState}
           activeDevices={activeDevices}
-          syncEvents={syncState.syncEvents}
-          deviceCount={syncState.deviceCount}
-          isMultiDeviceEnabled={true}
-          toggleMultiDeviceSync={() => {}}
-          refreshFromAllDevices={refreshAllData}
+          className="mb-6"
         />
 
         {/* Tab Content */}
@@ -730,7 +718,7 @@ const EmployeeApp: React.FC = () => {
             setPrepItems={setPrepItemsWithSave}
             setScheduledPreps={setScheduledPrepsWithSave}
             setPrepSelections={setPrepSelectionsWithSave}
-            quickSave={legacyQuickSave}
+            quickSave={quickSave}
           />
         )}
 
@@ -749,7 +737,7 @@ const EmployeeApp: React.FC = () => {
             setInventoryMonthlyItems={setInventoryMonthlyItems}
             setInventoryDatabaseItems={setInventoryDatabaseItems}
             setInventoryActivityLog={setInventoryActivityLog}
-            quickSave={legacyQuickSave}
+            quickSave={quickSave}
           />
         )}
 
