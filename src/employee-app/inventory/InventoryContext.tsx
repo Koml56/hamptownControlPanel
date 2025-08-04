@@ -6,8 +6,7 @@ import {
   ActivityLogEntry, 
   InventoryFrequency, 
   InventoryCategory, 
-  WasteReason, 
-  ActivityType
+  WasteReason 
 } from '../types'; // Import from main types.ts
 import { InventoryContextType } from './types'; // Local context type
 import { generateId, showToast } from './utils';

@@ -1,6 +1,6 @@
 // DailyReports.tsx
 import React from 'react';
-import { Calendar, Database, Download } from 'lucide-react';
+import { Calendar, Download } from 'lucide-react';
 import { MOOD_EMOJIS, MOOD_LABELS } from './constants';
 import { getFormattedDate } from './utils';
 import type { DailyDataMap, Employee, ConnectionStatus } from './types';
