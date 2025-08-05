@@ -1,8 +1,16 @@
 // src/employee-app/inventory/utils.ts
-import type { InventoryCategory, StockStatus, InventoryFrequency } from '../types';
+import type { InventoryCategory, StockStatus, InventoryFrequency, CustomCategory } from '../types';
 
-export const getCategoryIcon = (category: InventoryCategory | string | undefined): string => {
+export const getCategoryIcon = (category: InventoryCategory | string | undefined, customCategories?: CustomCategory[]): string => {
   if (!category) return '❓';
+  
+  // First check if it's a custom category
+  if (customCategories) {
+    const customCategory = customCategories.find(cat => cat.name === category || cat.id === category);
+    if (customCategory) {
+      return customCategory.icon;
+    }
+  }
   
   // Handle known categories
   switch (category as InventoryCategory) {
@@ -25,8 +33,16 @@ export const getCategoryIcon = (category: InventoryCategory | string | undefined
   }
 };
 
-export const getCategoryColor = (category: InventoryCategory | string | undefined): string => {
+export const getCategoryColor = (category: InventoryCategory | string | undefined, customCategories?: CustomCategory[]): string => {
   if (!category) return 'gray';
+  
+  // First check if it's a custom category
+  if (customCategories) {
+    const customCategory = customCategories.find(cat => cat.name === category || cat.id === category);
+    if (customCategory) {
+      return customCategory.color;
+    }
+  }
   
   // Handle known categories
   switch (category as InventoryCategory) {

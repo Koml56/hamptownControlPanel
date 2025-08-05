@@ -16,7 +16,8 @@ import type {
   StoreItem,
   InventoryItem,
   DatabaseItem,
-  ActivityLogEntry
+  ActivityLogEntry,
+  CustomCategory
 } from './types';
 import type { SyncOperation } from './OperationManager';
 import { getDatabase, ref, onValue, off } from 'firebase/database';
@@ -99,6 +100,7 @@ export const useFirebaseData = () => {
   const [inventoryMonthlyItems, setInventoryMonthlyItems] = useState<InventoryItem[]>([]);
   const [inventoryDatabaseItems, setInventoryDatabaseItems] = useState<DatabaseItem[]>([]);
   const [inventoryActivityLog, setInventoryActivityLog] = useState<ActivityLogEntry[]>([]);
+  const [inventoryCustomCategories, setInventoryCustomCategories] = useState<CustomCategory[]>([]);
   
   const firebaseService = new FirebaseService();
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -387,6 +389,7 @@ export const useFirebaseData = () => {
       setInventoryMonthlyItems(data.inventoryMonthlyItems || []);
       setInventoryDatabaseItems(data.inventoryDatabaseItems || []);
       setInventoryActivityLog(data.inventoryActivityLog || []);
+      setInventoryCustomCategories(data.inventoryCustomCategories || []);
 
       // ENHANCED: Log what we actually set for scheduledPreps with completion status
       const todayStr = getFormattedDate(new Date());
@@ -567,6 +570,13 @@ export const useFirebaseData = () => {
       setInventoryActivityLog(Array.isArray(data) ? data : Object.values(data));
     };
     onValue(inventoryActivityLogRef, handleInventoryActivityLog);
+
+    const inventoryCustomCategoriesRef = ref(db, 'inventoryCustomCategories');
+    const handleInventoryCustomCategories = (snapshot: any) => {
+      const data = snapshot.val() || [];
+      setInventoryCustomCategories(Array.isArray(data) ? data : Object.values(data));
+    };
+    onValue(inventoryCustomCategoriesRef, handleInventoryCustomCategories);
     // Cleanup
     return () => {
       off(employeesRef, 'value', handleEmployees);
@@ -613,6 +623,7 @@ export const useFirebaseData = () => {
     inventoryMonthlyItems,
     inventoryDatabaseItems,
     inventoryActivityLog,
+    inventoryCustomCategories,
 
     // Setters
     setEmployees,
@@ -630,6 +641,7 @@ export const useFirebaseData = () => {
     setInventoryMonthlyItems,
     setInventoryDatabaseItems,
     setInventoryActivityLog,
+    setInventoryCustomCategories,
 
     // Actions
     loadFromFirebase,

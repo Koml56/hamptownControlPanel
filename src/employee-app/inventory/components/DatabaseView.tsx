@@ -1,25 +1,26 @@
 // src/employee-app/inventory/components/DatabaseView.tsx
 import React, { useState, useEffect } from 'react';
-import { Upload, Plus, Download, Search, Edit3, Trash2, X, AlertTriangle } from 'lucide-react';
+import { Upload, Plus, Download, Search, Edit3, Trash2, X, AlertTriangle, TrendingDown, Tag } from 'lucide-react';
 import { useInventory } from '../InventoryContext';
 import { getCategoryIcon } from '../utils';
 import { InventoryFrequency, InventoryCategory, DatabaseItem } from '../../types';
 import ImportModal from './ImportModal';
 import ManualItemModal from './ManualItemModal';
 import CategoryModal from './CategoryModal';
+import CategoryEditor from './CategoryEditor';
 import BulkActionsBar from './BulkActionsBar';
 
 // Individual Item Edit Modal
 interface ItemEditModalProps {
   item: DatabaseItem;
   onClose: () => void;
-  onSave: (frequency: InventoryFrequency, category: InventoryCategory, minLevel: number, initialStock: number) => void;
+  onSave: (frequency: InventoryFrequency, category: InventoryCategory | string, minLevel: number, initialStock: number) => void;
   onUnassign: () => void;
 }
 
 const ItemEditModal: React.FC<ItemEditModalProps> = ({ item, onClose, onSave, onUnassign }) => {
   const [frequency, setFrequency] = useState<InventoryFrequency>(item.assignedTo || 'daily');
-  const [category, setCategory] = useState<InventoryCategory>(item.assignedCategory || 'produce');
+  const [category, setCategory] = useState<InventoryCategory | string>(item.assignedCategory || 'produce');
   const [minLevel, setMinLevel] = useState(5);
   const [initialStock, setInitialStock] = useState(0);
 
@@ -71,7 +72,7 @@ const ItemEditModal: React.FC<ItemEditModalProps> = ({ item, onClose, onSave, on
             <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
             <select 
               value={category}
-              onChange={(e) => setCategory(e.target.value as InventoryCategory)}
+              onChange={(e) => setCategory(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="produce">🥬 Produce</option>
@@ -156,6 +157,7 @@ const DatabaseView: React.FC = () => {
   const [showImportModal, setShowImportModal] = useState(false);
   const [showManualModal, setShowManualModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [showCategoryEditor, setShowCategoryEditor] = useState(false);
   const [preSelectedFrequency, setPreSelectedFrequency] = useState<string | undefined>(undefined);
 
   const handleAssignCategory = (frequency?: string) => {
@@ -247,7 +249,7 @@ const DatabaseView: React.FC = () => {
     setEditingItem(item);
   };
 
-  const handleItemSave = (frequency: InventoryFrequency, category: InventoryCategory, minLevel: number, initialStock: number) => {
+  const handleItemSave = (frequency: InventoryFrequency, category: InventoryCategory | string, minLevel: number, initialStock: number) => {
     if (editingItem) {
       assignToCategory([editingItem.id], frequency, category, minLevel, initialStock);
     }
@@ -321,7 +323,7 @@ const DatabaseView: React.FC = () => {
           </div>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           <button 
             onClick={() => setShowImportModal(true)}
             className="bg-blue-500 text-white px-4 py-3 rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center"
@@ -335,6 +337,13 @@ const DatabaseView: React.FC = () => {
           >
             <Plus className="w-5 h-5 mr-2" />
             Add Manual Item
+          </button>
+          <button 
+            onClick={() => setShowCategoryEditor(true)}
+            className="bg-indigo-500 text-white px-4 py-3 rounded-lg hover:bg-indigo-600 transition-colors flex items-center justify-center"
+          >
+            <Tag className="w-5 h-5 mr-2" />
+            Manage Categories
           </button>
           <button 
             onClick={handleExport}
@@ -535,6 +544,11 @@ const DatabaseView: React.FC = () => {
             setPreSelectedFrequency(undefined);
           }}
           preSelectedFrequency={preSelectedFrequency}
+        />
+      )}
+      {showCategoryEditor && (
+        <CategoryEditor 
+          onClose={() => setShowCategoryEditor(false)}
         />
       )}
       {editingItem && (

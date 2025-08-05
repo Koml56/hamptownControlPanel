@@ -6,7 +6,8 @@ import type {
   InventoryItem,
   DatabaseItem,
   ActivityLogEntry,
-  WasteReason
+  WasteReason,
+  CustomCategory
 } from '../types';
 
 export interface InventoryTabProps {
@@ -18,11 +19,13 @@ export interface InventoryTabProps {
   inventoryMonthlyItems: InventoryItem[];
   inventoryDatabaseItems: DatabaseItem[];
   inventoryActivityLog: ActivityLogEntry[];
+  inventoryCustomCategories: CustomCategory[];
   setInventoryDailyItems: (items: InventoryItem[]) => void;
   setInventoryWeeklyItems: (items: InventoryItem[]) => void;
   setInventoryMonthlyItems: (items: InventoryItem[]) => void;
   setInventoryDatabaseItems: (items: DatabaseItem[]) => void;
   setInventoryActivityLog: (log: ActivityLogEntry[]) => void;
+  setInventoryCustomCategories: (categories: CustomCategory[]) => void;
   quickSave: (field: string, data: any) => Promise<boolean>;
 }
 
@@ -33,6 +36,7 @@ export interface InventoryContextType {
   monthlyItems: InventoryItem[];
   databaseItems: DatabaseItem[];
   activityLog: ActivityLogEntry[];
+  customCategories: CustomCategory[];
   selectedItems: Set<number | string>;
   
   // UI State
@@ -44,12 +48,13 @@ export interface InventoryContextType {
   setMonthlyItems: (items: InventoryItem[]) => void;
   setDatabaseItems: (items: DatabaseItem[]) => void;
   setActivityLog: (log: ActivityLogEntry[]) => void;
+  setCustomCategories: (categories: CustomCategory[]) => void;
   addActivityEntry: (entry: Omit<ActivityLogEntry, 'id' | 'timestamp'>) => void;
   updateItemStock: (itemId: number | string, newStock: number, frequency: InventoryFrequency, employee: string, notes?: string) => void;
   reportWaste: (itemId: number | string, amount: number, reason: WasteReason, frequency: InventoryFrequency, employee: string, notes?: string) => void;
   importFromExcel: (data: any[]) => void;
   addManualItem: (item: Omit<DatabaseItem, 'id' | 'frequency'>) => void;
-  assignToCategory: (itemIds: (number | string)[], frequency: InventoryFrequency, category: InventoryCategory, minLevel: number, initialStock: number) => void;
+  assignToCategory: (itemIds: (number | string)[], frequency: InventoryFrequency, category: InventoryCategory | string, minLevel: number, initialStock: number) => void;
   unassignFromCategory: (itemId: number | string) => void;
   cleanupDuplicates: () => void;
   deleteItems: (itemIds: (number | string)[]) => void;
@@ -57,4 +62,8 @@ export interface InventoryContextType {
   selectMultipleItems: (itemIds: (number | string)[]) => void;
   clearSelection: () => void;
   switchTab: (tab: InventoryFrequency | 'reports') => void;
+  // Custom Category Management
+  addCustomCategory: (category: Omit<CustomCategory, 'id' | 'createdAt' | 'isDefault'>) => void;
+  updateCustomCategory: (id: string, category: CustomCategory) => void;
+  deleteCustomCategory: (id: string) => void;
 }
