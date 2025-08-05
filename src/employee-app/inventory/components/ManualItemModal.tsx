@@ -2,14 +2,14 @@
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import { useInventory } from '../InventoryContext';
-import { showToast } from '../utils';
+import { showToast, getAllCategoryOptions } from '../utils';
 
 interface ManualItemModalProps {
   onClose: () => void;
 }
 
 const ManualItemModal: React.FC<ManualItemModalProps> = ({ onClose }) => {
-  const { addManualItem } = useInventory();
+  const { addManualItem, customCategories } = useInventory();
   const [formData, setFormData] = useState({
     name: '',
     ean: '',
@@ -18,6 +18,9 @@ const ManualItemModal: React.FC<ManualItemModalProps> = ({ onClose }) => {
     costWithTax: '',
     type: ''
   });
+
+  // Get all available categories
+  const allCategoryOptions = getAllCategoryOptions(customCategories);
 
   const handleSubmit = () => {
     if (!formData.name.trim()) {
@@ -115,12 +118,11 @@ const ManualItemModal: React.FC<ManualItemModalProps> = ({ onClose }) => {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="">Select type...</option>
-              <option value="tukku">🏪 Tukku (Wholesale)</option>
-              <option value="beverages">🥤 Beverages</option>
-              <option value="packaging">📦 Packaging</option>
-              <option value="produce">🥬 Produce</option>
-              <option value="meat">🥩 Meat & Fish</option>
-              <option value="dairy">🥛 Dairy</option>
+              {allCategoryOptions.map(option => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </div>
         </div>
