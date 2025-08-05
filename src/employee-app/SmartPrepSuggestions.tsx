@@ -101,7 +101,7 @@ const SmartPrepSuggestions: React.FC<SmartPrepSuggestionsProps> = ({
   onShowPriorityOptions,
   onResetWorkflow
 }) => {
-  const [showSuggestions, setShowSuggestions] = useState(true);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestionMode, setSuggestionMode] = useState<'overdue' | 'smart' | 'all'>('smart');
   const [maxSuggestions, setMaxSuggestions] = useState(5);
   const [showLearningLog, setShowLearningLog] = useState(false);
