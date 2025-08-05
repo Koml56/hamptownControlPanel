@@ -7,6 +7,8 @@ export { default as DailyView } from './DailyView';
 export { default as WeeklyView } from './WeeklyView';
 export { default as MonthlyView } from './MonthlyView';
 export { default as ReportsView } from './ReportsView';
+export { default as OutOfStockView } from './OutOfStockView';
+export { default as TabNavigation } from './TabNavigation';
 export { default as ImportModal } from './ImportModal';
 export { default as ManualItemModal } from './ManualItemModal';
 export { default as CategoryModal } from './CategoryModal';

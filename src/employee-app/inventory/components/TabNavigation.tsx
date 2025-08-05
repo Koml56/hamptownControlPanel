@@ -1,11 +1,17 @@
 // src/employee-app/inventory/components/TabNavigation.tsx
 import React from 'react';
-import { Flame, Calendar, Package, Database, BarChart3 } from 'lucide-react';
+import { Flame, Calendar, Package, Database, BarChart3, AlertTriangle } from 'lucide-react';
 import { useInventory } from '../InventoryContext';
-import type { InventoryFrequency } from '../../types';
+import { getOutOfStockItems } from '../consumptionAnalytics';
 
 const TabNavigation: React.FC = () => {
   const { currentTab, switchTab, dailyItems, weeklyItems, monthlyItems, databaseItems } = useInventory();
+
+  // Calculate out of stock count
+  const outOfStockCount = React.useMemo(() => {
+    const outOfStockItems = getOutOfStockItems(dailyItems, weeklyItems, monthlyItems);
+    return outOfStockItems.length;
+  }, [dailyItems, weeklyItems, monthlyItems]);
 
   const tabs = [
     {
@@ -28,6 +34,13 @@ const TabNavigation: React.FC = () => {
       icon: Package,
       count: monthlyItems.length,
       color: 'green'
+    },
+    {
+      id: 'outofstock' as const,
+      label: 'Out of Stock',
+      icon: AlertTriangle,
+      count: outOfStockCount,
+      color: 'orange'
     },
     {
       id: 'database' as const,

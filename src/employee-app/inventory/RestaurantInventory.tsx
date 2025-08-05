@@ -1,6 +1,6 @@
 // src/employee-app/inventory/RestaurantInventory.tsx
 import React from 'react';
-import { ChefHat, Flame, Calendar, Package, Database, BarChart3, AlertTriangle, TrendingDown, CheckCircle } from 'lucide-react';
+import { ChefHat, AlertTriangle, TrendingDown, CheckCircle, Database, Package } from 'lucide-react';
 import { InventoryProvider, useInventory } from './InventoryContext';
 import { InventoryTabProps } from './types';
 import { getStockStatus } from './utils';
@@ -9,6 +9,8 @@ import DailyView from './components/DailyView';
 import WeeklyView from './components/WeeklyView';
 import MonthlyView from './components/MonthlyView';
 import ReportsView from './components/ReportsView';
+import OutOfStockView from './components/OutOfStockView';
+import TabNavigation from './components/TabNavigation';
 import ToastContainer from './components/ToastContainer';
 
 // Simple Header Component - No background wrapper
@@ -102,81 +104,6 @@ const InventoryHeader: React.FC = () => {
   );
 };
 
-// Simple Tab Navigation - No background wrapper
-const TabNavigation: React.FC = () => {
-  const { currentTab, switchTab, dailyItems, weeklyItems, monthlyItems, databaseItems } = useInventory();
-
-  const tabs = [
-    {
-      id: 'daily' as const,
-      label: 'Daily',
-      icon: Flame,
-      count: dailyItems.length,
-      color: 'red'
-    },
-    {
-      id: 'weekly' as const,
-      label: 'Weekly',
-      icon: Calendar,
-      count: weeklyItems.length,
-      color: 'yellow'
-    },
-    {
-      id: 'monthly' as const,
-      label: 'Monthly',
-      icon: Package,
-      count: monthlyItems.length,
-      color: 'green'
-    },
-    {
-      id: 'database' as const,
-      label: 'Database',
-      icon: Database,
-      count: databaseItems.length,
-      color: 'blue'
-    },
-    {
-      id: 'reports' as const,
-      label: 'Analytics',
-      icon: BarChart3,
-      count: 0,
-      color: 'purple'
-    }
-  ];
-
-  return (
-    <div className="bg-white rounded-xl shadow-sm mb-6 p-2">
-      <div className="flex space-x-2 overflow-x-auto scrollbar-hide pb-2">
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = currentTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => switchTab(tab.id)}
-              className={`flex-shrink-0 flex items-center justify-center px-3 py-2 md:px-4 md:py-3 rounded-lg transition-all font-medium min-w-max ${
-                isActive 
-                  ? `bg-${tab.color}-500 text-white` 
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              <Icon className="w-4 h-4 md:w-5 md:h-5 mr-1 md:mr-2" />
-              <span className="text-sm md:text-base">{tab.label}</span>
-              <span className={`ml-1 md:ml-2 px-1.5 py-0.5 md:px-2 md:py-1 rounded-full text-xs ${
-                isActive 
-                  ? `bg-${tab.color}-600` 
-                  : 'bg-gray-300 text-gray-700'
-              }`}>
-                {tab.count}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
-
 const InventoryContent: React.FC = () => {
   const { currentTab } = useInventory();
 
@@ -188,6 +115,8 @@ const InventoryContent: React.FC = () => {
         return <WeeklyView />;
       case 'monthly':
         return <MonthlyView />;
+      case 'outofstock':
+        return <OutOfStockView />;
       case 'database':
         return <DatabaseView />;
       case 'reports':
