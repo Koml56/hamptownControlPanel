@@ -6,7 +6,8 @@ import {
   ActivityLogEntry, 
   InventoryFrequency, 
   InventoryCategory, 
-  WasteReason 
+  WasteReason,
+  CustomCategory
 } from '../types'; // Import from main types.ts
 import { InventoryContextType } from './types'; // Local context type
 import { generateId, showToast } from './utils';
@@ -29,11 +30,13 @@ interface InventoryProviderProps {
   inventoryMonthlyItems: InventoryItem[];
   inventoryDatabaseItems: DatabaseItem[];
   inventoryActivityLog: ActivityLogEntry[];
+  inventoryCustomCategories: CustomCategory[];
   setInventoryDailyItems: (items: InventoryItem[]) => void;
   setInventoryWeeklyItems: (items: InventoryItem[]) => void;
   setInventoryMonthlyItems: (items: InventoryItem[]) => void;
   setInventoryDatabaseItems: (items: DatabaseItem[]) => void;
   setInventoryActivityLog: (log: ActivityLogEntry[]) => void;
+  setInventoryCustomCategories: (categories: CustomCategory[]) => void;
   quickSave: (field: string, data: any) => Promise<boolean>;
 }
 
@@ -44,11 +47,13 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
   inventoryMonthlyItems,
   inventoryDatabaseItems,
   inventoryActivityLog,
+  inventoryCustomCategories,
   setInventoryDailyItems,
   setInventoryWeeklyItems,
   setInventoryMonthlyItems,
   setInventoryDatabaseItems,
   setInventoryActivityLog,
+  setInventoryCustomCategories,
   quickSave
 }) => {
   // Use Firebase state instead of local state
@@ -57,6 +62,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
   const monthlyItems = inventoryMonthlyItems;
   const databaseItems = inventoryDatabaseItems;
   const activityLog = inventoryActivityLog;
+  const customCategories = inventoryCustomCategories;
   
   // UI-only state (not synced to Firebase)
   const [selectedItems, setSelectedItems] = useState<Set<number | string>>(new Set());
@@ -245,7 +251,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
   const assignToCategory = useCallback((
     itemIds: (number | string)[],
     frequency: InventoryFrequency,
-    category: InventoryCategory,
+    category: InventoryCategory | string,
     minLevel: number,
     initialStock: number
   ) => {
@@ -552,6 +558,59 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     setSelectedItems(new Set()); // Clear selections when switching tabs
   }, []);
 
+  // Custom Category Management
+  const addCustomCategory = useCallback((category: Omit<CustomCategory, 'id' | 'createdAt' | 'isDefault'>) => {
+    const newCategory: CustomCategory = {
+      ...category,
+      id: generateId().toString(),
+      createdAt: new Date().toISOString(),
+      isDefault: false
+    };
+    
+    const updatedCategories = [...customCategories, newCategory];
+    setInventoryCustomCategories(updatedCategories);
+    quickSave('inventoryCustomCategories', updatedCategories);
+    showToast(`Custom category "${category.name}" created successfully`);
+    
+    addActivityEntry({
+      type: 'manual_add',
+      item: `Custom Category: ${category.name}`,
+      quantity: 1,
+      unit: 'category',
+      employee: 'Current User'
+    });
+  }, [customCategories, setInventoryCustomCategories, quickSave, addActivityEntry]);
+
+  const updateCustomCategory = useCallback((id: string, updatedCategory: CustomCategory) => {
+    const updatedCategories = customCategories.map(cat => 
+      cat.id === id ? updatedCategory : cat
+    );
+    setInventoryCustomCategories(updatedCategories);
+    quickSave('inventoryCustomCategories', updatedCategories);
+    showToast(`Category "${updatedCategory.name}" updated successfully`);
+  }, [customCategories, setInventoryCustomCategories, quickSave]);
+
+  const deleteCustomCategory = useCallback((id: string) => {
+    const category = customCategories.find(cat => cat.id === id);
+    if (!category) {
+      showToast('Category not found');
+      return;
+    }
+    
+    const updatedCategories = customCategories.filter(cat => cat.id !== id);
+    setInventoryCustomCategories(updatedCategories);
+    quickSave('inventoryCustomCategories', updatedCategories);
+    showToast(`Category "${category.name}" deleted successfully`);
+    
+    addActivityEntry({
+      type: 'manual_add',
+      item: `Deleted Category: ${category.name}`,
+      quantity: 1,
+      unit: 'category',
+      employee: 'Current User'
+    });
+  }, [customCategories, setInventoryCustomCategories, quickSave, addActivityEntry]);
+
   const value: InventoryContextType = {
     // Data
     dailyItems,
@@ -559,6 +618,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     monthlyItems,
     databaseItems,
     activityLog,
+    customCategories,
     selectedItems,
     
     // UI State
@@ -570,6 +630,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     setMonthlyItems: setInventoryMonthlyItems,
     setDatabaseItems: setInventoryDatabaseItems,
     setActivityLog: setInventoryActivityLog,
+    setCustomCategories: setInventoryCustomCategories,
     addActivityEntry,
     updateItemStock,
     reportWaste,
@@ -582,7 +643,11 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     toggleItemSelection,
     selectMultipleItems,
     clearSelection,
-    switchTab
+    switchTab,
+    // Custom Category Management
+    addCustomCategory,
+    updateCustomCategory,
+    deleteCustomCategory
   };
 
   return (

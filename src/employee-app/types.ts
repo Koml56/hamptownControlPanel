@@ -141,10 +141,20 @@ export type StockStatus = 'critical' | 'low' | 'normal';
 export type WasteReason = 'expired' | 'overcooked' | 'dropped' | 'overordered' | 'customer-return' | 'other';
 export type ActivityType = 'count_update' | 'waste' | 'import' | 'manual_add';
 
+// Custom Category Management
+export interface CustomCategory {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  createdAt: string;
+  isDefault: boolean;
+}
+
 export interface InventoryItem {
   id: number | string;
   name: string;
-  category: InventoryCategory;
+  category: InventoryCategory | string;
   currentStock: number;
   minLevel: number;
   unit: string;
@@ -166,7 +176,7 @@ export interface DatabaseItem {
   frequency: InventoryFrequency;
   // Assignment tracking
   assignedTo?: InventoryFrequency; // Which frequency it's assigned to (daily/weekly/monthly)
-  assignedCategory?: InventoryCategory; // Which category it's assigned to
+  assignedCategory?: InventoryCategory | string; // Which category it's assigned to
   assignedDate?: string; // When it was assigned
   isAssigned?: boolean; // Whether it's currently assigned to any inventory list
 }

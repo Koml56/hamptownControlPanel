@@ -10,11 +10,11 @@ interface CategoryModalProps {
 }
 
 const CategoryModal: React.FC<CategoryModalProps> = ({ onClose, preSelectedFrequency }) => {
-  const { databaseItems, selectedItems, assignToCategory } = useInventory();
+  const { databaseItems, selectedItems, customCategories, assignToCategory } = useInventory();
   const [frequency, setFrequency] = useState<InventoryFrequency>(
     (preSelectedFrequency as InventoryFrequency) || 'daily'
   );
-  const [category, setCategory] = useState<InventoryCategory>('produce');
+  const [category, setCategory] = useState<InventoryCategory | string>('produce');
   const [minLevel, setMinLevel] = useState(5);
   const [initialStock, setInitialStock] = useState(0);
 
@@ -24,6 +24,22 @@ const CategoryModal: React.FC<CategoryModalProps> = ({ onClose, preSelectedFrequ
     assignToCategory(Array.from(selectedItems), frequency, category, minLevel, initialStock);
     onClose();
   };
+
+  // Default categories
+  const defaultCategories = [
+    { value: 'produce', label: '🥬 Produce' },
+    { value: 'meat', label: '🥩 Meat & Fish' },
+    { value: 'dairy', label: '🥛 Dairy' },
+    { value: 'bread', label: '🍞 Bread & Bakery' },
+    { value: 'beverages', label: '🥤 Beverages' },
+    { value: 'cooking', label: '🫒 Cooking Ingredients' },
+    { value: 'baking', label: '🌾 Baking Supplies' },
+    { value: 'grains', label: '🌾 Grains & Rice' },
+    { value: 'cleaning', label: '🧽 Cleaning Supplies' },
+    { value: 'supplies', label: '📦 General Supplies' },
+    { value: 'packaging', label: '📦 Packaging' },
+    { value: 'tukku', label: '🏪 Tukku (Wholesale)' }
+  ];
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -66,18 +82,21 @@ const CategoryModal: React.FC<CategoryModalProps> = ({ onClose, preSelectedFrequ
             <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
             <select 
               value={category}
-              onChange={(e) => setCategory(e.target.value as InventoryCategory)}
+              onChange={(e) => setCategory(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
             >
-              <option value="produce">🥬 Produce</option>
-              <option value="meat">🥩 Meat & Fish</option>
-              <option value="dairy">🥛 Dairy</option>
-              <option value="bread">🍞 Bread & Baked</option>
-              <option value="beverages">🥤 Beverages</option>
-              <option value="packaging">📦 Packaging</option>
-              <option value="tukku">🏪 Tukku (Wholesale)</option>
-              <option value="cleaning">🧽 Cleaning</option>
-              <option value="supplies">📦 Supplies</option>
+              <optgroup label="Default Categories">
+                {defaultCategories.map(cat => (
+                  <option key={cat.value} value={cat.value}>{cat.label}</option>
+                ))}
+              </optgroup>
+              {customCategories.length > 0 && (
+                <optgroup label="Custom Categories">
+                  {customCategories.map(cat => (
+                    <option key={cat.id} value={cat.name}>{cat.icon} {cat.name}</option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </div>
           
