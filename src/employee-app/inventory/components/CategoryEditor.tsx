@@ -1,6 +1,6 @@
 // src/employee-app/inventory/components/CategoryEditor.tsx
 import React, { useState } from 'react';
-import { X, Plus, Edit3, Trash2, Tag, Palette } from 'lucide-react';
+import { X, Plus, Edit3, Trash2, Tag } from 'lucide-react';
 import { useInventory } from '../InventoryContext';
 import { CustomCategory } from '../../types';
 import { defaultCategories } from '../utils';
@@ -30,22 +30,13 @@ const CategoryEditor: React.FC<CategoryEditorProps> = ({ onClose }) => {
     if (!formData.name.trim()) return;
 
     if (editingCategory) {
-      if (editingCategory.id.startsWith('default_')) {
-        // For default categories, create a custom override
-        addCustomCategory({
-          name: formData.name.trim(),
-          icon: formData.icon,
-          color: formData.color
-        });
-      } else {
-        // For custom categories, update normally
-        updateCustomCategory(editingCategory.id, {
-          ...editingCategory,
-          name: formData.name.trim(),
-          icon: formData.icon,
-          color: formData.color
-        });
-      }
+      // For custom categories, update normally
+      updateCustomCategory(editingCategory.id, {
+        ...editingCategory,
+        name: formData.name.trim(),
+        icon: formData.icon,
+        color: formData.color
+      });
     } else {
       addCustomCategory({
         name: formData.name.trim(),
@@ -79,36 +70,6 @@ const CategoryEditor: React.FC<CategoryEditorProps> = ({ onClose }) => {
     }
   };
 
-  const handleEditDefault = (category: typeof defaultCategories[0]) => {
-    // Convert default category to custom category format for editing
-    setEditingCategory({
-      id: `default_${category.id}`,
-      name: category.name,
-      icon: category.icon,
-      color: category.color,
-      createdAt: new Date().toISOString(),
-      isDefault: true
-    });
-    setFormData({
-      name: category.name,
-      icon: category.icon,
-      color: category.color
-    });
-    setShowForm(true);
-  };
-
-  const handleDeleteDefault = (category: typeof defaultCategories[0]) => {
-    if (window.confirm(`Are you sure you want to remove the "${category.name}" category? This will create a custom override.`)) {
-      // Create a custom category marked as deleted/hidden
-      addCustomCategory({
-        name: `REMOVED_${category.name}`,
-        icon: '❌',
-        color: '#EF4444'
-      });
-      alert('Default category marked as removed. You can restore it by editing the custom categories.');
-    }
-  };
-
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-xl p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
@@ -127,29 +88,13 @@ const CategoryEditor: React.FC<CategoryEditorProps> = ({ onClose }) => {
           <h4 className="text-lg font-medium text-gray-700 mb-3">Default Categories</h4>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             {defaultCategories.map(category => (
-              <div key={category.id} className="bg-gray-50 p-3 rounded-lg border border-gray-200 relative group">
+              <div key={category.id} className="bg-gray-50 p-3 rounded-lg border border-gray-200">
                 <div className="flex items-center">
                   <span className="text-2xl mr-3">{category.icon}</span>
                   <div className="flex-1">
                     <div className="font-medium text-gray-800">{category.name}</div>
                     <div className="text-xs text-gray-500">Built-in</div>
                   </div>
-                </div>
-                <div className="flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity mt-2">
-                  <button
-                    onClick={() => handleEditDefault(category)}
-                    className="text-blue-600 hover:text-blue-800 p-1"
-                    title="Edit category"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDeleteDefault(category)}
-                    className="text-red-600 hover:text-red-800 p-1"
-                    title="Remove category"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
                 </div>
               </div>
             ))}
@@ -216,11 +161,7 @@ const CategoryEditor: React.FC<CategoryEditorProps> = ({ onClose }) => {
         {showForm && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
             <h5 className="font-medium text-blue-800 mb-3">
-              {editingCategory 
-                ? editingCategory.id.startsWith('default_')
-                  ? 'Create Custom Override'
-                  : 'Edit Category'
-                : 'Add New Category'}
+              {editingCategory ? 'Edit Category' : 'Add New Category'}
             </h5>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
@@ -299,11 +240,7 @@ const CategoryEditor: React.FC<CategoryEditorProps> = ({ onClose }) => {
                   type="submit"
                   className="flex-1 bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 transition-colors"
                 >
-                  {editingCategory 
-                    ? editingCategory.id.startsWith('default_')
-                      ? 'Create Override'
-                      : 'Update Category'
-                    : 'Add Category'}
+                  {editingCategory ? 'Update Category' : 'Add Category'}
                 </button>
                 <button
                   type="button"

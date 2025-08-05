@@ -136,7 +136,7 @@ export interface AdminPanelProps {
 
 // Inventory Types - moved from inventory/types.ts for Firebase integration
 export type InventoryFrequency = 'daily' | 'weekly' | 'monthly' | 'database';
-export type InventoryCategory = 'produce' | 'meat' | 'dairy' | 'bread' | 'beverages' | 'cooking' | 'baking' | 'grains' | 'cleaning' | 'supplies' | 'packaging' | 'tukku' | 'uncategorized';
+export type InventoryCategory = 'meat' | 'dairy' | 'uncategorized';
 export type StockStatus = 'critical' | 'low' | 'normal';
 export type WasteReason = 'expired' | 'overcooked' | 'dropped' | 'overordered' | 'customer-return' | 'other';
 export type ActivityType = 'count_update' | 'waste' | 'import' | 'manual_add';

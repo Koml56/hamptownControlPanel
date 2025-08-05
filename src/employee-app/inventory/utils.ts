@@ -14,18 +14,8 @@ export const getCategoryIcon = (category: InventoryCategory | string | undefined
   
   // Handle known categories
   switch (category as InventoryCategory) {
-    case 'produce': return '🥬';
     case 'meat': return '🥩';
     case 'dairy': return '🥛';
-    case 'bread': return '🍞';
-    case 'beverages': return '🥤';
-    case 'cooking': return '🫒';
-    case 'baking': return '🌾';
-    case 'grains': return '🌾';
-    case 'cleaning': return '🧽';
-    case 'supplies': return '📦';
-    case 'packaging': return '📦';
-    case 'tukku': return '🏪';
     case 'uncategorized': return '❓';
     default: 
       // Handle unknown string categories
@@ -46,18 +36,8 @@ export const getCategoryColor = (category: InventoryCategory | string | undefine
   
   // Handle known categories
   switch (category as InventoryCategory) {
-    case 'produce': return 'green';
     case 'meat': return 'red';
     case 'dairy': return 'blue';
-    case 'bread': return 'yellow';
-    case 'beverages': return 'purple';
-    case 'cooking': return 'orange';
-    case 'baking': return 'amber';
-    case 'grains': return 'yellow';
-    case 'cleaning': return 'gray';
-    case 'supplies': return 'gray';
-    case 'packaging': return 'gray';
-    case 'tukku': return 'indigo';
     case 'uncategorized': return 'gray';
     default: 
       // Handle unknown string categories
@@ -226,18 +206,8 @@ export const validateExcelFile = (file: File): { valid: boolean; error?: string 
 
 // Default categories configuration
 export const defaultCategories = [
-  { id: 'produce', name: 'Produce', icon: '🥬', color: '#10B981' },
   { id: 'meat', name: 'Meat & Fish', icon: '🥩', color: '#EF4444' },
-  { id: 'dairy', name: 'Dairy', icon: '🥛', color: '#3B82F6' },
-  { id: 'bread', name: 'Bread & Bakery', icon: '🍞', color: '#F59E0B' },
-  { id: 'beverages', name: 'Beverages', icon: '🥤', color: '#8B5CF6' },
-  { id: 'cooking', name: 'Cooking Ingredients', icon: '🫒', color: '#F97316' },
-  { id: 'baking', name: 'Baking Supplies', icon: '🌾', color: '#D97706' },
-  { id: 'grains', name: 'Grains & Rice', icon: '🌾', color: '#F59E0B' },
-  { id: 'cleaning', name: 'Cleaning Supplies', icon: '🧽', color: '#6B7280' },
-  { id: 'supplies', name: 'General Supplies', icon: '📦', color: '#6B7280' },
-  { id: 'packaging', name: 'Packaging', icon: '📦', color: '#6B7280' },
-  { id: 'tukku', name: 'Tukku (Wholesale)', icon: '🏪', color: '#4F46E5' }
+  { id: 'dairy', name: 'Dairy', icon: '🥛', color: '#3B82F6' }
 ];
 
 export interface CategoryOption {
