@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Upload, Plus, Download, Search, Edit3, Trash2, X, AlertTriangle, TrendingDown, Tag } from 'lucide-react';
 import { useInventory } from '../InventoryContext';
-import { getCategoryIcon } from '../utils';
+import { getCategoryIcon, getAllCategoryOptions } from '../utils';
 import { InventoryFrequency, InventoryCategory, DatabaseItem } from '../../types';
 import ImportModal from './ImportModal';
 import ManualItemModal from './ManualItemModal';
@@ -19,10 +19,14 @@ interface ItemEditModalProps {
 }
 
 const ItemEditModal: React.FC<ItemEditModalProps> = ({ item, onClose, onSave, onUnassign }) => {
+  const { customCategories } = useInventory();
   const [frequency, setFrequency] = useState<InventoryFrequency>(item.assignedTo || 'daily');
   const [category, setCategory] = useState<InventoryCategory | string>(item.assignedCategory || 'produce');
   const [minLevel, setMinLevel] = useState(5);
   const [initialStock, setInitialStock] = useState(0);
+
+  // Get all available categories
+  const allCategoryOptions = getAllCategoryOptions(customCategories);
 
   const handleSave = () => {
     onSave(frequency, category, minLevel, initialStock);
@@ -75,18 +79,11 @@ const ItemEditModal: React.FC<ItemEditModalProps> = ({ item, onClose, onSave, on
               onChange={(e) => setCategory(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
             >
-              <option value="produce">🥬 Produce</option>
-              <option value="meat">🥩 Meat & Fish</option>
-              <option value="dairy">🥛 Dairy</option>
-              <option value="bread">🍞 Bread & Bakery</option>
-              <option value="beverages">🥤 Beverages</option>
-              <option value="cooking">🫒 Cooking Ingredients</option>
-              <option value="baking">🌾 Baking Supplies</option>
-              <option value="grains">🌾 Grains & Rice</option>
-              <option value="cleaning">🧽 Cleaning Supplies</option>
-              <option value="supplies">📦 General Supplies</option>
-              <option value="packaging">📦 Packaging</option>
-              <option value="tukku">🏪 Tukku (Wholesale)</option>
+              {allCategoryOptions.map(option => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </div>
           
@@ -151,7 +148,8 @@ const DatabaseView: React.FC = () => {
     deleteItems,
     assignToCategory,
     unassignFromCategory,
-    cleanupDuplicates
+    cleanupDuplicates,
+    customCategories
   } = useInventory();
   
   const [showImportModal, setShowImportModal] = useState(false);
@@ -169,6 +167,9 @@ const DatabaseView: React.FC = () => {
   const [filterType, setFilterType] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectAll, setSelectAll] = useState(false);
+
+  // Get all available categories
+  const allCategoryOptions = getAllCategoryOptions(customCategories);
 
   // Filter items
   const filteredItems = databaseItems.filter(item => {
@@ -390,9 +391,11 @@ const DatabaseView: React.FC = () => {
               <option value="all">All Items</option>
               <option value="assigned">✅ Assigned Items</option>
               <option value="unassigned">⏳ Unassigned Items</option>
-              <option value="tukku">🏪 Tukku (Wholesale)</option>
-              <option value="beverages">🥤 Beverages</option>
-              <option value="packaging">📦 Packaging</option>
+              {allCategoryOptions.map(option => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
               <option value="uncategorized">❓ Uncategorized</option>
             </select>
             <div className="relative">

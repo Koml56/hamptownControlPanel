@@ -223,3 +223,63 @@ export const validateExcelFile = (file: File): { valid: boolean; error?: string 
   
   return { valid: true };
 };
+
+// Default categories configuration
+export const defaultCategories = [
+  { id: 'produce', name: 'Produce', icon: '🥬', color: '#10B981' },
+  { id: 'meat', name: 'Meat & Fish', icon: '🥩', color: '#EF4444' },
+  { id: 'dairy', name: 'Dairy', icon: '🥛', color: '#3B82F6' },
+  { id: 'bread', name: 'Bread & Bakery', icon: '🍞', color: '#F59E0B' },
+  { id: 'beverages', name: 'Beverages', icon: '🥤', color: '#8B5CF6' },
+  { id: 'cooking', name: 'Cooking Ingredients', icon: '🫒', color: '#F97316' },
+  { id: 'baking', name: 'Baking Supplies', icon: '🌾', color: '#D97706' },
+  { id: 'grains', name: 'Grains & Rice', icon: '🌾', color: '#F59E0B' },
+  { id: 'cleaning', name: 'Cleaning Supplies', icon: '🧽', color: '#6B7280' },
+  { id: 'supplies', name: 'General Supplies', icon: '📦', color: '#6B7280' },
+  { id: 'packaging', name: 'Packaging', icon: '📦', color: '#6B7280' },
+  { id: 'tukku', name: 'Tukku (Wholesale)', icon: '🏪', color: '#4F46E5' }
+];
+
+export interface CategoryOption {
+  value: string;
+  label: string;
+  icon: string;
+  isCustom?: boolean;
+}
+
+// Get all available categories for select dropdowns
+export const getAllCategoryOptions = (customCategories: CustomCategory[] = []): CategoryOption[] => {
+  const defaultOptions: CategoryOption[] = defaultCategories.map(cat => ({
+    value: cat.id,
+    label: `${cat.icon} ${cat.name}`,
+    icon: cat.icon,
+    isCustom: false
+  }));
+  
+  const customOptions: CategoryOption[] = customCategories.map(cat => ({
+    value: cat.id,
+    label: `${cat.icon} ${cat.name}`,
+    icon: cat.icon,
+    isCustom: true
+  }));
+  
+  return [...defaultOptions, ...customOptions];
+};
+
+// Get category display name with icon
+export const getCategoryDisplayName = (categoryValue: string, customCategories: CustomCategory[] = []): string => {
+  // Check custom categories first
+  const customCategory = customCategories.find(cat => cat.id === categoryValue);
+  if (customCategory) {
+    return `${customCategory.icon} ${customCategory.name}`;
+  }
+  
+  // Check default categories
+  const defaultCategory = defaultCategories.find(cat => cat.id === categoryValue);
+  if (defaultCategory) {
+    return `${defaultCategory.icon} ${defaultCategory.name}`;
+  }
+  
+  // Fallback for unknown categories
+  return categoryValue;
+};

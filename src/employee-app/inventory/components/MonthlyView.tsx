@@ -5,14 +5,18 @@ import { useInventory } from '../InventoryContext';
 import ItemCard from './ItemCard';
 import CountModal from './CountModal';
 import WasteModal from './WasteModal';
+import { getAllCategoryOptions, getCategoryDisplayName } from '../utils';
 
 const MonthlyView: React.FC = () => {
-  const { monthlyItems } = useInventory();
+  const { monthlyItems, customCategories } = useInventory();
   const [showCountModal, setShowCountModal] = useState(false);
   const [showWasteModal, setShowWasteModal] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<number | string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+
+  // Get all available categories
+  const allCategoryOptions = getAllCategoryOptions(customCategories);
 
   // Filter items
   const filteredItems = monthlyItems.filter(item => {
@@ -111,9 +115,9 @@ const MonthlyView: React.FC = () => {
                 className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="all">All Categories</option>
-                {categories.map(category => (
-                  <option key={category} value={category} className="capitalize">
-                    {category}
+                {allCategoryOptions.map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
                   </option>
                 ))}
               </select>

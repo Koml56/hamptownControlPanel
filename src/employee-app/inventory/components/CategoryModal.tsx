@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import { useInventory } from '../InventoryContext';
 import { InventoryFrequency, InventoryCategory } from '../../types';
+import { getAllCategoryOptions } from '../utils';
 
 interface CategoryModalProps {
   onClose: () => void;
@@ -25,21 +26,8 @@ const CategoryModal: React.FC<CategoryModalProps> = ({ onClose, preSelectedFrequ
     onClose();
   };
 
-  // Default categories
-  const defaultCategories = [
-    { value: 'produce', label: '🥬 Produce' },
-    { value: 'meat', label: '🥩 Meat & Fish' },
-    { value: 'dairy', label: '🥛 Dairy' },
-    { value: 'bread', label: '🍞 Bread & Bakery' },
-    { value: 'beverages', label: '🥤 Beverages' },
-    { value: 'cooking', label: '🫒 Cooking Ingredients' },
-    { value: 'baking', label: '🌾 Baking Supplies' },
-    { value: 'grains', label: '🌾 Grains & Rice' },
-    { value: 'cleaning', label: '🧽 Cleaning Supplies' },
-    { value: 'supplies', label: '📦 General Supplies' },
-    { value: 'packaging', label: '📦 Packaging' },
-    { value: 'tukku', label: '🏪 Tukku (Wholesale)' }
-  ];
+  // Get all available categories
+  const allCategoryOptions = getAllCategoryOptions(customCategories);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -85,18 +73,11 @@ const CategoryModal: React.FC<CategoryModalProps> = ({ onClose, preSelectedFrequ
               onChange={(e) => setCategory(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
             >
-              <optgroup label="Default Categories">
-                {defaultCategories.map(cat => (
-                  <option key={cat.value} value={cat.value}>{cat.label}</option>
-                ))}
-              </optgroup>
-              {customCategories.length > 0 && (
-                <optgroup label="Custom Categories">
-                  {customCategories.map(cat => (
-                    <option key={cat.id} value={cat.name}>{cat.icon} {cat.name}</option>
-                  ))}
-                </optgroup>
-              )}
+              {allCategoryOptions.map(option => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </div>
           

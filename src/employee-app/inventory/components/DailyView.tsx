@@ -5,15 +5,18 @@ import { useInventory } from '../InventoryContext';
 import ItemCard from './ItemCard';
 import CountModal from './CountModal';
 import WasteModal from './WasteModal';
-import { formatDate } from '../utils';
+import { formatDate, getAllCategoryOptions } from '../utils';
 
 const DailyView: React.FC = () => {
-  const { dailyItems, activityLog } = useInventory();
+  const { dailyItems, activityLog, customCategories } = useInventory();
   const [showCountModal, setShowCountModal] = useState(false);
   const [showWasteModal, setShowWasteModal] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<number | string | null>(null);
   const [typeFilter, setTypeFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Get all available categories
+  const allCategoryOptions = getAllCategoryOptions(customCategories);
 
   // Filter items
   const filteredItems = dailyItems.filter(item => {
@@ -81,12 +84,11 @@ const DailyView: React.FC = () => {
                 className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="all">All Types</option>
-                <option value="tukku">🏪 Tukku (Wholesale)</option>
-                <option value="beverages">🥤 Beverages</option>
-                <option value="packaging">📦 Packaging</option>
-                <option value="produce">🥬 Produce</option>
-                <option value="meat">🥩 Meat & Fish</option>
-                <option value="dairy">🥛 Dairy</option>
+                {allCategoryOptions.map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
               
               <div className="relative">
