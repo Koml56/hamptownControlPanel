@@ -647,7 +647,9 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     // Custom Category Management
     addCustomCategory,
     updateCustomCategory,
-    deleteCustomCategory
+    deleteCustomCategory,
+    // Firebase integration
+    quickSave
   };
 
   return (

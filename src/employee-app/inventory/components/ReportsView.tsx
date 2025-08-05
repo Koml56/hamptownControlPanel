@@ -2,15 +2,15 @@
 import React from 'react';
 import { BarChart3, TrendingUp, AlertTriangle, DollarSign } from 'lucide-react';
 import { useInventory } from '../InventoryContext';
-import { getStockStatus } from '../utils';
+import { getStockStatus } from '../stockUtils';
 
 const ReportsView: React.FC = () => {
   const { dailyItems, weeklyItems, monthlyItems, activityLog } = useInventory();
 
   // Calculate statistics
   const allItems = [...dailyItems, ...weeklyItems, ...monthlyItems];
-  const criticalItems = allItems.filter(item => getStockStatus(item).status === 'critical');
-  const lowStockItems = allItems.filter(item => getStockStatus(item).status === 'low');
+  const criticalItems = allItems.filter(item => getStockStatus(item.currentStock, item.minLevel) === 'critical');
+  const lowStockItems = allItems.filter(item => getStockStatus(item.currentStock, item.minLevel) === 'low');
   const totalValue = allItems.reduce((sum, item) => sum + (item.cost * item.currentStock), 0);
   
   // Activity statistics
@@ -112,7 +112,7 @@ const ReportsView: React.FC = () => {
                 <span className="text-sm text-gray-600">Normal Stock</span>
               </div>
               <span className="font-semibold text-green-600">
-                {allItems.filter(item => getStockStatus(item).status === 'normal').length}
+                {allItems.filter(item => getStockStatus(item.currentStock, item.minLevel) === 'ok').length}
               </span>
             </div>
             <div className="flex items-center justify-between">

@@ -45,15 +45,15 @@ export const getCategoryColor = (category: InventoryCategory | string | undefine
   }
 };
 
-export const getStockStatus = (item: { currentStock: number; minLevel: number }): { status: StockStatus; color: string } => {
-  if (item.currentStock === 0) {
-    return { status: 'critical', color: 'red' };
-  } else if (item.currentStock <= item.minLevel * 0.5) {
-    return { status: 'critical', color: 'red' };
-  } else if (item.currentStock <= item.minLevel) {
-    return { status: 'low', color: 'yellow' };
-  }
-  return { status: 'normal', color: 'green' };
+export const getStockStatus = (currentStock: number, minimumLevel: number): { status: 'out' | 'critical' | 'low' | 'ok'; color: string } => {
+  if (minimumLevel === 0) return { status: 'ok', color: 'gray' };
+  
+  const percentage = (currentStock / minimumLevel) * 100;
+  
+  if (currentStock === 0) return { status: 'out', color: 'red' };           // 0% - RED - Out of stock
+  if (percentage <= 20) return { status: 'critical', color: 'orange' };    // ≤20% - ORANGE - Critical  
+  if (percentage <= 50) return { status: 'low', color: 'yellow' };         // ≤50% - YELLOW - Low
+  return { status: 'ok', color: 'green' };                                 // >50% - GREEN - OK
 };
 
 export const getFrequencyBadge = (frequency: InventoryFrequency): string => {

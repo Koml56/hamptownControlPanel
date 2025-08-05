@@ -137,7 +137,7 @@ export interface AdminPanelProps {
 // Inventory Types - moved from inventory/types.ts for Firebase integration
 export type InventoryFrequency = 'daily' | 'weekly' | 'monthly' | 'database' | 'outofstock';
 export type InventoryCategory = 'meat' | 'dairy' | 'uncategorized';
-export type StockStatus = 'critical' | 'low' | 'normal';
+export type StockStatus = 'out' | 'critical' | 'low' | 'ok';
 export type WasteReason = 'expired' | 'overcooked' | 'dropped' | 'overordered' | 'customer-return' | 'other';
 export type ActivityType = 'count_update' | 'waste' | 'import' | 'manual_add';
 
@@ -157,12 +157,21 @@ export interface InventoryItem {
   category: InventoryCategory | string;
   currentStock: number;
   minLevel: number;
+  optimalLevel?: number; // Optional for backward compatibility, default to 2x minimum
   unit: string;
   lastUsed: string;
   cost: number;
   ean?: string;
   frequency?: InventoryFrequency;
   databaseId?: number | string; // Link to original database item
+  unitPackSize?: number; // How items are packaged (e.g., 12 bottles per box)
+  consumptionHistory?: ConsumptionData[]; // Track consumption over time
+  orderedStatus?: {
+    isOrdered: boolean;
+    orderedDate?: Date;
+    orderedQuantity?: number;
+    expectedDelivery?: Date;
+  };
 }
 
 export interface DatabaseItem {

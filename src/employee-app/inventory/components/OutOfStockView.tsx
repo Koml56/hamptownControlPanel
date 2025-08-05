@@ -1,16 +1,18 @@
 // src/employee-app/inventory/components/OutOfStockView.tsx
 import React, { useState, useMemo } from 'react';
-import { AlertTriangle, Calendar, Download, TrendingDown, Package } from 'lucide-react';
+import { AlertTriangle, Calendar, Download, TrendingDown, Package, CheckCircle2 } from 'lucide-react';
 import { useInventory } from '../InventoryContext';
 import { getOutOfStockItems, checkUpcomingHolidays } from '../consumptionAnalytics';
 import { generateOrderExcel } from '../excelExport';
 import { EnhancedInventoryItem, HolidayAlert } from '../../types';
 import { showToast } from '../utils';
+import { getStockStatus, markAsOrdered } from '../stockUtils';
 
 const OutOfStockView: React.FC = () => {
-  const { dailyItems, weeklyItems, monthlyItems } = useInventory();
+  const { dailyItems, weeklyItems, monthlyItems, setDailyItems, setWeeklyItems, setMonthlyItems, quickSave } = useInventory();
   const [filter, setFilter] = useState<'all' | 'critical' | 'low' | 'out'>('critical');
   const [holidayAlerts] = useState<HolidayAlert[]>(checkUpcomingHolidays());
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
 
   // Get enhanced items with forecast data
   const enhancedItems = useMemo(() => {
@@ -23,6 +25,29 @@ const OutOfStockView: React.FC = () => {
     return enhancedItems.filter(item => item.status === filter);
   }, [enhancedItems, filter]);
 
+  // Fixed summary stats calculation as per requirements
+  const getStockSummary = () => {
+    const allItems = [...dailyItems, ...weeklyItems, ...monthlyItems];
+    
+    return {
+      out: allItems.filter(i => i.currentStock === 0).length,
+      critical: allItems.filter(i => {
+        const pct = (i.currentStock / i.minLevel) * 100;
+        return pct > 0 && pct <= 20;
+      }).length,
+      low: allItems.filter(i => {
+        const pct = (i.currentStock / i.minLevel) * 100;
+        return pct > 20 && pct <= 50;
+      }).length,
+      total: allItems.filter(i => {
+        const status = getStockStatus(i.currentStock, i.minLevel);
+        return ['out', 'critical', 'low'].includes(status);
+      }).length
+    };
+  };
+
+  const summary = getStockSummary();
+
   const handleGenerateExcel = () => {
     try {
       const fileName = generateOrderExcel(enhancedItems);
@@ -33,8 +58,53 @@ const OutOfStockView: React.FC = () => {
     }
   };
 
+  const handleMarkAsOrdered = async () => {
+    if (selectedItems.size === 0) {
+      showToast('Please select items to mark as ordered');
+      return;
+    }
+
+    const itemIds = Array.from(selectedItems);
+    const quantities = itemIds.map(id => {
+      const item = enhancedItems.find(i => i.id.toString() === id);
+      return item?.recommendedOrder || item?.optimalLevel || (item?.minLevel ? item.minLevel * 2 : 10);
+    });
+
+    try {
+      // Update items in respective arrays
+      const updatedDaily = markAsOrdered(dailyItems, itemIds, quantities);
+      const updatedWeekly = markAsOrdered(weeklyItems, itemIds, quantities);
+      const updatedMonthly = markAsOrdered(monthlyItems, itemIds, quantities);
+
+      // Save to state and Firebase
+      setDailyItems(updatedDaily);
+      setWeeklyItems(updatedWeekly);
+      setMonthlyItems(updatedMonthly);
+
+      await quickSave('inventoryDailyItems', updatedDaily);
+      await quickSave('inventoryWeeklyItems', updatedWeekly);
+      await quickSave('inventoryMonthlyItems', updatedMonthly);
+
+      setSelectedItems(new Set());
+      showToast(`${selectedItems.size} items marked as ordered`);
+    } catch (error) {
+      showToast('Error marking items as ordered');
+      console.error('Mark as ordered error:', error);
+    }
+  };
+
+  const toggleItemSelection = (itemId: string) => {
+    const newSelection = new Set(selectedItems);
+    if (newSelection.has(itemId)) {
+      newSelection.delete(itemId);
+    } else {
+      newSelection.add(itemId);
+    }
+    setSelectedItems(newSelection);
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-20">
       {/* Holiday Alert Banner */}
       {holidayAlerts.length > 0 && (
         <div className="bg-orange-50 border-l-4 border-orange-500 p-4 rounded-lg">
@@ -57,28 +127,20 @@ const OutOfStockView: React.FC = () => {
         <h2 className="text-lg font-semibold text-gray-800 mb-4">Stock Status Summary</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="text-center p-3 bg-red-50 rounded-lg border border-red-200">
-            <div className="text-2xl font-bold text-red-600">
-              {enhancedItems.filter(i => i.status === 'out').length}
-            </div>
+            <div className="text-2xl font-bold text-red-600">{summary.out}</div>
             <div className="text-sm text-red-600">Out of Stock</div>
           </div>
           <div className="text-center p-3 bg-orange-50 rounded-lg border border-orange-200">
-            <div className="text-2xl font-bold text-orange-600">
-              {enhancedItems.filter(i => i.status === 'critical').length}
-            </div>
-            <div className="text-sm text-orange-600">Critical</div>
+            <div className="text-2xl font-bold text-orange-600">{summary.critical}</div>
+            <div className="text-sm text-orange-600">Critical (≤20%)</div>
           </div>
           <div className="text-center p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-            <div className="text-2xl font-bold text-yellow-600">
-              {enhancedItems.filter(i => i.status === 'low').length}
-            </div>
-            <div className="text-sm text-yellow-600">Low Stock</div>
+            <div className="text-2xl font-bold text-yellow-600">{summary.low}</div>
+            <div className="text-sm text-yellow-600">Low Stock (≤50%)</div>
           </div>
           <div className="text-center p-3 bg-blue-50 rounded-lg border border-blue-200">
-            <div className="text-2xl font-bold text-blue-600">
-              {enhancedItems.length}
-            </div>
-            <div className="text-sm text-blue-600">Total Items</div>
+            <div className="text-2xl font-bold text-blue-600">{summary.total}</div>
+            <div className="text-sm text-blue-600">Total Needs Attention</div>
           </div>
         </div>
       </div>
@@ -95,7 +157,7 @@ const OutOfStockView: React.FC = () => {
             }`}
           >
             <AlertTriangle className="w-4 h-4 inline mr-2" />
-            Out of Stock ({enhancedItems.filter(i => i.status === 'out').length})
+            Out of Stock ({summary.out})
           </button>
           <button
             onClick={() => setFilter('critical')}
@@ -106,7 +168,7 @@ const OutOfStockView: React.FC = () => {
             }`}
           >
             <AlertTriangle className="w-4 h-4 inline mr-2" />
-            Critical ({enhancedItems.filter(i => i.status === 'critical').length})
+            Critical ({summary.critical})
           </button>
           <button
             onClick={() => setFilter('low')}
@@ -117,7 +179,7 @@ const OutOfStockView: React.FC = () => {
             }`}
           >
             <TrendingDown className="w-4 h-4 inline mr-2" />
-            Low Stock ({enhancedItems.filter(i => i.status === 'low').length})
+            Low Stock ({summary.low})
           </button>
           <button
             onClick={() => setFilter('all')}
@@ -131,6 +193,32 @@ const OutOfStockView: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Selection Actions */}
+      {selectedItems.size > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <span className="text-blue-800 font-medium">
+              {selectedItems.size} items selected
+            </span>
+            <div className="space-x-2">
+              <button
+                onClick={() => setSelectedItems(new Set())}
+                className="px-3 py-1 text-blue-600 hover:bg-blue-100 rounded text-sm"
+              >
+                Clear Selection
+              </button>
+              <button
+                onClick={handleMarkAsOrdered}
+                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
+              >
+                <CheckCircle2 className="w-4 h-4 inline mr-1" />
+                Mark as Ordered
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Items Grid */}
       {filteredItems.length === 0 ? (
@@ -146,14 +234,19 @@ const OutOfStockView: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredItems.map(item => (
-            <StockCard key={item.id} item={item} />
+            <StockCard 
+              key={item.id} 
+              item={item}
+              isSelected={selectedItems.has(item.id.toString())}
+              onToggleSelection={() => toggleItemSelection(item.id.toString())}
+            />
           ))}
         </div>
       )}
 
       {/* Export Button - Fixed position */}
       {enhancedItems.length > 0 && (
-        <div className="fixed bottom-6 right-6 z-10">
+        <div className="fixed bottom-20 md:bottom-6 right-4 md:right-6 z-10">
           <button
             onClick={handleGenerateExcel}
             className="bg-green-500 text-white px-6 py-3 rounded-full shadow-lg hover:bg-green-600 flex items-center transition-colors"
@@ -168,7 +261,11 @@ const OutOfStockView: React.FC = () => {
 };
 
 // Stock Card Component
-const StockCard: React.FC<{ item: EnhancedInventoryItem }> = ({ item }) => {
+const StockCard: React.FC<{ 
+  item: EnhancedInventoryItem; 
+  isSelected: boolean; 
+  onToggleSelection: () => void; 
+}> = ({ item, isSelected, onToggleSelection }) => {
   const statusColors = {
     out: 'border-red-500 bg-red-50',
     critical: 'border-orange-500 bg-orange-50',
@@ -184,11 +281,47 @@ const StockCard: React.FC<{ item: EnhancedInventoryItem }> = ({ item }) => {
     outofstock: 'bg-gray-200 text-gray-800'
   };
 
+  const isOrdered = item.orderedStatus?.isOrdered;
+
   return (
-    <div className={`border-2 rounded-lg p-4 ${statusColors[item.status || 'ok']}`}>
+    <div className={`border-2 rounded-lg p-4 relative ${
+      isOrdered 
+        ? 'border-blue-500 bg-blue-50 opacity-75' 
+        : statusColors[item.status || 'ok']
+    } ${isSelected ? 'ring-2 ring-blue-400' : ''}`}>
+      
+      {/* Selection checkbox */}
+      {!isOrdered && (
+        <div className="absolute top-2 right-2">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={onToggleSelection}
+            className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+          />
+        </div>
+      )}
+
+      {/* Ordered status indicator */}
+      {isOrdered && (
+        <div className="mb-2 text-sm bg-blue-100 text-blue-700 px-2 py-1 rounded">
+          <CheckCircle2 className="w-4 h-4 inline mr-1" />
+          Ordered {item.orderedStatus?.orderedQuantity} units on {
+            item.orderedStatus?.orderedDate 
+              ? new Date(item.orderedStatus.orderedDate).toLocaleDateString()
+              : 'Unknown date'
+          }
+          {item.orderedStatus?.expectedDelivery && (
+            <div className="text-xs mt-1">
+              Expected: {new Date(item.orderedStatus.expectedDelivery).toLocaleDateString()}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Header with frequency badge */}
       <div className="flex justify-between items-start mb-3">
-        <h3 className="font-semibold text-lg">{item.name}</h3>
+        <h3 className="font-semibold text-lg pr-6">{item.name}</h3>
         <span className={`text-xs px-2 py-1 rounded-full ${frequencyColors[item.frequency]}`}>
           {item.frequency}
         </span>
@@ -203,6 +336,22 @@ const StockCard: React.FC<{ item: EnhancedInventoryItem }> = ({ item }) => {
         <div className="flex justify-between">
           <span className="text-gray-600">Minimum:</span>
           <span>{item.minimumLevel} {item.unit}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-600">Optimal:</span>
+          <span>{item.optimalLevel} {item.unit}</span>
+        </div>
+
+        {/* Stock percentage indicator */}
+        <div className="flex justify-between">
+          <span className="text-gray-600">Status:</span>
+          <span className={`font-medium capitalize ${
+            item.status === 'out' ? 'text-red-600' :
+            item.status === 'critical' ? 'text-orange-600' :
+            item.status === 'low' ? 'text-yellow-600' : 'text-green-600'
+          }`}>
+            {item.status} ({Math.round((item.currentStock / item.minimumLevel) * 100)}%)
+          </span>
         </div>
 
         {/* Forecast section */}

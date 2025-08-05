@@ -1,5 +1,6 @@
 // src/employee-app/inventory/consumptionAnalytics.ts
 import { ConsumptionData, ForecastData, EnhancedInventoryItem, InventoryItem, HolidayAlert, InventoryFrequency } from '../types';
+import { getStockStatus, calculateRecommendedOrder, getAverageDailyConsumption, calculateDaysRemaining } from './stockUtils';
 
 export const calculateAverageConsumption = (
   history: ConsumptionData[],
@@ -43,61 +44,99 @@ export const detectOrderPattern = (
     : 20; // Default to 20% if no history
 };
 
-export const calculateRecommendedOrder = (
-  item: InventoryItem,
-  forecast: ForecastData
-): number => {
-  const { currentStock, minLevel } = item;
-  const { averageDailyConsumption } = forecast;
-  
-  // Base calculation: bring stock up to optimal level
-  const optimalStock = minLevel * 2; // Assume optimal is 2x minimum
-  const baseOrder = Math.max(0, optimalStock - currentStock);
-  
-  // Adjust for consumption rate (7-day safety buffer)
-  const safetyBuffer = averageDailyConsumption * 7;
-  
-  return Math.max(baseOrder, safetyBuffer);
-};
-
 export const enhanceItemWithForecast = (
   item: InventoryItem,
   frequency: InventoryFrequency
 ): EnhancedInventoryItem => {
-  // Mock consumption history for demo
-  const mockHistory: ConsumptionData[] = [];
-  const averageDailyConsumption = Math.max(0.5, item.minLevel * 0.1); // Mock calculation
+  // Use real consumption history if available, otherwise generate sample data for demo
+  const consumptionHistory = item.consumptionHistory || generateSampleConsumptionHistory(item, frequency);
+  
+  // Calculate average daily consumption using new algorithm
+  const averageDailyConsumption = getAverageDailyConsumption(consumptionHistory, frequency);
+  
+  // Calculate days remaining
+  const daysRemaining = calculateDaysRemaining(item.currentStock, averageDailyConsumption);
+  
+  // Ensure optimal level is set
+  const optimalLevel = item.optimalLevel || item.minLevel * 2;
+  
+  // Calculate recommended order quantity
+  const recommendedOrderQty = calculateRecommendedOrder(
+    item.currentStock,
+    item.minLevel,
+    optimalLevel,
+    averageDailyConsumption,
+    3 // 3 days to next delivery
+  );
   
   const forecast: ForecastData = {
     itemId: item.id.toString(),
     averageDailyConsumption,
-    daysRemaining: forecastDaysRemaining(item.currentStock, averageDailyConsumption),
-    recommendedOrderQty: calculateRecommendedOrder(item, {
-      itemId: item.id.toString(),
-      averageDailyConsumption,
-      daysRemaining: 0,
-      recommendedOrderQty: 0,
-      usualOrderThreshold: 20
-    }),
-    usualOrderThreshold: 20
+    daysRemaining,
+    recommendedOrderQty,
+    usualOrderThreshold: detectOrderPattern(consumptionHistory, item.minLevel)
   };
 
-  const stockPercentage = (item.currentStock / item.minLevel) * 100;
-  const status = stockPercentage === 0 ? 'out' :
-                 stockPercentage < 10 ? 'critical' :
-                 stockPercentage < 30 ? 'low' : 'ok';
+  // Use new status calculation
+  const status = getStockStatus(item.currentStock, item.minLevel) as 'out' | 'critical' | 'low' | 'ok';
 
   return {
     ...item,
     minimumLevel: item.minLevel,
-    optimalLevel: item.minLevel * 2,
-    consumptionHistory: mockHistory,
+    optimalLevel,
+    consumptionHistory,
     forecast,
     frequency,
     status,
     daysRemaining: forecast.daysRemaining,
     recommendedOrder: forecast.recommendedOrderQty
   };
+};
+
+/**
+ * Generate sample consumption history for demo purposes
+ * This simulates realistic consumption patterns
+ */
+const generateSampleConsumptionHistory = (item: InventoryItem, frequency: InventoryFrequency): ConsumptionData[] => {
+  const history: ConsumptionData[] = [];
+  const now = new Date();
+  
+  // Generate different patterns based on frequency
+  const daysToGenerate = frequency === 'daily' ? 14 : 
+                          frequency === 'weekly' ? 56 : 180;
+  
+  // Base consumption rate (as a fraction of minimum level per day)
+  const baseRate = frequency === 'daily' ? 0.2 : 
+                   frequency === 'weekly' ? 0.05 : 0.015;
+  
+  let currentStock = item.currentStock;
+  
+  for (let i = daysToGenerate; i >= 0; i--) {
+    const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+    
+    // Add some randomness to consumption (70% to 130% of base rate)
+    const variability = 0.7 + Math.random() * 0.6;
+    const dailyConsumption = Math.max(0, item.minLevel * baseRate * variability);
+    
+    // Simulate occasional deliveries when stock gets low
+    const received = currentStock <= item.minLevel * 0.3 && Math.random() < 0.3 
+      ? item.minLevel * (1.5 + Math.random()) 
+      : 0;
+    
+    const previousStock = currentStock;
+    currentStock = Math.max(0, currentStock + received - dailyConsumption);
+    
+    history.push({
+      itemId: item.id.toString(),
+      date,
+      previousStock,
+      currentStock,
+      received,
+      consumed: dailyConsumption
+    });
+  }
+  
+  return history;
 };
 
 export const getOutOfStockItems = (
@@ -113,11 +152,56 @@ export const getOutOfStockItems = (
 
   return allItems
     .map(item => enhanceItemWithForecast(item, item.frequency))
-    .filter(item => item.currentStock <= item.minimumLevel * 0.3)
-    .sort((a, b) => (a.daysRemaining || 0) - (b.daysRemaining || 0));
+    .filter(item => {
+      const status = getStockStatus(item.currentStock, item.minimumLevel);
+      return ['out', 'critical', 'low'].includes(status);
+    })
+    .sort((a, b) => {
+      // Sort by urgency: out first, then by days remaining
+      if (a.status === 'out' && b.status !== 'out') return -1;
+      if (b.status === 'out' && a.status !== 'out') return 1;
+      return (a.daysRemaining || 0) - (b.daysRemaining || 0);
+    });
 };
 
-export const checkUpcomingHolidays = (): HolidayAlert[] => {
-  // Mock implementation for demo
-  return [];
+// Holiday patterns for Finland
+export const HOLIDAYS_FINLAND = {
+  'NEW_YEAR': { date: '01-01', name: 'New Year', floating: false },
+  'EPIPHANY': { date: '01-06', name: 'Epiphany', floating: false },
+  'VALENTINES': { date: '02-14', name: "Valentine's Day", floating: false },
+  'EASTER': { date: null, name: 'Easter', floating: true },
+  'MAY_DAY': { date: '05-01', name: 'Vappu', floating: false },
+  'MIDSUMMER': { date: null, name: 'Juhannus', floating: true },
+  'INDEPENDENCE': { date: '12-06', name: 'Independence Day', floating: false },
+  'CHRISTMAS': { date: '12-24', name: 'Christmas Eve', floating: false }
+};
+
+export const checkUpcomingHolidays = (daysAhead: number = 21): HolidayAlert[] => {
+  const today = new Date();
+  const alerts: HolidayAlert[] = [];
+  
+  Object.entries(HOLIDAYS_FINLAND).forEach(([key, holiday]) => {
+    if (!holiday.date || holiday.floating) return; // Skip floating holidays for now
+    
+    const [month, day] = holiday.date.split('-').map(Number);
+    const thisYear = new Date(today.getFullYear(), month - 1, day);
+    const nextYear = new Date(today.getFullYear() + 1, month - 1, day);
+    
+    const holidayDate = thisYear >= today ? thisYear : nextYear;
+    const daysUntil = Math.ceil((holidayDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (daysUntil <= daysAhead && daysUntil > 0) {
+      alerts.push({
+        holiday: holiday.name,
+        daysUntil,
+        lastYearData: {
+          date: holiday.date,
+          items: [] // Would be populated with historical data
+        },
+        recommendations: [] // Would be populated with consumption-based recommendations
+      });
+    }
+  });
+  
+  return alerts.sort((a, b) => a.daysUntil - b.daysUntil);
 };

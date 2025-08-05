@@ -66,4 +66,6 @@ export interface InventoryContextType {
   addCustomCategory: (category: Omit<CustomCategory, 'id' | 'createdAt' | 'isDefault'>) => void;
   updateCustomCategory: (id: string, category: CustomCategory) => void;
   deleteCustomCategory: (id: string) => void;
+  // Firebase integration
+  quickSave: (field: string, data: any) => Promise<boolean>;
 }

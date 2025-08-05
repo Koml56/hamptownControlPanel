@@ -3,7 +3,7 @@ import React from 'react';
 import { ChefHat, AlertTriangle, TrendingDown, CheckCircle, Database, Package } from 'lucide-react';
 import { InventoryProvider, useInventory } from './InventoryContext';
 import { InventoryTabProps } from './types';
-import { getStockStatus } from './utils';
+import { getStockStatus } from './stockUtils';
 import DatabaseView from './components/DatabaseView';
 import DailyView from './components/DailyView';
 import WeeklyView from './components/WeeklyView';
@@ -19,9 +19,9 @@ const InventoryHeader: React.FC = () => {
 
   // Calculate stock statistics
   const allItems = [...dailyItems, ...weeklyItems, ...monthlyItems];
-  const criticalCount = allItems.filter(item => getStockStatus(item).status === 'critical').length;
-  const lowStockCount = allItems.filter(item => getStockStatus(item).status === 'low').length;
-  const wellStockedCount = allItems.filter(item => getStockStatus(item).status === 'normal').length;
+  const criticalCount = allItems.filter(item => getStockStatus(item.currentStock, item.minLevel) === 'critical').length;
+  const lowStockCount = allItems.filter(item => getStockStatus(item.currentStock, item.minLevel) === 'low').length;
+  const wellStockedCount = allItems.filter(item => getStockStatus(item.currentStock, item.minLevel) === 'ok').length;
   const databaseCount = databaseItems.length;
 
   return (

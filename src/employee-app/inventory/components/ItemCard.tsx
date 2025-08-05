@@ -2,7 +2,8 @@
 import React from 'react';
 import { Edit3, Trash2 } from 'lucide-react';
 import { InventoryItem } from '../../types';
-import { getCategoryIcon, getStockStatus } from '../utils';
+import { getCategoryIcon } from '../utils';
+import { getStockStatus } from '../stockUtils';
 
 interface ItemCardProps {
   item: InventoryItem;
@@ -17,13 +18,18 @@ const ItemCard: React.FC<ItemCardProps> = ({
   onReportWaste, 
   showQuickActions = true 
 }) => {
-  const stockStatus = getStockStatus(item);
-  const status = stockStatus.status;
+  const stockStatus = getStockStatus(item.currentStock, item.minLevel);
+  const status = stockStatus; // This is now a string directly
+  const stockColor = stockStatus === 'out' ? 'red' :
+                     stockStatus === 'critical' ? 'orange' :
+                     stockStatus === 'low' ? 'yellow' : 'green';
   
   const getStatusClasses = () => {
     switch (status) {
+      case 'out':
+        return 'bg-gradient-to-br from-red-50 to-red-100 border-l-4 border-red-600';
       case 'critical':
-        return 'bg-gradient-to-br from-red-50 to-red-100 border-l-4 border-red-500';
+        return 'bg-gradient-to-br from-orange-50 to-orange-100 border-l-4 border-orange-500';
       case 'low':
         return 'bg-gradient-to-br from-yellow-50 to-yellow-100 border-l-4 border-yellow-500';
       default:
@@ -33,7 +39,8 @@ const ItemCard: React.FC<ItemCardProps> = ({
 
   const getStockTextColor = () => {
     switch (status) {
-      case 'critical': return 'text-red-600';
+      case 'out': return 'text-red-700';
+      case 'critical': return 'text-orange-600';
       case 'low': return 'text-yellow-600';
       default: return 'text-green-600';
     }
@@ -41,8 +48,10 @@ const ItemCard: React.FC<ItemCardProps> = ({
 
   const getStatusBadge = () => {
     switch (status) {
+      case 'out':
+        return <span className="bg-red-100 text-red-700 px-2 py-1 rounded-full text-xs font-medium animate-pulse">🛑 Out of Stock</span>;
       case 'critical':
-        return <span className="bg-red-100 text-red-700 px-2 py-1 rounded-full text-xs font-medium animate-pulse">🚨 Critical</span>;
+        return <span className="bg-orange-100 text-orange-700 px-2 py-1 rounded-full text-xs font-medium animate-pulse">🚨 Critical</span>;
       case 'low':
         return <span className="bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full text-xs font-medium">⚠️ Low Stock</span>;
       default:

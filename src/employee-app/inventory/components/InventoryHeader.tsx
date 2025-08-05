@@ -2,16 +2,16 @@
 import React from 'react';
 import { ChefHat } from 'lucide-react';
 import { useInventory } from '../InventoryContext';
-import { getStockStatus } from '../utils';
+import { getStockStatus } from '../stockUtils';
 
 const InventoryHeader: React.FC = () => {
   const { dailyItems, weeklyItems, monthlyItems, databaseItems } = useInventory();
 
   // Calculate stock statistics
   const allItems = [...dailyItems, ...weeklyItems, ...monthlyItems];
-  const criticalCount = allItems.filter(item => getStockStatus(item).status === 'critical').length;
-  const lowStockCount = allItems.filter(item => getStockStatus(item).status === 'low').length;
-  const wellStockedCount = allItems.filter(item => getStockStatus(item).status === 'normal').length;
+  const criticalCount = allItems.filter(item => getStockStatus(item.currentStock, item.minLevel) === 'critical').length;
+  const lowStockCount = allItems.filter(item => getStockStatus(item.currentStock, item.minLevel) === 'low').length;
+  const wellStockedCount = allItems.filter(item => getStockStatus(item.currentStock, item.minLevel) === 'ok').length;
   const databaseCount = databaseItems.length;
 
   return (
