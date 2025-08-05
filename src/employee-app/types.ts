@@ -135,7 +135,7 @@ export interface AdminPanelProps {
 }
 
 // Inventory Types - moved from inventory/types.ts for Firebase integration
-export type InventoryFrequency = 'daily' | 'weekly' | 'monthly' | 'database';
+export type InventoryFrequency = 'daily' | 'weekly' | 'monthly' | 'database' | 'outofstock';
 export type InventoryCategory = 'meat' | 'dairy' | 'uncategorized';
 export type StockStatus = 'critical' | 'low' | 'normal';
 export type WasteReason = 'expired' | 'overcooked' | 'dropped' | 'overordered' | 'customer-return' | 'other';
@@ -191,4 +191,61 @@ export interface ActivityLogEntry {
   timestamp: string;
   notes?: string;
   reason?: WasteReason;
+}
+
+// Out of Stock / Consumption Tracking Types
+export interface ConsumptionData {
+  itemId: string;
+  date: Date;
+  previousStock: number;
+  currentStock: number;
+  received: number; // New deliveries
+  consumed: number; // Calculated: previous + received - current
+}
+
+export interface ForecastData {
+  itemId: string;
+  averageDailyConsumption: number;
+  daysRemaining: number;
+  recommendedOrderQty: number;
+  usualOrderThreshold: number; // % of minimum when usually ordered
+  lastOrderDate?: Date;
+}
+
+export interface SeasonalPattern {
+  month: number;
+  coefficient: number; // 1.0 = normal, 2.0 = double consumption
+}
+
+export interface HolidayPattern {
+  date: string; // "2024-02-14"
+  items: {
+    itemId: string;
+    consumptionMultiplier: number;
+    actualConsumption: number;
+  }[];
+}
+
+export interface HolidayAlert {
+  holiday: string;
+  daysUntil: number;
+  lastYearData: HolidayPattern;
+  recommendations: {
+    itemId: string;
+    itemName: string;
+    increasePercent: number;
+  }[];
+}
+
+// Enhanced InventoryItem with consumption tracking
+export interface EnhancedInventoryItem extends InventoryItem {
+  minimumLevel: number; // Alias for minLevel for consistency
+  optimalLevel: number;
+  unitPackSize?: number; // e.g., milk comes in 12L boxes
+  consumptionHistory: ConsumptionData[];
+  forecast?: ForecastData;
+  frequency: InventoryFrequency; // Required for enhanced items
+  status?: 'out' | 'critical' | 'low' | 'ok';
+  daysRemaining?: number;
+  recommendedOrder?: number;
 }
