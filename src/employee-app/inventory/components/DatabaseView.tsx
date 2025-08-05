@@ -45,7 +45,7 @@ const ItemEditModal: React.FC<ItemEditModalProps> = ({ item, onClose, onSave, on
         
         <div className="mb-4 p-3 bg-gray-50 rounded-lg">
           <div className="flex items-center">
-            <span className="text-2xl mr-3">{getCategoryIcon(item.type || 'supplies')}</span>
+            <span className="text-2xl mr-3">{getCategoryIcon(item.isAssigned && item.assignedCategory ? item.assignedCategory : (item.type || 'supplies'))}</span>
             <div>
               <h4 className="font-medium text-gray-800">{item.name}</h4>
               <p className="text-sm text-gray-600">{item.ean || 'No EAN'} • {item.unit || 'pieces'}</p>
@@ -446,7 +446,7 @@ const DatabaseView: React.FC = () => {
                         className="mr-3 rounded"
                         onClick={(e) => e.stopPropagation()}
                       />
-                      <span className="text-2xl mr-3">{getCategoryIcon(item.type || 'supplies')}</span>
+                      <span className="text-2xl mr-3">{getCategoryIcon(item.isAssigned && item.assignedCategory ? item.assignedCategory : (item.type || 'supplies'))}</span>
                       <div>
                         <h4 className="font-semibold text-gray-800">{item.name}</h4>
                         <p className="text-sm text-gray-600">{item.ean || 'No EAN'}</p>
