@@ -50,7 +50,7 @@ export interface InventoryContextType {
   setActivityLog: (log: ActivityLogEntry[]) => void;
   setCustomCategories: (categories: CustomCategory[]) => void;
   addActivityEntry: (entry: Omit<ActivityLogEntry, 'id' | 'timestamp'>) => void;
-  updateItemStock: (itemId: number | string, newStock: number, frequency: InventoryFrequency, employee: string, notes?: string) => void;
+  updateItemStock: (itemId: number | string, newStock: number, frequency: InventoryFrequency, employee: string, notes?: string, deliveries?: number) => void;
   reportWaste: (itemId: number | string, amount: number, reason: WasteReason, frequency: InventoryFrequency, employee: string, notes?: string) => void;
   importFromExcel: (data: any[]) => void;
   addManualItem: (item: Omit<DatabaseItem, 'id' | 'frequency'>) => void;

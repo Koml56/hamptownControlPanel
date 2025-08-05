@@ -1,17 +1,18 @@
 // src/employee-app/inventory/components/OutOfStockView.tsx
 import React, { useState, useMemo } from 'react';
-import { AlertTriangle, Calendar, Download, TrendingDown, Package, CheckCircle2 } from 'lucide-react';
+import { AlertTriangle, Download, TrendingDown, Package, CheckCircle2 } from 'lucide-react';
 import { useInventory } from '../InventoryContext';
 import { getOutOfStockItems, checkUpcomingHolidays } from '../consumptionAnalytics';
 import { generateOrderExcel } from '../excelExport';
-import { EnhancedInventoryItem, HolidayAlert } from '../../types';
+import { EnhancedInventoryItem, HolidayAlert as HolidayAlertType } from '../../types';
 import { showToast } from '../utils';
 import { getStockStatus, markAsOrdered } from '../stockUtils';
+import HolidayAlert from './HolidayAlert';
 
 const OutOfStockView: React.FC = () => {
   const { dailyItems, weeklyItems, monthlyItems, setDailyItems, setWeeklyItems, setMonthlyItems, quickSave } = useInventory();
   const [filter, setFilter] = useState<'all' | 'critical' | 'low' | 'out'>('critical');
-  const [holidayAlerts] = useState<HolidayAlert[]>(checkUpcomingHolidays());
+  const [holidayAlerts] = useState<HolidayAlertType[]>(checkUpcomingHolidays());
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
 
   // Get enhanced items with forecast data
@@ -107,18 +108,10 @@ const OutOfStockView: React.FC = () => {
     <div className="space-y-6 pb-20">
       {/* Holiday Alert Banner */}
       {holidayAlerts.length > 0 && (
-        <div className="bg-orange-50 border-l-4 border-orange-500 p-4 rounded-lg">
-          <div className="flex items-start">
-            <Calendar className="w-5 h-5 text-orange-500 mt-1 mr-3" />
-            <div className="flex-1">
-              <h3 className="font-semibold text-orange-900">
-                Upcoming Holiday: {holidayAlerts[0].holiday}
-              </h3>
-              <p className="text-orange-700 mt-1">
-                In {holidayAlerts[0].daysUntil} days - Review last year's consumption
-              </p>
-            </div>
-          </div>
+        <div className="space-y-4">
+          {holidayAlerts.map((alert, index) => (
+            <HolidayAlert key={index} alert={alert} />
+          ))}
         </div>
       )}
 
@@ -145,52 +138,54 @@ const OutOfStockView: React.FC = () => {
         </div>
       </div>
 
-      {/* Filter Tabs */}
+      {/* Filter Tabs - horizontal scroll on mobile */}
       <div className="bg-white rounded-xl shadow-sm p-2">
-        <div className="flex space-x-2 overflow-x-auto">
-          <button
-            onClick={() => setFilter('out')}
-            className={`px-4 py-2 rounded-lg whitespace-nowrap ${
-              filter === 'out' 
-                ? 'bg-red-500 text-white' 
-                : 'text-gray-600 hover:bg-gray-100'
-            }`}
-          >
-            <AlertTriangle className="w-4 h-4 inline mr-2" />
-            Out of Stock ({summary.out})
-          </button>
-          <button
-            onClick={() => setFilter('critical')}
-            className={`px-4 py-2 rounded-lg whitespace-nowrap ${
-              filter === 'critical' 
-                ? 'bg-orange-500 text-white' 
-                : 'text-gray-600 hover:bg-gray-100'
-            }`}
-          >
-            <AlertTriangle className="w-4 h-4 inline mr-2" />
-            Critical ({summary.critical})
-          </button>
-          <button
-            onClick={() => setFilter('low')}
-            className={`px-4 py-2 rounded-lg whitespace-nowrap ${
-              filter === 'low' 
-                ? 'bg-yellow-500 text-white' 
-                : 'text-gray-600 hover:bg-gray-100'
-            }`}
-          >
-            <TrendingDown className="w-4 h-4 inline mr-2" />
-            Low Stock ({summary.low})
-          </button>
-          <button
-            onClick={() => setFilter('all')}
-            className={`px-4 py-2 rounded-lg whitespace-nowrap ${
-              filter === 'all' 
-                ? 'bg-blue-500 text-white' 
-                : 'text-gray-600 hover:bg-gray-100'
-            }`}
-          >
-            All Items ({enhancedItems.length})
-          </button>
+        <div className="overflow-x-auto">
+          <div className="flex space-x-2 min-w-max">
+            <button
+              onClick={() => setFilter('out')}
+              className={`px-4 py-2 rounded-lg whitespace-nowrap flex items-center ${
+                filter === 'out' 
+                  ? 'bg-red-500 text-white' 
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              <AlertTriangle className="w-4 h-4 mr-2" />
+              Out of Stock ({summary.out})
+            </button>
+            <button
+              onClick={() => setFilter('critical')}
+              className={`px-4 py-2 rounded-lg whitespace-nowrap flex items-center ${
+                filter === 'critical' 
+                  ? 'bg-orange-500 text-white' 
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              <AlertTriangle className="w-4 h-4 mr-2" />
+              Critical ({summary.critical})
+            </button>
+            <button
+              onClick={() => setFilter('low')}
+              className={`px-4 py-2 rounded-lg whitespace-nowrap flex items-center ${
+                filter === 'low' 
+                  ? 'bg-yellow-500 text-white' 
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              <TrendingDown className="w-4 h-4 mr-2" />
+              Low Stock ({summary.low})
+            </button>
+            <button
+              onClick={() => setFilter('all')}
+              className={`px-4 py-2 rounded-lg whitespace-nowrap flex items-center ${
+                filter === 'all' 
+                  ? 'bg-blue-500 text-white' 
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              All Items ({enhancedItems.length})
+            </button>
+          </div>
         </div>
       </div>
 

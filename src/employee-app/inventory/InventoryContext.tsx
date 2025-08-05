@@ -114,7 +114,8 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     newStock: number, 
     frequency: InventoryFrequency, 
     employee: string, 
-    notes?: string
+    notes?: string,
+    deliveries?: number
   ) => {
     const items = getItemsByFrequency(frequency);
     // Handle both string and number IDs by comparing their string representations
@@ -126,10 +127,16 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     }
 
     const oldStock = item.currentStock;
+    
+    // Use our new stock update function with consumption tracking
+    const { updatedItem } = require('./stockUtils').handleStockUpdate(
+      item, 
+      newStock, 
+      deliveries || 0
+    );
+    
     const updatedItems = items.map(i => 
-      i.id.toString() === itemId.toString()
-        ? { ...i, currentStock: newStock, lastUsed: new Date().toISOString().split('T')[0] }
-        : i
+      i.id.toString() === itemId.toString() ? updatedItem : i
     );
 
     setItemsByFrequency(frequency, updatedItems);
@@ -140,10 +147,14 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
       quantity: newStock,
       unit: item.unit,
       employee,
-      notes: notes || `Count updated from ${oldStock} to ${newStock}`
+      notes: notes || `Count updated from ${oldStock} to ${newStock}${deliveries ? ` (${deliveries} delivered)` : ''}`
     });
 
-    showToast(`Successfully updated ${item.name} count to ${newStock} ${item.unit}!`);
+    // Calculate consumption for the toast message
+    const consumed = Math.max(0, oldStock - newStock + (deliveries || 0));
+    const consumptionText = consumed > 0 ? ` (${consumed} consumed)` : '';
+    
+    showToast(`Successfully updated ${item.name} count to ${newStock} ${item.unit}!${consumptionText}`);
   }, [addActivityEntry]);
 
   // Report waste
