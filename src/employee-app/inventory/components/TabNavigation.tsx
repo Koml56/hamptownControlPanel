@@ -60,7 +60,7 @@ const TabNavigation: React.FC = () => {
 
   const getTabClasses = (tabId: string, color: string) => {
     const isActive = currentTab === tabId;
-    const baseClasses = "flex-1 flex items-center justify-center px-4 py-3 rounded-lg transition-all font-medium";
+    const baseClasses = "flex-shrink-0 flex items-center justify-center px-4 py-3 rounded-lg transition-all font-medium whitespace-nowrap";
     
     if (isActive) {
       return `${baseClasses} bg-${color}-500 text-white`;
@@ -78,8 +78,14 @@ const TabNavigation: React.FC = () => {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm mb-6 p-2">
-      <div className="flex space-x-2">
+    <div className="bg-white rounded-xl shadow-sm mb-6 p-2 overflow-x-auto" style={{scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch', overflowX: 'auto'}}>
+      <div 
+        className="flex space-x-2" 
+        style={{
+          width: 'max-content',
+          minWidth: '100%'
+        }}
+      >
         {tabs.map((tab) => {
           const Icon = tab.icon;
           return (
@@ -87,6 +93,7 @@ const TabNavigation: React.FC = () => {
               key={tab.id}
               onClick={() => switchTab(tab.id)}
               className={getTabClasses(tab.id, tab.color)}
+              style={{ minWidth: 'max-content' }}
             >
               <Icon className="w-5 h-5 mr-2" />
               {tab.label}
