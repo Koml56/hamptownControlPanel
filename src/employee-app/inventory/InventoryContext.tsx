@@ -11,6 +11,7 @@ import {
 } from '../types'; // Import from main types.ts
 import { InventoryContextType } from './types'; // Local context type
 import { generateId, showToast } from './utils';
+import { sendInventoryNotification } from './notificationService';
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
 
@@ -141,6 +142,9 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
 
     setItemsByFrequency(frequency, updatedItems);
     
+    // Send notification if stock levels warrant it
+    sendInventoryNotification(updatedItem, oldStock);
+    
     addActivityEntry({
       type: 'count_update',
       item: item.name,
@@ -155,7 +159,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     const consumptionText = consumed > 0 ? ` (${consumed} consumed)` : '';
     
     showToast(`Successfully updated ${item.name} count to ${newStock} ${item.unit}!${consumptionText}`);
-  }, [addActivityEntry]);
+  }, [addActivityEntry, getItemsByFrequency, setItemsByFrequency]);
 
   // Report waste
   const reportWaste = useCallback((
@@ -180,13 +184,20 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
       return;
     }
 
+    const oldStock = item.currentStock;
+    const newStock = item.currentStock - amount;
+
     const updatedItems = items.map(i => 
       i.id.toString() === itemId.toString()
-        ? { ...i, currentStock: i.currentStock - amount }
+        ? { ...i, currentStock: newStock }
         : i
     );
 
     setItemsByFrequency(frequency, updatedItems);
+    
+    // Send notification if waste caused stock levels to drop to critical levels
+    const updatedItem = { ...item, currentStock: newStock };
+    sendInventoryNotification(updatedItem, oldStock);
     
     addActivityEntry({
       type: 'waste',
@@ -199,7 +210,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     });
 
     showToast(`Successfully reported waste of ${amount} ${item.unit} ${item.name}!`);
-  }, [addActivityEntry]);
+  }, [addActivityEntry, getItemsByFrequency, setItemsByFrequency]);
 
   // Import from Excel with Firebase sync
   const importFromExcel = useCallback((data: any[]) => {
