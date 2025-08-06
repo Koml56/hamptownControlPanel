@@ -117,14 +117,15 @@ self.addEventListener('sync', (event) => {
   }
 });
 
-// Handle push notifications (if you want to add them later)
+// Handle push notifications (enhanced for inventory notifications)
 self.addEventListener('push', (event) => {
-  console.log('📬 Push notification received');
+  console.log('📬 Push notification received', event.data);
   
-  const options = {
-    body: event.data ? event.data.text() : 'New WorkVibe notification',
-    icon: '/icons/icon-192x192.png',
-    badge: '/icons/icon-96x96.png',
+  let notificationData = {
+    title: 'WorkVibe Notification',
+    body: 'New notification from WorkVibe',
+    icon: '/hamptownControlPanel/icons/icon-192x192.png',
+    badge: '/hamptownControlPanel/icons/icon-96x96.png',
     vibrate: [100, 50, 100],
     data: {
       dateOfArrival: Date.now(),
@@ -132,33 +133,58 @@ self.addEventListener('push', (event) => {
     },
     actions: [
       {
-        action: 'explore',
+        action: 'view',
         title: 'Open WorkVibe',
-        icon: '/icons/icon-96x96.png'
+        icon: '/hamptownControlPanel/icons/icon-96x96.png'
       },
       {
         action: 'close',
         title: 'Close',
-        icon: '/icons/icon-96x96.png'
+        icon: '/hamptownControlPanel/icons/icon-96x96.png'
       }
     ]
   };
 
+  // Parse push data if available
+  if (event.data) {
+    try {
+      const pushData = event.data.json();
+      notificationData = { ...notificationData, ...pushData };
+    } catch (e) {
+      notificationData.body = event.data.text();
+    }
+  }
+
   event.waitUntil(
-    self.registration.showNotification('WorkVibe', options)
+    self.registration.showNotification(notificationData.title, notificationData)
   );
 });
 
 // Handle notification clicks
 self.addEventListener('notificationclick', (event) => {
-  console.log('🔔 Notification clicked:', event.action);
+  console.log('🔔 Notification clicked:', event.action, event.notification.data);
   
   event.notification.close();
 
-  if (event.action === 'explore') {
-    // Open the app
+  if (event.action === 'explore' || event.action === 'view') {
+    // Open the app - adjust URL to handle different contexts
+    const url = event.notification.data?.type === 'inventory' 
+      ? '/hamptownControlPanel/?tab=inventory' 
+      : '/hamptownControlPanel/';
+    
     event.waitUntil(
-      clients.openWindow('/')
+      clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
+        // Check if app is already open
+        for (const client of clientList) {
+          if (client.url.includes('/hamptownControlPanel') && 'focus' in client) {
+            return client.focus();
+          }
+        }
+        // If no existing window, open new one
+        if (clients.openWindow) {
+          return clients.openWindow(url);
+        }
+      })
     );
   }
 });

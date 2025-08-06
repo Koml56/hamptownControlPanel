@@ -135,7 +135,7 @@ describe('NotificationService', () => {
         'Out of Stock Alert!',
         expect.objectContaining({
           body: 'We are out of Test Item. Immediate restocking required.',
-          icon: '/favicon.ico',
+          icon: '/hamptownControlPanel/favicon.ico',
           tag: 'inventory-1'
         })
       );
@@ -149,7 +149,7 @@ describe('NotificationService', () => {
         'Low Stock Alert!',
         expect.objectContaining({
           body: 'Only 20% left of Test Item. Consider restocking soon.',
-          icon: '/favicon.ico',
+          icon: '/hamptownControlPanel/favicon.ico',
           tag: 'inventory-1'
         })
       );
@@ -199,7 +199,7 @@ describe('NotificationService', () => {
         'Low Stock Alert!',
         expect.objectContaining({
           body: 'Only 10% left of Test Item. Consider restocking soon.',
-          icon: '/favicon.ico',
+          icon: '/hamptownControlPanel/favicon.ico',
           tag: 'inventory-1'
         })
       );
