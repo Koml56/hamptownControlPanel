@@ -103,15 +103,50 @@ export const isNotificationSupported = (): boolean => {
   return typeof window !== 'undefined' && 'Notification' in window;
 };
 
+// Check if running in PWA/standalone mode
+export const isPWAMode = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  
+  try {
+    // Check if running in standalone mode (when added to home screen)
+    const isStandalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+    
+    // Also check for iOS Safari standalone mode
+    const isIOSStandalone = 'standalone' in window.navigator && (window.navigator as any).standalone;
+    
+    return isStandalone || isIOSStandalone;
+  } catch (error) {
+    // Fallback for environments where matchMedia is not available (like tests)
+    return false;
+  }
+};
+
+// Check if running on iOS
+export const isIOS = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  
+  try {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+           (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  } catch (error) {
+    return false;
+  }
+};
+
+// Check if Service Worker is available
+export const isServiceWorkerSupported = (): boolean => {
+  return typeof window !== 'undefined' && 'serviceWorker' in navigator;
+};
+
 // Calculate stock percentage
 const getStockPercentage = (currentStock: number, minLevel: number): number => {
   if (minLevel === 0) return currentStock > 0 ? 100 : 0;
   return (currentStock / minLevel) * 100;
 };
 
-// Send notification for inventory status
+// Send notification for inventory status with PWA support
 export const sendInventoryNotification = (item: InventoryItem, previousStock: number): void => {
-  if (typeof window === 'undefined' || !('Notification' in window)) return;
+  if (typeof window === 'undefined') return;
   
   const settings = getNotificationSettings();
   
@@ -125,7 +160,7 @@ export const sendInventoryNotification = (item: InventoryItem, previousStock: nu
   
   let title: string | null = null;
   let body: string | null = null;
-  let icon = '/favicon.ico'; // Use the app's favicon
+  let icon = '/hamptownControlPanel/favicon.ico'; // Use the app's favicon with proper path
 
   // Check for out of stock condition (0 stock)
   if (item.currentStock === 0 && previousStock > 0) {
@@ -146,36 +181,106 @@ export const sendInventoryNotification = (item: InventoryItem, previousStock: nu
 
   // Send notification if conditions are met
   if (title && body) {
-    try {
-      const notification = new Notification(title, {
-        body,
-        icon,
-        badge: icon,
-        tag: `inventory-${item.id}`, // Prevent duplicate notifications for same item
-        requireInteraction: false, // Don't require user interaction to dismiss
-        silent: false
-      });
+    const notificationData = {
+      title,
+      body,
+      icon,
+      badge: icon,
+      tag: `inventory-${item.id}`,
+      requireInteraction: false,
+      silent: false,
+      data: {
+        itemId: item.id,
+        itemName: item.name,
+        timestamp: Date.now(),
+        type: 'inventory'
+      }
+    };
 
-      // Auto-close notification after 10 seconds
-      setTimeout(() => {
-        notification.close();
-      }, 10000);
-
-      // Optional: Add click handler to focus the app
-      notification.onclick = () => {
-        window.focus();
-        notification.close();
-      };
-
-    } catch (error) {
-      console.error('Failed to send notification:', error);
+    // Use Service Worker notifications for PWA mode (better iOS support)
+    if ((isPWAMode() || isIOS()) && isServiceWorkerSupported()) {
+      sendServiceWorkerNotification(notificationData);
+    } else {
+      // Use regular Web Notification API for desktop browsers
+      sendWebNotification(notificationData);
     }
   }
 };
 
-// Test notification function for UI testing
+// Send notification via Service Worker (for PWA/iOS compatibility)
+const sendServiceWorkerNotification = (notificationData: any): void => {
+  if (!isServiceWorkerSupported()) return;
+
+  try {
+    navigator.serviceWorker.ready.then(registration => {
+      if (registration.showNotification) {
+        registration.showNotification(notificationData.title, {
+          body: notificationData.body,
+          icon: notificationData.icon,
+          badge: notificationData.badge || notificationData.icon,
+          tag: notificationData.tag,
+          requireInteraction: notificationData.requireInteraction || false,
+          silent: notificationData.silent || false,
+          data: notificationData.data,
+          vibrate: isIOS() ? [200, 100, 200] : undefined, // iOS likes vibration patterns
+          actions: [
+            {
+              action: 'view',
+              title: 'View Inventory',
+              icon: notificationData.icon
+            }
+          ]
+        });
+        
+        console.log('📱 Service Worker notification sent:', notificationData.title);
+      }
+    }).catch(error => {
+      console.error('❌ Service Worker notification failed:', error);
+      // Fallback to regular notification
+      sendWebNotification(notificationData);
+    });
+  } catch (error) {
+    console.error('❌ Service Worker notification error:', error);
+    // Fallback to regular notification
+    sendWebNotification(notificationData);
+  }
+};
+
+// Send notification via Web Notification API (for desktop browsers)
+const sendWebNotification = (notificationData: any): void => {
+  if (!('Notification' in window)) return;
+
+  try {
+    const notification = new Notification(notificationData.title, {
+      body: notificationData.body,
+      icon: notificationData.icon,
+      badge: notificationData.badge,
+      tag: notificationData.tag,
+      requireInteraction: notificationData.requireInteraction,
+      silent: notificationData.silent
+    });
+
+    // Auto-close notification after 10 seconds
+    setTimeout(() => {
+      notification.close();
+    }, 10000);
+
+    // Optional: Add click handler to focus the app
+    notification.onclick = () => {
+      window.focus();
+      notification.close();
+    };
+
+    console.log('💻 Web notification sent:', notificationData.title);
+
+  } catch (error) {
+    console.error('❌ Web notification failed:', error);
+  }
+};
+
+// Test notification function for UI testing with PWA support
 export const sendTestNotification = (): void => {
-  if (typeof window === 'undefined' || !('Notification' in window)) return;
+  if (typeof window === 'undefined') return;
   
   const settings = getNotificationSettings();
   
@@ -183,24 +288,26 @@ export const sendTestNotification = (): void => {
     return;
   }
 
-  try {
-    const notification = new Notification('Test Notification', {
-      body: 'Inventory notifications are working correctly!',
-      icon: '/favicon.ico',
-      tag: 'test-notification'
-    });
+  const notificationData = {
+    title: 'Test Notification',
+    body: 'Inventory notifications are working correctly! 🎉',
+    icon: '/hamptownControlPanel/favicon.ico',
+    tag: 'test-notification',
+    requireInteraction: false,
+    silent: false,
+    data: {
+      type: 'test',
+      timestamp: Date.now()
+    }
+  };
 
-    setTimeout(() => {
-      notification.close();
-    }, 5000);
-
-    notification.onclick = () => {
-      window.focus();
-      notification.close();
-    };
-
-  } catch (error) {
-    console.error('Failed to send test notification:', error);
+  // Use Service Worker notifications for PWA mode (better iOS support)
+  if ((isPWAMode() || isIOS()) && isServiceWorkerSupported()) {
+    console.log('📱 Sending Service Worker test notification...');
+    sendServiceWorkerNotification(notificationData);
+  } else {
+    console.log('💻 Sending Web API test notification...');
+    sendWebNotification(notificationData);
   }
 };
 
@@ -235,20 +342,40 @@ export const debugNotificationStatus = (): void => {
   const settings = getNotificationSettings();
   const stored = localStorage.getItem(NOTIFICATION_PREF_KEY);
   
-  console.log('🔍 Notification Debug Status:', {
-    browserSupported: 'Notification' in window,
-    permission: Notification.permission,
-    localStorage: stored,
-    settingsEnabled: settings.enabled,
-    settingsPermission: settings.permission,
-    userAgent: navigator.userAgent,
-    protocol: window.location.protocol,
-    isSecureContext: window.isSecureContext
-  });
+  try {
+    console.log('🔍 Notification Debug Status:', {
+      browserSupported: 'Notification' in window,
+      permission: Notification.permission,
+      localStorage: stored,
+      settingsEnabled: settings.enabled,
+      settingsPermission: settings.permission,
+      isPWAMode: isPWAMode(),
+      isIOS: isIOS(),
+      isServiceWorkerSupported: isServiceWorkerSupported(),
+      serviceWorkerRegistered: navigator.serviceWorker?.controller ? 'Yes' : 'No',
+      displayMode: window.matchMedia ? 
+        (window.matchMedia('(display-mode: standalone)').matches ? 'standalone' : 'browser') : 
+        'unknown',
+      userAgent: navigator.userAgent,
+      protocol: window.location.protocol,
+      isSecureContext: window.isSecureContext
+    });
 
-  // Try sending a debug notification if enabled
-  if (settings.enabled && settings.permission === 'granted') {
-    console.log('🔍 Attempting debug notification...');
-    sendTestNotification();
+    // Additional PWA-specific debugging
+    if (isPWAMode()) {
+      console.log('📱 PWA Mode detected - will use Service Worker notifications');
+    }
+
+    if (isIOS()) {
+      console.log('🍎 iOS detected - optimized for iOS PWA notifications');
+    }
+
+    // Try sending a debug notification if enabled
+    if (settings.enabled && settings.permission === 'granted') {
+      console.log('🔍 Attempting debug notification...');
+      sendTestNotification();
+    }
+  } catch (error) {
+    console.error('❌ Debug function error:', error);
   }
 };

@@ -12,7 +12,9 @@ import {
   setNotificationEnabled, 
   isNotificationSupported,
   sendTestNotification,
-  debugNotificationStatus 
+  debugNotificationStatus,
+  isPWAMode,
+  isIOS
 } from '../notificationService';
 import HolidayAlert from './HolidayAlert';
 
@@ -230,6 +232,18 @@ const OutOfStockView: React.FC = () => {
                   Permission granted - notifications will work even when the app is closed.
                 </div>
               )}
+              {isPWAMode() && (
+                <div className="text-xs text-green-600 mt-1 flex items-center">
+                  <span className="mr-1">📱</span>
+                  PWA mode detected - using enhanced notifications for better mobile experience.
+                </div>
+              )}
+              {isIOS() && (
+                <div className="text-xs text-purple-600 mt-1 flex items-center">
+                  <span className="mr-1">🍎</span>
+                  iOS optimized notifications enabled.
+                </div>
+              )}
             </div>
           )}
           
@@ -237,7 +251,8 @@ const OutOfStockView: React.FC = () => {
             <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
               <div className="text-sm text-gray-600 mb-2">
                 Enable notifications to get alerts when items are out of stock or running low.
-                This setting is saved locally for this device only.
+                {isPWAMode() ? ' Using PWA-optimized notifications for better mobile experience.' : ''}
+                {isIOS() && !isPWAMode() ? ' For best results on iOS, add this app to your home screen.' : ''}
               </div>
               {notificationSettings.permission === 'denied' && (
                 <div className="text-sm text-red-600 bg-red-50 p-2 rounded mt-2">
@@ -245,15 +260,25 @@ const OutOfStockView: React.FC = () => {
                   <br />1. Click the 🔒 lock icon in your address bar
                   <br />2. Set "Notifications" to "Allow"  
                   <br />3. Refresh the page and try again
+                  {isIOS() && (
+                    <>
+                      <br /><br /><strong>iOS Users:</strong> Add this app to your home screen for the best notification experience.
+                    </>
+                  )}
                 </div>
               )}
-              <div className="mt-2">
+              <div className="mt-2 space-x-4">
                 <button 
                   onClick={() => debugNotificationStatus()}
                   className="text-xs text-blue-600 hover:text-blue-800 underline"
                 >
                   Debug Notification Status (Check Console)
                 </button>
+                {isIOS() && !isPWAMode() && (
+                  <span className="text-xs text-purple-600">
+                    💡 Add to home screen for better iOS notifications
+                  </span>
+                )}
               </div>
             </div>
           )}
