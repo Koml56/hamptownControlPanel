@@ -279,27 +279,15 @@ const StockCard: React.FC<{
   const isOrdered = item.orderedStatus?.isOrdered;
 
   return (
-    <div className={`border-2 rounded-lg p-4 relative ${
+    <div className={`border-2 rounded-lg p-4 ${
       isOrdered 
         ? 'border-blue-500 bg-blue-50 opacity-75' 
         : statusColors[item.status || 'ok']
-    } ${isSelected ? 'ring-2 ring-blue-400' : ''}`}>
+    } ${isSelected ? 'ring-2 ring-blue-500 ring-offset-2' : ''}`}>
       
-      {/* Selection checkbox */}
-      {!isOrdered && (
-        <div className="absolute top-2 right-2">
-          <input
-            type="checkbox"
-            checked={isSelected}
-            onChange={onToggleSelection}
-            className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-          />
-        </div>
-      )}
-
       {/* Ordered status indicator */}
       {isOrdered && (
-        <div className="mb-2 text-sm bg-blue-100 text-blue-700 px-2 py-1 rounded">
+        <div className="mb-3 text-sm bg-blue-100 text-blue-700 px-2 py-1 rounded">
           <CheckCircle2 className="w-4 h-4 inline mr-1" />
           Ordered {item.orderedStatus?.orderedQuantity} units on {
             item.orderedStatus?.orderedDate 
@@ -314,10 +302,22 @@ const StockCard: React.FC<{
         </div>
       )}
 
-      {/* Header with frequency badge */}
-      <div className="flex justify-between items-start mb-3">
-        <h3 className="font-semibold text-lg pr-6">{item.name}</h3>
-        <span className={`text-xs px-2 py-1 rounded-full ${frequencyColors[item.frequency]}`}>
+      {/* Header with checkbox, title, and badge in one row */}
+      <div className="flex items-start gap-2 mb-3">
+        {!isOrdered && (
+          <input 
+            type="checkbox" 
+            checked={isSelected}
+            onChange={onToggleSelection}
+            className="w-5 h-5 md:w-4 md:h-4 mt-1 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0"
+          />
+        )}
+        
+        <h3 className="font-semibold text-lg flex-1 min-w-0">
+          <span className="truncate block" title={item.name}>{item.name}</span>
+        </h3>
+        
+        <span className={`text-xs px-2 py-1 rounded-full flex-shrink-0 ${frequencyColors[item.frequency]}`}>
           {item.frequency}
         </span>
       </div>
