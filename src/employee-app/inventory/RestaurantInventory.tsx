@@ -12,7 +12,6 @@ import ReportsView from './components/ReportsView';
 import OutOfStockView from './components/OutOfStockView';
 import TabNavigation from './components/TabNavigation';
 import ToastContainer from './components/ToastContainer';
-import NotificationSettings from './components/NotificationSettings';
 
 // Simple Header Component - No background wrapper
 const InventoryHeader: React.FC = () => {
@@ -133,7 +132,6 @@ const InventoryContent: React.FC = () => {
     <>
       <ToastContainer />
       <InventoryHeader />
-      <NotificationSettings />
       <TabNavigation />
       {renderCurrentView()}
     </>
