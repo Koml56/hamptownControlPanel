@@ -11,7 +11,8 @@ import {
   getNotificationSettings, 
   setNotificationEnabled, 
   isNotificationSupported,
-  sendTestNotification 
+  sendTestNotification,
+  debugNotificationStatus 
 } from '../notificationService';
 import HolidayAlert from './HolidayAlert';
 
@@ -111,26 +112,44 @@ const OutOfStockView: React.FC = () => {
     setSelectedItems(newSelection);
   };
 
-  // Handle notification toggle
+  // Handle notification toggle with improved error handling
   const handleNotificationToggle = async () => {
     try {
       const newEnabledState = !notificationSettings.enabled;
-      const success = await setNotificationEnabled(newEnabledState);
+      const result = await setNotificationEnabled(newEnabledState);
       
-      if (success) {
+      if (result.success) {
         setNotificationSettings(getNotificationSettings());
         showToast(newEnabledState ? 'Notifications enabled!' : 'Notifications disabled');
         
         // Send test notification when enabling
         if (newEnabledState) {
+          console.log('🔔 Sending test notification...');
           setTimeout(() => sendTestNotification(), 1000);
         }
       } else {
-        showToast('Failed to enable notifications. Please check browser permissions.');
+        // Handle different types of failures
+        setNotificationSettings(getNotificationSettings()); // Refresh to get accurate state
+        
+        if (result.error) {
+          showToast(result.error);
+          console.error('❌ Notification enable failed:', result.error);
+        } else {
+          showToast('Failed to enable notifications. Please check browser settings.');
+        }
+        
+        // If permission was denied, provide additional guidance
+        if (result.permission === 'denied') {
+          console.log('ℹ️ To enable notifications:');
+          console.log('1. Click the 🔒 icon in your browser address bar');
+          console.log('2. Set Notifications to "Allow"');
+          console.log('3. Refresh the page and try again');
+        }
       }
     } catch (error) {
       showToast('Error updating notification settings');
-      console.error('Notification toggle error:', error);
+      console.error('❌ Notification toggle error:', error);
+      setNotificationSettings(getNotificationSettings()); // Refresh state
     }
   };
 
@@ -216,9 +235,25 @@ const OutOfStockView: React.FC = () => {
           
           {!notificationSettings.enabled && (
             <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-gray-600 mb-2">
                 Enable notifications to get alerts when items are out of stock or running low.
                 This setting is saved locally for this device only.
+              </div>
+              {notificationSettings.permission === 'denied' && (
+                <div className="text-sm text-red-600 bg-red-50 p-2 rounded mt-2">
+                  <strong>Permission Denied:</strong> Please enable notifications in your browser settings:
+                  <br />1. Click the 🔒 lock icon in your address bar
+                  <br />2. Set "Notifications" to "Allow"  
+                  <br />3. Refresh the page and try again
+                </div>
+              )}
+              <div className="mt-2">
+                <button 
+                  onClick={() => debugNotificationStatus()}
+                  className="text-xs text-blue-600 hover:text-blue-800 underline"
+                >
+                  Debug Notification Status (Check Console)
+                </button>
               </div>
             </div>
           )}

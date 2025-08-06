@@ -9,32 +9,92 @@ export interface NotificationSettings {
   permission: NotificationPermission;
 }
 
-// Get notification preference from localStorage (device-specific)
+export interface NotificationResult {
+  success: boolean;
+  error?: string;
+  permission?: NotificationPermission;
+}
+
+// Get notification preference from localStorage (device-specific) with validation
 export const getNotificationSettings = (): NotificationSettings => {
-  const enabled = typeof window !== 'undefined' && localStorage.getItem(NOTIFICATION_PREF_KEY) === 'true';
-  const permission = typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'denied';
+  if (typeof window === 'undefined') {
+    return { enabled: false, permission: 'denied' };
+  }
+
+  const stored = localStorage.getItem(NOTIFICATION_PREF_KEY);
+  const permission = 'Notification' in window ? Notification.permission : 'denied';
+  
+  // Only consider notifications enabled if both localStorage says true AND permission is granted
+  const enabled = stored === 'true' && permission === 'granted';
+  
+  // Debug logging
+  console.log('🔍 Notification settings:', {
+    stored,
+    permission,
+    enabled,
+    supported: 'Notification' in window
+  });
+  
+  // If localStorage says enabled but permission isn't granted, fix the inconsistency
+  if (stored === 'true' && permission !== 'granted') {
+    console.warn('⚠️ Notification settings inconsistent - localStorage says enabled but permission not granted');
+    localStorage.setItem(NOTIFICATION_PREF_KEY, 'false');
+    return { enabled: false, permission };
+  }
   
   return { enabled, permission };
 };
 
-// Set notification preference in localStorage
-export const setNotificationEnabled = async (enabled: boolean): Promise<boolean> => {
-  if (typeof window === 'undefined') return false;
+// Set notification preference in localStorage with enhanced error handling
+export const setNotificationEnabled = async (enabled: boolean): Promise<{ success: boolean; error?: string; permission?: NotificationPermission }> => {
+  if (typeof window === 'undefined') {
+    return { success: false, error: 'Window not available' };
+  }
   
-  if (enabled && 'Notification' in window) {
-    // Request permission when enabling notifications
+  if (!enabled) {
+    // Disabling notifications - always succeeds
+    localStorage.setItem(NOTIFICATION_PREF_KEY, 'false');
+    console.log('🔕 Notifications disabled by user');
+    return { success: true, permission: Notification.permission };
+  }
+
+  if (!('Notification' in window)) {
+    return { success: false, error: 'Notifications not supported in this browser' };
+  }
+
+  try {
+    console.log('🔔 Requesting notification permission...');
     const permission = await Notification.requestPermission();
+    console.log('🔔 Permission result:', permission);
     
     if (permission === 'granted') {
       localStorage.setItem(NOTIFICATION_PREF_KEY, 'true');
-      return true;
-    } else {
+      console.log('✅ Notifications enabled successfully');
+      return { success: true, permission };
+    } else if (permission === 'denied') {
       localStorage.setItem(NOTIFICATION_PREF_KEY, 'false');
-      return false;
+      return { 
+        success: false, 
+        error: 'Notification permission denied. Please enable notifications in your browser settings.',
+        permission 
+      };
+    } else {
+      // Permission is 'default' - user dismissed dialog without choice
+      localStorage.setItem(NOTIFICATION_PREF_KEY, 'false');
+      return { 
+        success: false, 
+        error: 'Permission request was dismissed. Please try again and allow notifications.',
+        permission 
+      };
     }
-  } else {
-    localStorage.setItem(NOTIFICATION_PREF_KEY, enabled ? 'true' : 'false');
-    return enabled;
+  } catch (error) {
+    console.error('❌ Error requesting notification permission:', error);
+    localStorage.setItem(NOTIFICATION_PREF_KEY, 'false');
+    return { 
+      success: false, 
+      error: `Failed to request permission: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      permission: Notification.permission
+    };
   }
 };
 
@@ -163,4 +223,32 @@ export const checkInventoryChanges = (
       sendInventoryNotification(newItem, previousItem.currentStock);
     }
   });
+};
+
+// ADDED: Debugging function to help troubleshoot notification issues
+export const debugNotificationStatus = (): void => {
+  if (typeof window === 'undefined') {
+    console.log('🔍 Debug: Running in server environment');
+    return;
+  }
+
+  const settings = getNotificationSettings();
+  const stored = localStorage.getItem(NOTIFICATION_PREF_KEY);
+  
+  console.log('🔍 Notification Debug Status:', {
+    browserSupported: 'Notification' in window,
+    permission: Notification.permission,
+    localStorage: stored,
+    settingsEnabled: settings.enabled,
+    settingsPermission: settings.permission,
+    userAgent: navigator.userAgent,
+    protocol: window.location.protocol,
+    isSecureContext: window.isSecureContext
+  });
+
+  // Try sending a debug notification if enabled
+  if (settings.enabled && settings.permission === 'granted') {
+    console.log('🔍 Attempting debug notification...');
+    sendTestNotification();
+  }
 };
