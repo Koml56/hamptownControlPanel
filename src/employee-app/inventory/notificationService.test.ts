@@ -107,9 +107,7 @@ describe('NotificationService', () => {
       optimalLevel: 20,
       frequency: 'daily',
       lastUsed: '2025-01-01',
-      cost: 5.99,
-      supplier: 'Test Supplier',
-      notes: 'Test notes'
+      cost: 5.99
     };
 
     beforeEach(() => {
