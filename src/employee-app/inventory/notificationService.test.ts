@@ -176,5 +176,127 @@ describe('NotificationService', () => {
       // Should only be called once
       expect(window.Notification).toHaveBeenCalledTimes(1);
     });
+
+    it('should send notification when already low stock gets lower', () => {
+      // Stock goes from 2 (20%) to 1 (10%) - both are ≤20%
+      const veryLowStockItem = { ...mockItem, currentStock: 1 };
+      sendInventoryNotification(veryLowStockItem, 2);
+      
+      expect(window.Notification).toHaveBeenCalledWith(
+        'Low Stock Alert!',
+        expect.objectContaining({
+          body: 'Only 10% left of Test Item. Consider restocking soon.',
+          icon: '/favicon.ico',
+          tag: 'inventory-1'
+        })
+      );
+    });
+
+    it('should not send notification for small decreases in already low stock', () => {
+      // Stock goes from 2.5 to 2.4 - less than 1 unit change
+      const veryLowStockItem = { ...mockItem, currentStock: 2.4 };
+      sendInventoryNotification(veryLowStockItem, 2.5);
+      
+      expect(window.Notification).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('checkInventoryChanges', () => {
+    const mockItems: InventoryItem[] = [
+      {
+        id: 1,
+        name: 'Test Item 1',
+        category: 'test',
+        unit: 'pieces',
+        currentStock: 5,
+        minLevel: 10,
+        optimalLevel: 20,
+        frequency: 'daily',
+        lastUsed: '2025-01-01',
+        cost: 5.99
+      },
+      {
+        id: 2,
+        name: 'Test Item 2',
+        category: 'test',
+        unit: 'pieces',
+        currentStock: 15,
+        minLevel: 20,
+        optimalLevel: 40,
+        frequency: 'daily',
+        lastUsed: '2025-01-01',
+        cost: 3.99
+      }
+    ];
+
+    beforeEach(() => {
+      localStorageMock.getItem.mockReturnValue('true');
+      (window.Notification as any).permission = 'granted';
+    });
+
+    it('should check all items for changes and send notifications', () => {
+      const previousItems = [
+        { ...mockItems[0], currentStock: 5 }, // Was 5 (50%), now 1 (10%) - should notify
+        { ...mockItems[1], currentStock: 20 } // Was OK, now same - no change
+      ];
+
+      const newItems = [
+        { ...mockItems[0], currentStock: 1 }, // 1/10 = 10% (≤20%)
+        { ...mockItems[1], currentStock: 20 } // No change
+      ];
+
+      const { checkInventoryChanges } = require('./notificationService');
+      checkInventoryChanges(newItems, previousItems);
+      
+      // Should send notification for first item (already low, getting lower by ≥1 unit)
+      expect(window.Notification).toHaveBeenCalledWith(
+        'Low Stock Alert!',
+        expect.objectContaining({
+          body: 'Only 10% left of Test Item 1. Consider restocking soon.'
+        })
+      );
+    });
+
+    it('should send notifications when crossing the 20% threshold', () => {
+      const previousItems = [
+        { ...mockItems[0], currentStock: 3, minLevel: 10 }, // Was 30% (>20%)
+      ];
+
+      const newItems = [
+        { ...mockItems[0], currentStock: 2, minLevel: 10 }, // Now 20% (≤20%)
+      ];
+
+      const { checkInventoryChanges } = require('./notificationService');
+      checkInventoryChanges(newItems, previousItems);
+      
+      // Should send notification for crossing threshold
+      expect(window.Notification).toHaveBeenCalledWith(
+        'Low Stock Alert!',
+        expect.objectContaining({
+          body: 'Only 20% left of Test Item 1. Consider restocking soon.'
+        })
+      );
+    });
+
+    it('should not send notifications for items with no stock change', () => {
+      const { checkInventoryChanges } = require('./notificationService');
+      checkInventoryChanges(mockItems, mockItems);
+      
+      expect(window.Notification).not.toHaveBeenCalled();
+    });
+
+    it('should handle missing previous items gracefully', () => {
+      const { checkInventoryChanges } = require('./notificationService');
+      
+      // Should not throw error
+      expect(() => {
+        checkInventoryChanges(mockItems, []);
+        checkInventoryChanges([], mockItems);
+        checkInventoryChanges(null as any, mockItems);
+        checkInventoryChanges(mockItems, null as any);
+      }).not.toThrow();
+      
+      expect(window.Notification).not.toHaveBeenCalled();
+    });
   });
 });
