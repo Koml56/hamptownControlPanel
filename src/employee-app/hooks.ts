@@ -24,7 +24,6 @@ import { getDatabase, ref, onValue, off } from 'firebase/database';
 import { initializeApp } from 'firebase/app';
 import { FIREBASE_CONFIG } from './constants';
 import { applyTaskOperation } from './taskOperations';
-import { checkInventoryChanges } from './inventory/notificationService';
 
 // Migration functions
 const migrateEmployeeData = (employees: any[]): Employee[] => {
@@ -102,11 +101,6 @@ export const useFirebaseData = () => {
   const [inventoryDatabaseItems, setInventoryDatabaseItems] = useState<DatabaseItem[]>([]);
   const [inventoryActivityLog, setInventoryActivityLog] = useState<ActivityLogEntry[]>([]);
   const [inventoryCustomCategories, setInventoryCustomCategories] = useState<CustomCategory[]>([]);
-  
-  // Previous inventory state for change detection
-  const previousInventoryDailyRef = useRef<InventoryItem[]>([]);
-  const previousInventoryWeeklyRef = useRef<InventoryItem[]>([]);
-  const previousInventoryMonthlyRef = useRef<InventoryItem[]>([]);
   
   const firebaseService = new FirebaseService();
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -390,21 +384,12 @@ export const useFirebaseData = () => {
       setStoreItems(data.storeItems || getDefaultStoreItems());
       
       // Set inventory data
-      const dailyItems = data.inventoryDailyItems || [];
-      const weeklyItems = data.inventoryWeeklyItems || [];
-      const monthlyItems = data.inventoryMonthlyItems || [];
-      
-      setInventoryDailyItems(dailyItems);
-      setInventoryWeeklyItems(weeklyItems);
-      setInventoryMonthlyItems(monthlyItems);
+      setInventoryDailyItems(data.inventoryDailyItems || []);
+      setInventoryWeeklyItems(data.inventoryWeeklyItems || []);
+      setInventoryMonthlyItems(data.inventoryMonthlyItems || []);
       setInventoryDatabaseItems(data.inventoryDatabaseItems || []);
       setInventoryActivityLog(data.inventoryActivityLog || []);
       setInventoryCustomCategories(data.inventoryCustomCategories || []);
-      
-      // Initialize previous inventory references for change detection
-      previousInventoryDailyRef.current = [...dailyItems];
-      previousInventoryWeeklyRef.current = [...weeklyItems];
-      previousInventoryMonthlyRef.current = [...monthlyItems];
 
       // ENHANCED: Log what we actually set for scheduledPreps with completion status
       const todayStr = getFormattedDate(new Date());
@@ -550,52 +535,25 @@ export const useFirebaseData = () => {
     };
     onValue(storeItemsRef, handleStoreItems);
 
-    // Inventory Items - Real-time synchronization with notification support
+    // Inventory Items - Real-time synchronization
     const inventoryDailyItemsRef = ref(db, 'inventoryDailyItems');
     const handleInventoryDailyItems = (snapshot: any) => {
       const data = snapshot.val() || [];
-      const newItems = Array.isArray(data) ? data : Object.values(data);
-      
-      // Check for inventory changes and send notifications
-      if (isInitializedRef.current && previousInventoryDailyRef.current.length > 0) {
-        checkInventoryChanges(newItems, previousInventoryDailyRef.current);
-      }
-      
-      // Update state and previous reference
-      previousInventoryDailyRef.current = [...newItems];
-      setInventoryDailyItems(newItems);
+      setInventoryDailyItems(Array.isArray(data) ? data : Object.values(data));
     };
     onValue(inventoryDailyItemsRef, handleInventoryDailyItems);
 
     const inventoryWeeklyItemsRef = ref(db, 'inventoryWeeklyItems');
     const handleInventoryWeeklyItems = (snapshot: any) => {
       const data = snapshot.val() || [];
-      const newItems = Array.isArray(data) ? data : Object.values(data);
-      
-      // Check for inventory changes and send notifications
-      if (isInitializedRef.current && previousInventoryWeeklyRef.current.length > 0) {
-        checkInventoryChanges(newItems, previousInventoryWeeklyRef.current);
-      }
-      
-      // Update state and previous reference
-      previousInventoryWeeklyRef.current = [...newItems];
-      setInventoryWeeklyItems(newItems);
+      setInventoryWeeklyItems(Array.isArray(data) ? data : Object.values(data));
     };
     onValue(inventoryWeeklyItemsRef, handleInventoryWeeklyItems);
 
     const inventoryMonthlyItemsRef = ref(db, 'inventoryMonthlyItems');
     const handleInventoryMonthlyItems = (snapshot: any) => {
       const data = snapshot.val() || [];
-      const newItems = Array.isArray(data) ? data : Object.values(data);
-      
-      // Check for inventory changes and send notifications
-      if (isInitializedRef.current && previousInventoryMonthlyRef.current.length > 0) {
-        checkInventoryChanges(newItems, previousInventoryMonthlyRef.current);
-      }
-      
-      // Update state and previous reference
-      previousInventoryMonthlyRef.current = [...newItems];
-      setInventoryMonthlyItems(newItems);
+      setInventoryMonthlyItems(Array.isArray(data) ? data : Object.values(data));
     };
     onValue(inventoryMonthlyItemsRef, handleInventoryMonthlyItems);
 

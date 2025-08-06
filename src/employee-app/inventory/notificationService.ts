@@ -72,16 +72,10 @@ export const sendInventoryNotification = (item: InventoryItem, previousStock: nu
     title = 'Out of Stock Alert!';
     body = `We are out of ${item.name}. Immediate restocking required.`;
   }
-  // FIXED: Improved low stock condition - alert on any significant decrease in low stock levels
-  else if (currentPercentage <= 20 && currentPercentage > 0) {
-    // Alert if crossing the 20% threshold OR if already low and getting significantly lower
-    const shouldAlert = previousPercentage > 20 || // Crossing threshold
-                       (previousPercentage <= 20 && (previousStock - item.currentStock) >= 1); // Getting lower when already low
-    
-    if (shouldAlert) {
-      title = 'Low Stock Alert!';
-      body = `Only ${Math.round(currentPercentage)}% left of ${item.name}. Consider restocking soon.`;
-    }
+  // Check for low stock condition (≤20% of minimum level)
+  else if (currentPercentage <= 20 && currentPercentage > 0 && previousPercentage > 20) {
+    title = 'Low Stock Alert!';
+    body = `Only ${Math.round(currentPercentage)}% left of ${item.name}. Consider restocking soon.`;
   }
 
   // Send notification if conditions are met
@@ -142,25 +136,4 @@ export const sendTestNotification = (): void => {
   } catch (error) {
     console.error('Failed to send test notification:', error);
   }
-};
-
-// ADDED: Check for inventory changes and send notifications for cross-device sync
-export const checkInventoryChanges = (
-  newItems: InventoryItem[], 
-  previousItems: InventoryItem[]
-): void => {
-  if (!newItems || !previousItems) return;
-  
-  // Create maps for efficient lookup
-  const previousMap = new Map(previousItems.map(item => [item.id.toString(), item]));
-  
-  // Check each new item against its previous state
-  newItems.forEach(newItem => {
-    const previousItem = previousMap.get(newItem.id.toString());
-    
-    if (previousItem && previousItem.currentStock !== newItem.currentStock) {
-      // Stock changed - check if we should send notification
-      sendInventoryNotification(newItem, previousItem.currentStock);
-    }
-  });
 };
