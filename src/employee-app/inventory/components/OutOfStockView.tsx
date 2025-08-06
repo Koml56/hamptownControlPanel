@@ -1,12 +1,18 @@
 // src/employee-app/inventory/components/OutOfStockView.tsx
 import React, { useState, useMemo } from 'react';
-import { AlertTriangle, Download, TrendingDown, Package, CheckCircle2 } from 'lucide-react';
+import { AlertTriangle, Download, TrendingDown, Package, CheckCircle2, Bell, BellOff } from 'lucide-react';
 import { useInventory } from '../InventoryContext';
 import { getOutOfStockItems, checkUpcomingHolidays } from '../consumptionAnalytics';
 import { generateOrderExcel } from '../excelExport';
 import { EnhancedInventoryItem, HolidayAlert as HolidayAlertType } from '../../types';
 import { showToast } from '../utils';
 import { getStockStatus, markAsOrdered } from '../stockUtils';
+import { 
+  getNotificationSettings, 
+  setNotificationEnabled, 
+  isNotificationSupported,
+  sendTestNotification 
+} from '../notificationService';
 import HolidayAlert from './HolidayAlert';
 
 const OutOfStockView: React.FC = () => {
@@ -14,6 +20,7 @@ const OutOfStockView: React.FC = () => {
   const [filter, setFilter] = useState<'all' | 'critical' | 'low' | 'out'>('critical');
   const [holidayAlerts] = useState<HolidayAlertType[]>(checkUpcomingHolidays());
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [notificationSettings, setNotificationSettings] = useState(getNotificationSettings());
 
   // Get enhanced items with forecast data
   const enhancedItems = useMemo(() => {
@@ -104,6 +111,29 @@ const OutOfStockView: React.FC = () => {
     setSelectedItems(newSelection);
   };
 
+  // Handle notification toggle
+  const handleNotificationToggle = async () => {
+    try {
+      const newEnabledState = !notificationSettings.enabled;
+      const success = await setNotificationEnabled(newEnabledState);
+      
+      if (success) {
+        setNotificationSettings(getNotificationSettings());
+        showToast(newEnabledState ? 'Notifications enabled!' : 'Notifications disabled');
+        
+        // Send test notification when enabling
+        if (newEnabledState) {
+          setTimeout(() => sendTestNotification(), 1000);
+        }
+      } else {
+        showToast('Failed to enable notifications. Please check browser permissions.');
+      }
+    } catch (error) {
+      showToast('Error updating notification settings');
+      console.error('Notification toggle error:', error);
+    }
+  };
+
   return (
     <div className="space-y-6 pb-20">
       {/* Holiday Alert Banner */}
@@ -137,6 +167,63 @@ const OutOfStockView: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Notification Settings */}
+      {isNotificationSupported() && (
+        <div className="bg-white rounded-xl shadow-sm p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              {notificationSettings.enabled ? (
+                <Bell className="w-5 h-5 text-blue-600 mr-3" />
+              ) : (
+                <BellOff className="w-5 h-5 text-gray-400 mr-3" />
+              )}
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800">Inventory Notifications</h3>
+                <p className="text-sm text-gray-600">
+                  Get notified when items are out of stock or running low (≤20%)
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center">
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="sr-only peer"
+                  checked={notificationSettings.enabled}
+                  onChange={handleNotificationToggle}
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
+            </div>
+          </div>
+          
+          {notificationSettings.enabled && (
+            <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+              <div className="flex items-center text-sm text-blue-700">
+                <CheckCircle2 className="w-4 h-4 mr-2" />
+                <span>
+                  Notifications enabled for this device. You'll be alerted when inventory levels change.
+                </span>
+              </div>
+              {notificationSettings.permission === 'granted' && (
+                <div className="text-xs text-blue-600 mt-1">
+                  Permission granted - notifications will work even when the app is closed.
+                </div>
+              )}
+            </div>
+          )}
+          
+          {!notificationSettings.enabled && (
+            <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+              <div className="text-sm text-gray-600">
+                Enable notifications to get alerts when items are out of stock or running low.
+                This setting is saved locally for this device only.
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Filter Tabs - horizontal scroll on mobile */}
       <div className="bg-white rounded-xl shadow-sm p-2">
