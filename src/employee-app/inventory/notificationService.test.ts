@@ -61,10 +61,20 @@ describe('NotificationService', () => {
       });
     });
 
-    it('should return enabled=true when localStorage has "true"', () => {
+    it('should return enabled=true when localStorage has "true" AND permission is granted', () => {
       localStorageMock.getItem.mockReturnValue('true');
+      (window.Notification as any).permission = 'granted';
       const settings = getNotificationSettings();
       expect(settings.enabled).toBe(true);
+    });
+
+    it('should return enabled=false when localStorage has "true" but permission is not granted', () => {
+      localStorageMock.getItem.mockReturnValue('true');
+      (window.Notification as any).permission = 'denied';
+      const settings = getNotificationSettings();
+      expect(settings.enabled).toBe(false);
+      // Should also fix the localStorage inconsistency
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('inventory_notifications_enabled', 'false');
     });
   });
 
@@ -76,23 +86,26 @@ describe('NotificationService', () => {
       
       expect(window.Notification.requestPermission).toHaveBeenCalled();
       expect(localStorageMock.setItem).toHaveBeenCalledWith('inventory_notifications_enabled', 'true');
-      expect(result).toBe(true);
+      expect(result.success).toBe(true);
+      expect(result.permission).toBe('granted');
     });
 
-    it('should return false when permission is denied', async () => {
+    it('should return error when permission is denied', async () => {
       (window.Notification as any).requestPermission.mockResolvedValue('denied');
       
       const result = await setNotificationEnabled(true);
       
       expect(localStorageMock.setItem).toHaveBeenCalledWith('inventory_notifications_enabled', 'false');
-      expect(result).toBe(false);
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Notification permission denied');
+      expect(result.permission).toBe('denied');
     });
 
     it('should save false to localStorage when disabling', async () => {
       const result = await setNotificationEnabled(false);
       
       expect(localStorageMock.setItem).toHaveBeenCalledWith('inventory_notifications_enabled', 'false');
-      expect(result).toBe(false);
+      expect(result.success).toBe(true);
     });
   });
 
