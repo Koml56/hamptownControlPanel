@@ -1015,10 +1015,23 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                         )}
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
-                        <div className="flex items-center">
-                          <Star className="w-3 h-3 text-purple-500 mr-1" />
-                          <span className="font-medium text-purple-600">{emp.points}</span>
-                        </div>
+                        {editingEmployee === emp.id ? (
+                          <div className="flex items-center">
+                            <Star className="w-3 h-3 text-purple-500 mr-1" />
+                            <input
+                              type="number"
+                              min="0"
+                              value={emp.points}
+                              onChange={(e) => updateEmployee(emp.id, 'points', (parseInt(e.target.value) || 0).toString(), setEmployees, quickSave)}
+                              className="w-16 px-2 py-1 border rounded text-purple-600 font-medium"
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex items-center">
+                            <Star className="w-3 h-3 text-purple-500 mr-1" />
+                            <span className="font-medium text-purple-600">{emp.points}</span>
+                          </div>
+                        )}
                       </td>
                       <td className="border border-gray-200 px-4 py-2">
                         <div className="flex items-center">
