@@ -6,23 +6,24 @@ import { Employee, StoreItem, DailyDataMap } from './types';
 // Mock OperationManager to avoid IndexedDB dependency
 jest.mock('./OperationManager', () => ({
   OperationManager: class MockOperationManager {
-    createOperation(type: string, data: any, collection: string) {
+    createOperation(type: string, payload: any, targetField: string) {
       return {
         id: 'mock-op-' + Date.now(),
         type,
-        data,
-        collection,
+        payload,
+        targetField,
         deviceId: 'test-device',
         timestamp: Date.now(),
-        vectorClock: {}
+        vectorClock: {},
+        version: 1
       };
     }
     
     applyOperation(op: any, state: any) {
-      if (op.type === 'UPDATE_EMPLOYEE_POINTS' && op.collection === 'employees') {
+      if (op.type === 'UPDATE_EMPLOYEE_POINTS' && op.targetField === 'employees') {
         return {
           employees: state.employees.map((emp: Employee) => 
-            emp.id === op.data.id ? op.data : emp
+            emp.id === op.payload.id ? op.payload : emp
           )
         };
       }
@@ -105,12 +106,13 @@ describe('Store Operations with Firebase Integration', () => {
     it('should update employee points correctly', () => {
       const operation = {
         id: 'test-op',
-        type: 'UPDATE_EMPLOYEE_POINTS',
-        data: { ...mockEmployees[0], points: 40 },
-        collection: 'employees',
+        type: 'UPDATE_EMPLOYEE_POINTS' as const,
+        payload: { ...mockEmployees[0], points: 40 },
+        targetField: 'employees',
         deviceId: 'test-device',
         timestamp: Date.now(),
-        vectorClock: {}
+        vectorClock: {},
+        version: 1
       };
 
       const result = applyEmployeePointsOperation(mockEmployees, operation);
@@ -136,12 +138,13 @@ describe('Store Operations with Firebase Integration', () => {
 
       const operation = {
         id: 'test-op',
-        type: 'PURCHASE_ITEM',
-        data: { purchase, date: todayStr },
-        collection: 'dailyData',
+        type: 'PURCHASE_ITEM' as const,
+        payload: { purchase, date: todayStr },
+        targetField: 'dailyData',
         deviceId: 'test-device',
         timestamp: Date.now(),
-        vectorClock: {}
+        vectorClock: {},
+        version: 1
       };
 
       const result = applyPurchaseOperation(mockDailyData, operation);
@@ -155,12 +158,13 @@ describe('Store Operations with Firebase Integration', () => {
     it('should handle non-purchase operations gracefully', () => {
       const operation = {
         id: 'test-op',
-        type: 'OTHER_OPERATION',
-        data: {},
-        collection: 'dailyData',
+        type: 'ADD_TASK' as const,
+        payload: {},
+        targetField: 'dailyData',
         deviceId: 'test-device',
         timestamp: Date.now(),
-        vectorClock: {}
+        vectorClock: {},
+        version: 1
       };
 
       const result = applyPurchaseOperation(mockDailyData, operation);

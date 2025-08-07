@@ -149,7 +149,7 @@ export function applyPurchaseOperation(dailyData: DailyDataMap, op: SyncOperatio
     return dailyData;
   }
 
-  const { purchase, date } = op.data;
+  const { purchase, date } = op.payload;
   const todayData = dailyData[date] || {
     completedTasks: [],
     employeeMoods: [],

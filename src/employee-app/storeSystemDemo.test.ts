@@ -10,23 +10,24 @@ global.alert = jest.fn();
 // Mock the OperationManager and offline queue for demo
 jest.mock('./OperationManager', () => ({
   OperationManager: class MockOperationManager {
-    createOperation(type: string, data: any, collection: string) {
+    createOperation(type: string, payload: any, targetField: string) {
       return {
         id: 'demo-op-' + Date.now() + Math.random(),
         type,
-        data,
-        collection,
+        payload,
+        targetField,
         deviceId: 'demo-device',
         timestamp: Date.now(),
-        vectorClock: {}
+        vectorClock: {},
+        version: 1
       };
     }
     
     applyOperation(op: any, state: any) {
-      if (op.type === 'UPDATE_EMPLOYEE_POINTS' && op.collection === 'employees') {
+      if (op.type === 'UPDATE_EMPLOYEE_POINTS' && op.targetField === 'employees') {
         return {
           employees: state.employees.map((emp: Employee) => 
-            emp.id === op.data.id ? op.data : emp
+            emp.id === op.payload.id ? op.payload : emp
           )
         };
       }
@@ -179,7 +180,7 @@ describe('Store System Demo - Remake with Firebase Functions', () => {
     console.log('✅ Operations created:');
     console.log(`  • Purchase Operation: ${operations!.purchaseOp.type}`);
     console.log(`  • Employee Operation: ${operations!.employeeOp.type}`);
-    console.log(`  • Collection: ${operations!.purchaseOp.collection}`);
+    console.log(`  • Collection: ${operations!.purchaseOp.targetField}`);
     console.log(`  • Device ID: ${operations!.purchaseOp.deviceId}`);
     
     console.log('\n📊 Operation Data:');
