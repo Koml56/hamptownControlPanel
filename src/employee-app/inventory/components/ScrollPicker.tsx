@@ -1,5 +1,5 @@
 // src/employee-app/inventory/components/ScrollPicker.tsx
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 
 interface ScrollPickerProps {
   value: number;
@@ -26,11 +26,35 @@ const ScrollPicker: React.FC<ScrollPickerProps> = ({
   const [lastTap, setLastTap] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Generate values array
-  const values: number[] = [];
-  for (let i = min; i <= max; i += step) {
-    values.push(i);
-  }
+  // Generate values array with proper decimal rounding
+  const { values, decimalPlaces } = useMemo(() => {
+    const getDecimalPlaces = (num: number): number => {
+      if (Math.floor(num) === num) return 0;
+      const str = num.toString();
+      if (str.indexOf('.') !== -1 && str.indexOf('e-') === -1) {
+        return str.split('.')[1].length;
+      } else if (str.indexOf('e-') !== -1) {
+        const parts = str.split('e-');
+        return parseInt(parts[1], 10);
+      }
+      return 0;
+    };
+
+    const decimalPlaces = getDecimalPlaces(step);
+    const values: number[] = [];
+    const numSteps = Math.round((max - min) / step);
+    
+    for (let i = 0; i <= numSteps; i++) {
+      const value = min + (i * step);
+      // Round to avoid floating-point precision issues
+      const roundedValue = Math.round(value * Math.pow(10, decimalPlaces)) / Math.pow(10, decimalPlaces);
+      if (roundedValue <= max) {
+        values.push(roundedValue);
+      }
+    }
+    
+    return { values, decimalPlaces };
+  }, [min, max, step]);
 
   const itemHeight = 48; // Height of each item in pixels
   const containerHeight = 192; // Total height of the picker
@@ -168,7 +192,10 @@ const ScrollPicker: React.FC<ScrollPickerProps> = ({
     
     // Find closest valid step value
     const stepsFromMin = Math.round((clampedValue - min) / step);
-    const finalValue = min + (stepsFromMin * step);
+    const calculatedValue = min + (stepsFromMin * step);
+    
+    // Round to avoid floating-point precision issues
+    const finalValue = Math.round(calculatedValue * Math.pow(10, decimalPlaces)) / Math.pow(10, decimalPlaces);
     
     // Ensure the final value is in our values array
     if (values.includes(finalValue)) {
@@ -177,7 +204,7 @@ const ScrollPicker: React.FC<ScrollPickerProps> = ({
     }
     
     return false;
-  }, [min, max, step, values, onChange]);
+  }, [min, max, step, values, onChange, decimalPlaces]);
 
   const handleInputSubmit = useCallback(() => {
     const success = validateAndSetValue(inputValue);
@@ -361,7 +388,7 @@ const ScrollPicker: React.FC<ScrollPickerProps> = ({
                   WebkitUserSelect: 'none'
                 }}
               >
-                {val}
+                {decimalPlaces > 0 ? val.toFixed(decimalPlaces) : val}
               </div>
             );
           })}
@@ -371,7 +398,9 @@ const ScrollPicker: React.FC<ScrollPickerProps> = ({
       {/* Value display */}
       <div className="mt-2 text-center">
         <span className="text-sm text-gray-600">Selected: </span>
-        <span className="font-semibold text-gray-800">{value}</span>
+        <span className="font-semibold text-gray-800">
+          {decimalPlaces > 0 ? value.toFixed(decimalPlaces) : value}
+        </span>
         <div className="text-xs text-gray-500 mt-1">
           Double-click or double-tap to enter value manually
         </div>
