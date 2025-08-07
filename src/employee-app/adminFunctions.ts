@@ -169,6 +169,44 @@ export const removeCustomRole = (
 };
 
 export { addPrepItem, updatePrepItem, deletePrepItem } from './prepOperations';
-export { addStoreItem, updateStoreItem, deleteStoreItem } from './storeOperations';
+
+// Store Management - now with proper Firebase sync
+export const addStoreItem = (
+  storeItems: any[],
+  setStoreItems: (updater: (prev: any[]) => any[]) => void,
+  newItem: any
+) => {
+  setStoreItems(prev => {
+    const updated = [...prev, newItem];
+    return updated;
+  });
+};
+
+export const updateStoreItem = (
+  storeItems: any[],
+  id: number,
+  field: string,
+  value: any,
+  setStoreItems: (updater: (prev: any[]) => any[]) => void
+) => {
+  setStoreItems(prev => {
+    const updated = prev.map(item => item.id === id ? { ...item, [field]: value } : item);
+    return updated;
+  });
+};
+
+export const deleteStoreItem = (
+  storeItems: any[],
+  id: number,
+  setStoreItems: (updater: (prev: any[]) => any[]) => void
+) => {
+  if (window.confirm('Are you sure you want to delete this store item?')) {
+    setStoreItems(prev => {
+      const updated = prev.filter(item => item.id !== id);
+      return updated;
+    });
+  }
+};
+
 export { updateDailyData } from './dailyDataOperations';
 export { addCompletedTask, removeCompletedTask } from './completedTasksOperations';
