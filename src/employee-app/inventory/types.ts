@@ -8,11 +8,12 @@ import type {
   ActivityLogEntry,
   WasteReason,
   CustomCategory,
-  Employee
+  Employee,
+  CurrentUser
 } from '../types';
 
 export interface InventoryTabProps {
-  currentUser: any;
+  currentUser: CurrentUser;
   connectionStatus: string;
   employees: Employee[];
   // Firebase props
@@ -40,6 +41,7 @@ export interface InventoryContextType {
   activityLog: ActivityLogEntry[];
   customCategories: CustomCategory[];
   employees: Employee[];
+  currentUser: CurrentUser;
   selectedItems: Set<number | string>;
   
   // UI State

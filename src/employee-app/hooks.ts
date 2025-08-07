@@ -699,9 +699,29 @@ export const useAuth = () => {
   const [currentUser, setCurrentUser] = useState<CurrentUser>({ id: 1, name: 'Luka' });
   const [isAdmin, setIsAdmin] = useState(false);
 
+  // Restore user from localStorage on component mount
+  useEffect(() => {
+    const savedUserName = localStorage.getItem('currentUserName');
+    if (savedUserName && savedUserName !== currentUser.name) {
+      // We need employees to find the correct ID, so this will be handled 
+      // by the EmployeeApp component when employees are loaded
+      setCurrentUser(prev => ({ ...prev, name: savedUserName }));
+    }
+  }, [currentUser.name]);
+
   const switchUser = useCallback((employee: Employee) => {
     setCurrentUser({ id: employee.id, name: employee.name });
     localStorage.setItem('currentUserName', employee.name);
+    
+    // Also update inventory employee selection to keep them in sync
+    try {
+      const { saveSelectedEmployee } = require('./inventory/components/EmployeeSelector');
+      saveSelectedEmployee(employee.id, employee.name);
+    } catch (error) {
+      // Fallback if import fails, just update localStorage directly
+      const employeeData = { id: employee.id, name: employee.name };
+      localStorage.setItem('inventory_selected_employee', JSON.stringify(employeeData));
+    }
   }, []);
 
   const logoutAdmin = useCallback(() => {

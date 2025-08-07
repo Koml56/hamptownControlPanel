@@ -8,7 +8,8 @@ import {
   InventoryCategory, 
   WasteReason,
   CustomCategory,
-  Employee
+  Employee,
+  CurrentUser
 } from '../types'; // Import from main types.ts
 import { InventoryContextType } from './types'; // Local context type
 import { generateId, showToast } from './utils';
@@ -26,6 +27,7 @@ export const useInventory = () => {
 
 interface InventoryProviderProps {
   children: React.ReactNode;
+  currentUser: CurrentUser;
   employees: Employee[];
   // Firebase props
   inventoryDailyItems: InventoryItem[];
@@ -45,6 +47,7 @@ interface InventoryProviderProps {
 
 export const InventoryProvider: React.FC<InventoryProviderProps> = ({ 
   children,
+  currentUser,
   employees,
   inventoryDailyItems,
   inventoryWeeklyItems,
@@ -645,6 +648,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     activityLog,
     customCategories,
     employees,
+    currentUser,
     selectedItems,
     
     // UI State

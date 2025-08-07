@@ -13,21 +13,61 @@ interface EmployeeSelectorProps {
 // localStorage key for storing selected employee
 const SELECTED_EMPLOYEE_KEY = 'inventory_selected_employee';
 
-// Save selected employee to localStorage
+// Save selected employee to localStorage - now syncs with global selection
 export const saveSelectedEmployee = (employeeId: number, employeeName: string) => {
   const employeeData = { id: employeeId, name: employeeName };
   localStorage.setItem(SELECTED_EMPLOYEE_KEY, JSON.stringify(employeeData));
+  
+  // Also update the global currentUser name in localStorage to keep them in sync
+  localStorage.setItem('currentUserName', employeeName);
 };
 
-// Load selected employee from localStorage
+// Load selected employee from localStorage - fallback to global currentUser
 export const loadSelectedEmployee = (): { id: number; name: string } | null => {
   try {
     const saved = localStorage.getItem(SELECTED_EMPLOYEE_KEY);
-    return saved ? JSON.parse(saved) : null;
+    if (saved) {
+      return JSON.parse(saved);
+    }
+    
+    // Fallback to global currentUser name if no inventory-specific selection exists
+    const globalUserName = localStorage.getItem('currentUserName');
+    if (globalUserName) {
+      // Return a partial object, the calling code will need to find the full employee data
+      return { id: -1, name: globalUserName };
+    }
+    
+    return null;
   } catch (error) {
     console.error('Error loading saved employee:', error);
     return null;
   }
+};
+
+// NEW: Initialize employee selection based on global currentUser
+export const initializeEmployeeSelection = (currentUser: any, employees: any[]): { id: number; name: string } | null => {
+  // First, try to find the currentUser in the employees list
+  const currentEmployee = employees.find(emp => emp.id === currentUser.id || emp.name === currentUser.name);
+  if (currentEmployee) {
+    return { id: currentEmployee.id, name: currentEmployee.name };
+  }
+  
+  // Fallback to saved selection, then to first employee
+  const saved = loadSelectedEmployee();
+  if (saved && saved.id !== -1) {
+    // Verify saved employee still exists
+    const employee = employees.find(emp => emp.id === saved.id);
+    if (employee) {
+      return saved;
+    }
+  }
+  
+  // Final fallback to first employee
+  if (employees.length > 0) {
+    return { id: employees[0].id, name: employees[0].name };
+  }
+  
+  return null;
 };
 
 const EmployeeSelector: React.FC<EmployeeSelectorProps> = ({

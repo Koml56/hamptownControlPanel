@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { X, ChevronDown } from 'lucide-react';
 import { useInventory } from '../InventoryContext';
 import { InventoryFrequency, WasteReason } from '../../types';
-import EmployeeSelector, { loadSelectedEmployee, saveSelectedEmployee } from './EmployeeSelector';
+import EmployeeSelector, { initializeEmployeeSelection, saveSelectedEmployee } from './EmployeeSelector';
 
 interface WasteModalProps {
   frequency: InventoryFrequency;
@@ -12,7 +12,7 @@ interface WasteModalProps {
 }
 
 const WasteModal: React.FC<WasteModalProps> = ({ frequency, selectedItemId, onClose }) => {
-  const { dailyItems, weeklyItems, monthlyItems, employees, reportWaste } = useInventory();
+  const { dailyItems, weeklyItems, monthlyItems, employees, currentUser, reportWaste } = useInventory();
   const [selectedItem, setSelectedItem] = useState('');
   const [wasteAmount, setWasteAmount] = useState('');
   const [reason, setReason] = useState<WasteReason>('expired');
@@ -33,32 +33,15 @@ const WasteModal: React.FC<WasteModalProps> = ({ frequency, selectedItemId, onCl
 
   const items = getItems();
 
-  // Load saved employee on component mount
+  // Initialize employee selection based on global currentUser
   useEffect(() => {
-    const savedEmployee = loadSelectedEmployee();
-    if (savedEmployee && employees.length > 0) {
-      // Verify the saved employee still exists in the current employee list
-      const employee = employees.find(emp => emp.id === savedEmployee.id);
-      if (employee) {
-        setSelectedEmployeeId(savedEmployee.id);
-        setSelectedEmployeeName(savedEmployee.name);
-      } else {
-        // If saved employee doesn't exist, default to first employee
-        const firstEmployee = employees[0];
-        if (firstEmployee) {
-          setSelectedEmployeeId(firstEmployee.id);
-          setSelectedEmployeeName(firstEmployee.name);
-          saveSelectedEmployee(firstEmployee.id, firstEmployee.name);
-        }
-      }
-    } else if (employees.length > 0) {
-      // No saved employee, default to first employee
-      const firstEmployee = employees[0];
-      setSelectedEmployeeId(firstEmployee.id);
-      setSelectedEmployeeName(firstEmployee.name);
-      saveSelectedEmployee(firstEmployee.id, firstEmployee.name);
+    const selection = initializeEmployeeSelection(currentUser, employees);
+    if (selection) {
+      setSelectedEmployeeId(selection.id);
+      setSelectedEmployeeName(selection.name);
+      saveSelectedEmployee(selection.id, selection.name);
     }
-  }, [employees]);
+  }, [currentUser, employees]);
 
   useEffect(() => {
     if (selectedItemId) {
