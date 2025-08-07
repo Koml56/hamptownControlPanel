@@ -699,7 +699,7 @@ export const useAuth = () => {
   const [currentUser, setCurrentUser] = useState<CurrentUser>({ id: 1, name: 'Luka' });
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // Restore user from localStorage on component mount
+  // Restore user from localStorage on component mount (only once)
   useEffect(() => {
     const savedUserName = localStorage.getItem('currentUserName');
     if (savedUserName && savedUserName !== currentUser.name) {
@@ -707,7 +707,7 @@ export const useAuth = () => {
       // by the EmployeeApp component when employees are loaded
       setCurrentUser(prev => ({ ...prev, name: savedUserName }));
     }
-  }, [currentUser.name]);
+  }, []); // Empty dependency array - only run once on mount
 
   const switchUser = useCallback((employee: Employee) => {
     setCurrentUser({ id: employee.id, name: employee.name });
@@ -727,12 +727,6 @@ export const useAuth = () => {
   const logoutAdmin = useCallback(() => {
     setIsAdmin(false);
   }, []);
-
-  useEffect(() => {
-    if (currentUser.name) {
-      localStorage.setItem('currentUserName', currentUser.name);
-    }
-  }, [currentUser.name]);
 
   return {
     currentUser,
