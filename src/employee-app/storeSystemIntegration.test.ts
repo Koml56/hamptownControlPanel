@@ -10,23 +10,24 @@ global.alert = jest.fn();
 // Mock the OperationManager and offline queue
 jest.mock('./OperationManager', () => ({
   OperationManager: class MockOperationManager {
-    createOperation(type: string, data: any, collection: string) {
+    createOperation(type: string, payload: any, targetField: string) {
       return {
         id: 'mock-op-' + Date.now() + Math.random(),
         type,
-        data,
-        collection,
+        payload,
+        targetField,
         deviceId: 'test-device',
         timestamp: Date.now(),
-        vectorClock: {}
+        vectorClock: {},
+        version: 1
       };
     }
     
     applyOperation(op: any, state: any) {
-      if (op.type === 'UPDATE_EMPLOYEE_POINTS' && op.collection === 'employees') {
+      if (op.type === 'UPDATE_EMPLOYEE_POINTS' && op.targetField === 'employees') {
         return {
           employees: state.employees.map((emp: Employee) => 
-            emp.id === op.data.id ? op.data : emp
+            emp.id === op.payload.id ? op.payload : emp
           )
         };
       }
@@ -230,13 +231,13 @@ describe('Complete Store System Integration', () => {
       expect(operations!.employeeOp.type).toBe('UPDATE_EMPLOYEE_POINTS');
       
       // Verify operation data structure
-      expect(operations!.purchaseOp.data.purchase).toMatchObject({
+      expect(operations!.purchaseOp.payload.purchase).toMatchObject({
         employeeId: 1,
         itemId: 1,
         cost: 10
       });
       
-      expect(operations!.employeeOp.data.points).toBe(40); // 50 - 10
+      expect(operations!.employeeOp.payload.points).toBe(40); // 50 - 10
     });
 
     it('should execute purchase operations with Firebase integration', () => {

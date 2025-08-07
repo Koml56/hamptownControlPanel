@@ -4,7 +4,7 @@ import { VectorClock } from './VectorClock';
 
 export interface SyncOperation {
   id: string;
-  type: 'ADD_TASK' | 'UPDATE_EMPLOYEE' | 'COMPLETE_TASK' | 'DELETE_ITEM' | 'ADD_STORE_ITEM' | 'UPDATE_STORE_ITEM' | 'DELETE_STORE_ITEM';
+  type: 'ADD_TASK' | 'UPDATE_EMPLOYEE' | 'COMPLETE_TASK' | 'DELETE_ITEM' | 'ADD_STORE_ITEM' | 'UPDATE_STORE_ITEM' | 'DELETE_STORE_ITEM' | 'PURCHASE_ITEM' | 'UPDATE_EMPLOYEE_POINTS';
   payload: any;
   timestamp: number;
   deviceId: string;
