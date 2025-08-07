@@ -1,6 +1,6 @@
 // Store.tsx
 import React, { useState } from 'react';
-import { ShoppingCart, Trophy, Clock, Gift, Users, Coffee, Star, History } from 'lucide-react';
+import { ShoppingCart, Trophy, Clock, Gift, Users, Star, History } from 'lucide-react';
 import { purchaseItem, canAffordItem, getEmployeePoints, getEmployeePurchaseHistory, getLeaderboard } from './storeFunctions';
 import type { Employee, StoreItem, DailyDataMap, CurrentUser, Purchase } from './types';
 
@@ -55,27 +55,19 @@ const Store: React.FC<StoreProps> = ({
     );
     
     if (success) {
-      // Trigger immediate save to Firebase with better error handling
-      try {
-        await saveToFirebase();
-        alert(`🎉 Successfully purchased: ${item.name}! Your purchase has been saved and will sync across devices.`);
-      } catch (error) {
-        console.error('Failed to save purchase to Firebase:', error);
-        // Purchase is successful locally, but warn about sync issues
-        alert(`✅ Purchase successful: ${item.name}!\n⚠️ Cloud sync failed - your purchase is saved locally and will sync when connection is restored.`);
-      }
+      // Show immediate success message
+      alert(`🎉 Successfully purchased: ${item.name}! Your purchase has been saved.`);
+      
+      // Trigger save to Firebase (non-blocking)
+      saveToFirebase();
     }
   };
 
-  React.useEffect(() => {
-    if (dailyData && Object.keys(dailyData).length > 0) {
-      saveToFirebase();
-    }
-  }, [dailyData, saveToFirebase]);
+
 
   const getCategoryIcon = (category: string) => {
     switch (category) {
-      case 'food': return <Coffee className="w-4 h-4" />;
+      case 'food': return <Gift className="w-4 h-4" />;
       case 'break': return <Clock className="w-4 h-4" />;
       case 'reward': return <Gift className="w-4 h-4" />;
       case 'social': return <Users className="w-4 h-4" />;
