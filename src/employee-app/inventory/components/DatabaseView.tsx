@@ -14,7 +14,7 @@ import BulkActionsBar from './BulkActionsBar';
 interface ItemEditModalProps {
   item: DatabaseItem;
   onClose: () => void;
-  onSave: (frequency: InventoryFrequency, category: InventoryCategory | string, minLevel: number, initialStock: number) => void;
+  onSave: (frequency: InventoryFrequency, category: InventoryCategory | string, minLevel: number, initialStock: number, box: boolean) => void;
   onUnassign: () => void;
 }
 
@@ -24,12 +24,13 @@ const ItemEditModal: React.FC<ItemEditModalProps> = ({ item, onClose, onSave, on
   const [category, setCategory] = useState<InventoryCategory | string>(item.assignedCategory || 'produce');
   const [minLevel, setMinLevel] = useState(5);
   const [initialStock, setInitialStock] = useState(0);
+  const [box, setBox] = useState(item.box || false);
 
   // Get all available categories
   const allCategoryOptions = getAllCategoryOptions(customCategories);
 
   const handleSave = () => {
-    onSave(frequency, category, minLevel, initialStock);
+    onSave(frequency, category, minLevel, initialStock, box);
     onClose();
   };
 
@@ -87,25 +88,48 @@ const ItemEditModal: React.FC<ItemEditModalProps> = ({ item, onClose, onSave, on
             </select>
           </div>
           
+          <div>
+            <label className="flex items-center space-x-2">
+              <input 
+                type="checkbox"
+                checked={box}
+                onChange={(e) => setBox(e.target.checked)}
+                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <span className="text-sm font-medium text-gray-700">Box (allows fractional quantities like 0.5, 1.5, 2.5)</span>
+            </label>
+            <p className="text-xs text-gray-500 mt-1">
+              When enabled, this item can be counted in fractional quantities (e.g., 0.5 box, 1.5 boxes)
+            </p>
+          </div>
+          
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Min Level</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Min Level {box ? '(boxes)' : ''}
+              </label>
               <input 
                 type="number" 
                 min="0"
+                step={box ? "0.1" : "1"}
                 value={minLevel}
-                onChange={(e) => setMinLevel(parseInt(e.target.value) || 0)}
+                onChange={(e) => setMinLevel(parseFloat(e.target.value) || 0)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                placeholder={box ? "e.g., 2.5" : "e.g., 5"}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Initial Stock</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Initial Stock {box ? '(boxes)' : ''}
+              </label>
               <input 
                 type="number" 
                 min="0"
+                step={box ? "0.1" : "1"}
                 value={initialStock}
-                onChange={(e) => setInitialStock(parseInt(e.target.value) || 0)}
+                onChange={(e) => setInitialStock(parseFloat(e.target.value) || 0)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                placeholder={box ? "e.g., 10.5" : "e.g., 20"}
               />
             </div>
           </div>
@@ -250,9 +274,9 @@ const DatabaseView: React.FC = () => {
     setEditingItem(item);
   };
 
-  const handleItemSave = (frequency: InventoryFrequency, category: InventoryCategory | string, minLevel: number, initialStock: number) => {
+  const handleItemSave = (frequency: InventoryFrequency, category: InventoryCategory | string, minLevel: number, initialStock: number, box: boolean) => {
     if (editingItem) {
-      assignToCategory([editingItem.id], frequency, category, minLevel, initialStock);
+      assignToCategory([editingItem.id], frequency, category, minLevel, initialStock, box);
     }
   };
 
