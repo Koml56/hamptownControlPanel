@@ -6,7 +6,7 @@ import { getOutOfStockItems, checkUpcomingHolidays } from '../consumptionAnalyti
 import { generateOrderExcel } from '../excelExport';
 import { EnhancedInventoryItem, HolidayAlert as HolidayAlertType } from '../../types';
 import { showToast } from '../utils';
-import { getStockStatus, markAsOrdered } from '../stockUtils';
+import { getStockStatus, markAsOrdered, formatExpectedDate } from '../stockUtils';
 import { 
   getNotificationSettings, 
   setNotificationEnabled, 
@@ -443,7 +443,7 @@ const StockCard: React.FC<{
           }
           {item.orderedStatus?.expectedDelivery && (
             <div className="text-xs mt-1">
-              Expected: {new Date(item.orderedStatus.expectedDelivery).toLocaleDateString()}
+              Expected: {formatExpectedDate(new Date(item.orderedStatus.expectedDelivery))}
             </div>
           )}
         </div>
