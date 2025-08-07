@@ -1,5 +1,5 @@
 // Store.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ShoppingCart, Trophy, Clock, Gift, Users, Star, History } from 'lucide-react';
 import { purchaseItem, canAffordItem, getEmployeePoints, getEmployeePurchaseHistory, getLeaderboard } from './storeFunctions';
 import type { Employee, StoreItem, DailyDataMap, CurrentUser, Purchase } from './types';
@@ -25,11 +25,31 @@ const Store: React.FC<StoreProps> = ({
 }) => {
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [showHistory, setShowHistory] = useState(false);
+  const [isProcessingPurchase, setIsProcessingPurchase] = useState<number | null>(null);
 
   const currentEmployee = employees.find(emp => emp.id === currentUser.id);
   const userPoints = getEmployeePoints(currentUser.id, employees);
   const purchaseHistory = getEmployeePurchaseHistory(currentUser.id, dailyData);
   const leaderboard = getLeaderboard(employees);
+
+  // Auto-save after purchase operations to ensure Firebase persistence
+  useEffect(() => {
+    let saveTimeout: NodeJS.Timeout;
+    
+    if (isProcessingPurchase === null) {
+      // Trigger delayed save after successful purchase
+      saveTimeout = setTimeout(() => {
+        console.log('🔄 Auto-saving store data to Firebase after purchase');
+        saveToFirebase();
+      }, 1000);
+    }
+
+    return () => {
+      if (saveTimeout) {
+        clearTimeout(saveTimeout);
+      }
+    };
+  }, [isProcessingPurchase, saveToFirebase]);
 
   const categories = [
     { id: 'all', name: 'All Items', icon: '🛍️' },
@@ -44,22 +64,38 @@ const Store: React.FC<StoreProps> = ({
     : storeItems.filter(item => item.category === activeCategory);
 
   const handlePurchase = async (item: StoreItem) => {
-    if (!currentEmployee) return;
+    if (!currentEmployee || isProcessingPurchase !== null) return;
     
-    const success = purchaseItem(
-      currentUser.id,
-      item,
-      employees,
-      setEmployees,
-      setDailyData
-    );
+    // Set processing state to prevent double purchases
+    setIsProcessingPurchase(item.id);
     
-    if (success) {
-      // Show immediate success message
-      alert(`🎉 Successfully purchased: ${item.name}! Your purchase has been saved.`);
+    try {
+      const success = purchaseItem(
+        currentUser.id,
+        item,
+        employees,
+        setEmployees,
+        setDailyData
+      );
       
-      // Trigger save to Firebase (non-blocking)
-      saveToFirebase();
+      if (success) {
+        // Show immediate success message
+        alert(`🎉 Successfully purchased: ${item.name}! Your purchase has been saved.`);
+        
+        console.log('🛒 Purchase successful, triggering Firebase save');
+        // Trigger immediate save to Firebase
+        saveToFirebase();
+      } else {
+        console.error('❌ Purchase failed');
+      }
+    } catch (error) {
+      console.error('❌ Purchase error:', error);
+      alert('An error occurred during purchase. Please try again.');
+    } finally {
+      // Reset processing state after a short delay
+      setTimeout(() => {
+        setIsProcessingPurchase(null);
+      }, 1000);
     }
   };
 
@@ -200,14 +236,16 @@ const Store: React.FC<StoreProps> = ({
                   </div>
                   <button
                     onClick={() => handlePurchase(item)}
-                    disabled={!canAfford || !item.available}
+                    disabled={!canAfford || !item.available || isProcessingPurchase !== null}
                     className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      canAfford && item.available
+                      canAfford && item.available && isProcessingPurchase === null
                         ? 'bg-purple-500 text-white hover:bg-purple-600'
                         : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                     }`}
                   >
                     {!item.available ? 'Unavailable' : 
+                     isProcessingPurchase === item.id ? 'Processing...' :
+                     isProcessingPurchase !== null ? 'Wait...' :
                      canAfford ? 'Purchase' : 'Need more points'}
                   </button>
                 </div>

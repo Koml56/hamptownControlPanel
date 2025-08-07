@@ -1,6 +1,7 @@
 // storeFunctions.ts
 import { getFormattedDate } from './utils';
 import type { Employee, StoreItem, Purchase, DailyDataMap } from './types';
+import { executePurchaseOperation } from './storeOperations';
 
 export const canAffordItem = (employee: Employee, item: StoreItem): boolean => {
   return employee.points >= item.cost && item.available;
@@ -26,65 +27,24 @@ export const purchaseItem = (
       return false;
     }
 
-    const today = new Date();
-    const todayStr = getFormattedDate(today);
-    const now = new Date().toLocaleTimeString('en-US', {
-      hour12: false,
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-
-    // Update employee points
-    setEmployees(prevEmployees =>
-      prevEmployees.map(emp =>
-        emp.id === employeeId ? { ...emp, points: emp.points - item.cost } : emp
-      )
+    // Use the new operation-based purchase system
+    const success = executePurchaseOperation(
+      employeeId,
+      item,
+      employees,
+      {} as DailyDataMap, // Will be populated by the operation
+      setEmployees,
+      setDailyData
     );
 
-    // Create purchase record
-    const purchase: Purchase = {
-      id: Date.now(),
-      employeeId,
-      itemId: item.id,
-      itemName: item.name,
-      cost: item.cost,
-      purchasedAt: now,
-      date: todayStr,
-      status: 'pending'
-    };
+    if (success) {
+      console.log("🛒 Purchase completed successfully using operation pattern");
+    } else {
+      console.error("❌ Purchase failed through operation pattern");
+      alert("An error occurred during purchase. Please try again.");
+    }
 
-    // Update dailyData immutably
-    setDailyData(prev => {
-      const todayData = prev[todayStr] || {
-        completedTasks: [],
-        employeeMoods: [],
-        purchases: [],
-        totalTasks: 22,
-        completionRate: 0,
-        totalPointsEarned: 0,
-        totalPointsSpent: 0
-      };
-
-      const updatedPurchases = Array.isArray(todayData.purchases)
-        ? [...todayData.purchases, purchase]
-        : [purchase];
-
-      const newTotalSpent = (todayData.totalPointsSpent || 0) + item.cost;
-
-      const updatedDailyData = {
-        ...prev,
-        [todayStr]: {
-          ...todayData,
-          purchases: updatedPurchases,
-          totalPointsSpent: newTotalSpent
-        }
-      };
-
-      return updatedDailyData;
-    });
-
-    console.log("🛒 Purchase logged successfully:", purchase);
-    return true;
+    return success;
   } catch (error) {
     console.error("❌ Error during purchase:", error);
     alert("An error occurred during purchase. Please try again.");
