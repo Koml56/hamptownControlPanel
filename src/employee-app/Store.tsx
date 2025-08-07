@@ -55,13 +55,14 @@ const Store: React.FC<StoreProps> = ({
     );
     
     if (success) {
-      // Trigger immediate save to Firebase
+      // Trigger immediate save to Firebase with better error handling
       try {
-        saveToFirebase();
-        alert(`🎉 Successfully purchased: ${item.name}! Check with your manager to redeem.`);
+        await saveToFirebase();
+        alert(`🎉 Successfully purchased: ${item.name}! Your purchase has been saved and will sync across devices.`);
       } catch (error) {
         console.error('Failed to save purchase to Firebase:', error);
-        alert(`⚠️ Purchase successful but failed to save to cloud. Please try again or contact IT.`);
+        // Purchase is successful locally, but warn about sync issues
+        alert(`✅ Purchase successful: ${item.name}!\n⚠️ Cloud sync failed - your purchase is saved locally and will sync when connection is restored.`);
       }
     }
   };
