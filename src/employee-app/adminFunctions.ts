@@ -1,18 +1,6 @@
 // adminFunctions.ts
 import { ADMIN_PASSWORD } from './constants';
 import type { Employee, Task, ActiveTab } from './types';
-import {
-  addTaskOperation,
-  updateTaskOperation,
-  deleteTaskOperation,
-  applyTaskOperation
-} from './taskOperations';
-import {
-  addEmployeeOperation,
-  updateEmployeeOperation,
-  deleteEmployeeOperation,
-  applyEmployeeOperation
-} from './employeeOperations';
 
 export const handleAdminLogin = (
   password: string,
@@ -38,7 +26,8 @@ export const addEmployee = (
   employees: Employee[],
   setEmployees: (updater: (prev: Employee[]) => Employee[]) => void,
   setNewEmployeeName: (name: string) => void,
-  setNewEmployeeRole: (role: string) => void
+  setNewEmployeeRole: (role: string) => void,
+  quickSave: (field: string, data: any) => Promise<any>
 ) => {
   if (name.trim()) {
     const newEmployee: Employee = {
@@ -50,11 +39,11 @@ export const addEmployee = (
       lastMoodDate: null,
       points: 0
     };
-    const op = addEmployeeOperation(employees, newEmployee);
-    // if (navigator.onLine) {
-    //   try { wsManagerEmp.sendOperation(op, 'normal'); } catch { offlineQueue.enqueue(op); }
-    // } else { offlineQueue.enqueue(op); }
-    setEmployees(prev => applyEmployeeOperation(prev, op));
+    setEmployees(prev => {
+      const updated = [...prev, newEmployee];
+      quickSave('employees', updated);
+      return updated;
+    });
     setNewEmployeeName('');
     setNewEmployeeRole('Cleaner');
   }
@@ -62,15 +51,14 @@ export const addEmployee = (
 
 export const removeEmployee = (
   id: number,
-  setEmployees: (updater: (prev: Employee[]) => Employee[]) => void
+  setEmployees: (updater: (prev: Employee[]) => Employee[]) => void,
+  quickSave: (field: string, data: any) => Promise<any>
 ) => {
   if (window.confirm('Are you sure you want to remove this employee?')) {
     setEmployees(prev => {
-      const op = deleteEmployeeOperation(prev, id);
-      // if (navigator.onLine) {
-      //   try { wsManagerEmp.sendOperation(op, 'normal'); } catch { offlineQueue.enqueue(op); }
-      // } else { offlineQueue.enqueue(op); }
-      return applyEmployeeOperation(prev, op);
+      const updated = prev.filter(emp => emp.id !== id);
+      quickSave('employees', updated);
+      return updated;
     });
   }
 };
@@ -79,14 +67,13 @@ export const updateEmployee = (
   id: number,
   field: keyof Employee,
   value: string,
-  setEmployees: (updater: (prev: Employee[]) => Employee[]) => void
+  setEmployees: (updater: (prev: Employee[]) => Employee[]) => void,
+  quickSave: (field: string, data: any) => Promise<any>
 ) => {
   setEmployees(prev => {
-    const op = updateEmployeeOperation(prev, id, field, value);
-    // if (navigator.onLine) {
-    //   try { wsManagerEmp.sendOperation(op, 'normal'); } catch { offlineQueue.enqueue(op); }
-    // } else { offlineQueue.enqueue(op); }
-    return applyEmployeeOperation(prev, op);
+    const updated = prev.map(emp => emp.id === id ? { ...emp, [field]: value } : emp);
+    quickSave('employees', updated);
+    return updated;
   });
 };
 
@@ -94,7 +81,8 @@ export const updateEmployee = (
 export const addTask = (
   tasks: Task[],
   setTasks: (updater: (prev: Task[]) => Task[]) => void,
-  setEditingTask: (id: number) => void
+  setEditingTask: (id: number) => void,
+  quickSave: (field: string, data: any) => Promise<any>
 ) => {
   const newTask: Task = {
     id: Math.max(...tasks.map(t => t.id), 0) + 1,
@@ -102,11 +90,13 @@ export const addTask = (
     location: 'Location',
     priority: 'medium',
     estimatedTime: '30 min',
-    points: 5 // Added points property
+    points: 5
   };
-  const op = addTaskOperation(tasks, newTask);
-  // sendTaskOperationWithOffline(op, 'normal');
-  setTasks(prev => applyTaskOperation(prev, op));
+  setTasks(prev => {
+    const updated = [...prev, newTask];
+    quickSave('tasks', updated);
+    return updated;
+  });
   setEditingTask(newTask.id);
 };
 
@@ -114,24 +104,26 @@ export const updateTask = (
   id: number,
   field: keyof Task,
   value: string,
-  setTasks: (updater: (prev: Task[]) => Task[]) => void
+  setTasks: (updater: (prev: Task[]) => Task[]) => void,
+  quickSave: (field: string, data: any) => Promise<any>
 ) => {
   setTasks(prev => {
-    const op = updateTaskOperation(prev, id, field, value);
-    // sendTaskOperationWithOffline(op, 'normal');
-    return applyTaskOperation(prev, op);
+    const updated = prev.map(task => task.id === id ? { ...task, [field]: value } : task);
+    quickSave('tasks', updated);
+    return updated;
   });
 };
 
 export const removeTask = (
   id: number,
-  setTasks: (updater: (prev: Task[]) => Task[]) => void
+  setTasks: (updater: (prev: Task[]) => Task[]) => void,
+  quickSave: (field: string, data: any) => Promise<any>
 ) => {
   if (window.confirm('Are you sure you want to remove this task?')) {
     setTasks(prev => {
-      const op = deleteTaskOperation(prev, id);
-      // sendTaskOperationWithOffline(op, 'normal');
-      return applyTaskOperation(prev, op);
+      const updated = prev.filter(task => task.id !== id);
+      quickSave('tasks', updated);
+      return updated;
     });
   }
 };
@@ -141,10 +133,15 @@ export const addCustomRole = (
   roleName: string,
   customRoles: string[],
   setCustomRoles: (updater: (prev: string[]) => string[]) => void,
-  setNewRoleName: (name: string) => void
+  setNewRoleName: (name: string) => void,
+  quickSave: (field: string, data: any) => Promise<any>
 ) => {
   if (roleName.trim() && !customRoles.includes(roleName.trim())) {
-    setCustomRoles(prev => [...prev, roleName.trim()]);
+    setCustomRoles(prev => {
+      const updated = [...prev, roleName.trim()];
+      quickSave('customRoles', updated);
+      return updated;
+    });
     setNewRoleName('');
   }
 };
@@ -152,7 +149,8 @@ export const addCustomRole = (
 export const removeCustomRole = (
   roleName: string,
   employees: Employee[],
-  setCustomRoles: (updater: (prev: string[]) => string[]) => void
+  setCustomRoles: (updater: (prev: string[]) => string[]) => void,
+  quickSave: (field: string, data: any) => Promise<any>
 ) => {
   // Don't allow removing if employees are using this role
   const employeesWithRole = employees.filter(emp => emp.role === roleName);
@@ -162,7 +160,11 @@ export const removeCustomRole = (
   }
   
   if (window.confirm(`Are you sure you want to remove the role "${roleName}"?`)) {
-    setCustomRoles(prev => prev.filter(role => role !== roleName));
+    setCustomRoles(prev => {
+      const updated = prev.filter(role => role !== roleName);
+      quickSave('customRoles', updated);
+      return updated;
+    });
   }
 };
 

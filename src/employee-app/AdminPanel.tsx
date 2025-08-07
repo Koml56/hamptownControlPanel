@@ -13,7 +13,7 @@ import {
   updateStoreItem,
   deleteStoreItem
 } from './adminFunctions';
-import type { Employee, Task, StoreItem, PrepItem, Recipe, AdminPanelProps } from './types';
+import type { Task, StoreItem, PrepItem, Recipe, AdminPanelProps } from './types';
 import debounce from 'lodash/debounce';
 
 const AdminPanel: React.FC<AdminPanelProps> = ({
@@ -32,6 +32,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const [showRoleManagement, setShowRoleManagement] = useState(false);
   const [showStoreManagement, setShowStoreManagement] = useState(false);
   const [showPrepManagement, setShowPrepManagement] = useState(false);
+  const [showEmployeeManagement, setShowEmployeeManagement] = useState(false);
   const [newEmployeeName, setNewEmployeeName] = useState('');
   const [newEmployeeRole, setNewEmployeeRole] = useState('Cleaner');
   const [newRoleName, setNewRoleName] = useState('');
@@ -72,7 +73,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
       employees,
       setEmployees,
       setNewEmployeeName,
-      setNewEmployeeRole
+      setNewEmployeeRole,
+      quickSave
     );
   };
 
@@ -95,7 +97,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   const handleAddRole = () => {
-    addCustomRole(newRoleName, customRoles, setCustomRoles, setNewRoleName);
+    addCustomRole(newRoleName, customRoles, setCustomRoles, setNewRoleName, quickSave);
   };
 
   // Store management functions
@@ -224,15 +226,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const [localTaskEdits, setLocalTaskEdits] = useState<Record<number, Partial<Task>>>({});
 
-  const debouncedUpdateTask = React.useCallback(
-    debounce((id: number, field: keyof Task, value: string) => {
-      updateTask(id, field, value, setTasks);
-      setLocalTaskEdits(prev => {
-        const { [id]: removed, ...rest } = prev;
-        return rest;
-      });
-    }, 800),
-    [setTasks]
+  const handleTaskUpdate = React.useCallback((id: number, field: keyof Task, value: string) => {
+    updateTask(id, field, value, setTasks, quickSave);
+    setLocalTaskEdits(prev => {
+      const { [id]: removed, ...rest } = prev;
+      return rest;
+    });
+  }, [setTasks, quickSave]);
+
+  const debouncedUpdateTask = React.useMemo(
+    () => debounce(handleTaskUpdate, 800),
+    [handleTaskUpdate]
   );
 
   const handleTaskInputChange = (id: number, field: keyof Task, value: string) => {
@@ -253,11 +257,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleSaveTaskDraft = (id: number) => {
     const draft = taskDrafts.find(t => t.id === id);
     if (!draft) return;
-    setTasks(prev => [...prev, draft]);
+    setTasks(prev => {
+      const updated = [...prev, draft];
+      quickSave('tasks', updated);
+      return updated;
+    });
     setTaskDrafts(drafts => drafts.filter(t => t.id !== id));
     setEditingTask(null);
-    // Do NOT call updateTask multiple times here!
-    // If you want to trigger a sync, call updateTask ONCE or rely on setTasks + Firebase listener
   };
 
   // --- Cancel Draft: Remove from drafts ---
@@ -316,7 +322,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                 <div key={role} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <span className="font-medium text-gray-700">{role}</span>
                   <button
-                    onClick={() => removeCustomRole(role, employees, setCustomRoles)}
+                    onClick={() => removeCustomRole(role, employees, setCustomRoles, quickSave)}
                     className="p-1 text-red-600 hover:text-red-800"
                     title="Remove role"
                   >
@@ -905,129 +911,145 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
       </div>
 
       {/* Employee Management */}
-      <div className="bg-white rounded-xl shadow-sm p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-          <Users className="w-5 h-5 mr-2" />
-          Employee Management
-        </h3>
-        
-        {/* Add Employee */}
-        <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-          <h4 className="font-medium text-gray-700 mb-3">Add New Employee</h4>
-          <div className="flex items-center space-x-2">
-            <input
-              type="text"
-              placeholder="Employee name"
-              value={newEmployeeName}
-              onChange={(e) => setNewEmployeeName(e.target.value)}
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-            />
-            <select
-              value={newEmployeeRole}
-              onChange={(e) => setNewEmployeeRole(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-            >
-              {customRoles.map(role => (
-                <option key={role} value={role}>{role}</option>
-              ))}
-            </select>
-            <button
-              onClick={handleAddEmployee}
-              className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center"
-            >
-              <UserPlus className="w-4 h-4" />
-            </button>
+      <div className={`bg-white rounded-xl shadow-sm mb-6 ${showEmployeeManagement ? 'p-6' : 'p-2'}`}>
+        <button
+          onClick={() => setShowEmployeeManagement(!showEmployeeManagement)}
+          className={`w-full flex items-center justify-between hover:text-gray-600 ${
+            showEmployeeManagement 
+              ? 'text-lg font-semibold text-gray-800 mb-4' 
+              : 'text-sm font-medium text-gray-700 py-1'
+          }`}
+        >
+          <div className="flex items-center">
+            <Users className={`mr-2 ${showEmployeeManagement ? 'w-5 h-5' : 'w-4 h-4'}`} />
+            Employee Management
           </div>
-        </div>
+          <span className={`transition-transform ${showEmployeeManagement ? 'text-xl rotate-180' : 'text-sm'}`}>
+            ▼
+          </span>
+        </button>
+        
+        {showEmployeeManagement && (
+          <>
+            {/* Add Employee */}
+            <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+              <h4 className="font-medium text-gray-700 mb-3">Add New Employee</h4>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="text"
+                  placeholder="Employee name"
+                  value={newEmployeeName}
+                  onChange={(e) => setNewEmployeeName(e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+                <select
+                  value={newEmployeeRole}
+                  onChange={(e) => setNewEmployeeRole(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  {customRoles.map(role => (
+                    <option key={role} value={role}>{role}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={handleAddEmployee}
+                  className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center"
+                >
+                  <UserPlus className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
 
-        {/* Employee Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-gray-50">
-                <th className="border border-gray-200 px-4 py-2 text-left">Name</th>
-                <th className="border border-gray-200 px-4 py-2 text-left">Role</th>
-                <th className="border border-gray-200 px-4 py-2 text-left">Points</th>
-                <th className="border border-gray-200 px-4 py-2 text-left">Mood</th>
-                <th className="border border-gray-200 px-4 py-2 text-left">Last Updated</th>
-                <th className="border border-gray-200 px-4 py-2 text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {employees.map(emp => (
-                <tr key={emp.id} className="hover:bg-gray-50">
-                  <td className="border border-gray-200 px-4 py-2">
-                    {editingEmployee === emp.id ? (
-                      <input
-                        type="text"
-                        value={emp.name}
-                        onChange={(e) => updateEmployee(emp.id, 'name', e.target.value, setEmployees)}
-                        className="w-full px-2 py-1 border rounded"
-                      />
-                    ) : (
-                      emp.name
-                    )}
-                  </td>
-                  <td className="border border-gray-200 px-4 py-2">
-                    {editingEmployee === emp.id ? (
-                      <select
-                        value={emp.role}
-                        onChange={(e) => updateEmployee(emp.id, 'role', e.target.value, setEmployees)}
-                        className="w-full px-2 py-1 border rounded"
-                      >
-                        {customRoles.map(role => (
-                          <option key={role} value={role}>{role}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      emp.role
-                    )}
-                  </td>
-                  <td className="border border-gray-200 px-4 py-2">
-                    <div className="flex items-center">
-                      <Star className="w-3 h-3 text-purple-500 mr-1" />
-                      <span className="font-medium text-purple-600">{emp.points}</span>
-                    </div>
-                  </td>
-                  <td className="border border-gray-200 px-4 py-2">
-                    <div className="flex items-center">
-                      <div className={`w-3 h-3 rounded-full mr-2 ${getMoodColor(emp.mood)}`} />
-                      {emp.mood}/5
-                    </div>
-                  </td>
-                  <td className="border border-gray-200 px-4 py-2 text-sm text-gray-600">
-                    {emp.lastUpdated}
-                  </td>
-                  <td className="border border-gray-200 px-4 py-2">
-                    <div className="flex gap-2 justify-center">
-                      {editingEmployee === emp.id ? (
-                        <button
-                          onClick={() => setEditingEmployee(null)}
-                          className="p-1 text-green-600 hover:text-green-800"
-                        >
-                          <Save className="w-4 h-4" />
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => setEditingEmployee(emp.id)}
-                          className="p-1 text-blue-600 hover:text-blue-800"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
-                      )}
-                      <button
-                        onClick={() => removeEmployee(emp.id, setEmployees)}
-                        className="p-1 text-red-600 hover:text-red-800"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            {/* Employee Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="bg-gray-50">
+                    <th className="border border-gray-200 px-4 py-2 text-left">Name</th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">Role</th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">Points</th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">Mood</th>
+                    <th className="border border-gray-200 px-4 py-2 text-left">Last Updated</th>
+                    <th className="border border-gray-200 px-4 py-2 text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {employees.map(emp => (
+                    <tr key={emp.id} className="hover:bg-gray-50">
+                      <td className="border border-gray-200 px-4 py-2">
+                        {editingEmployee === emp.id ? (
+                          <input
+                            type="text"
+                            value={emp.name}
+                            onChange={(e) => updateEmployee(emp.id, 'name', e.target.value, setEmployees, quickSave)}
+                            className="w-full px-2 py-1 border rounded"
+                          />
+                        ) : (
+                          emp.name
+                        )}
+                      </td>
+                      <td className="border border-gray-200 px-4 py-2">
+                        {editingEmployee === emp.id ? (
+                          <select
+                            value={emp.role}
+                            onChange={(e) => updateEmployee(emp.id, 'role', e.target.value, setEmployees, quickSave)}
+                            className="w-full px-2 py-1 border rounded"
+                          >
+                            {customRoles.map(role => (
+                              <option key={role} value={role}>{role}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          emp.role
+                        )}
+                      </td>
+                      <td className="border border-gray-200 px-4 py-2">
+                        <div className="flex items-center">
+                          <Star className="w-3 h-3 text-purple-500 mr-1" />
+                          <span className="font-medium text-purple-600">{emp.points}</span>
+                        </div>
+                      </td>
+                      <td className="border border-gray-200 px-4 py-2">
+                        <div className="flex items-center">
+                          <div className={`w-3 h-3 rounded-full mr-2 ${getMoodColor(emp.mood)}`} />
+                          {emp.mood}/5
+                        </div>
+                      </td>
+                      <td className="border border-gray-200 px-4 py-2 text-sm text-gray-600">
+                        {emp.lastUpdated}
+                      </td>
+                      <td className="border border-gray-200 px-4 py-2">
+                        <div className="flex gap-2 justify-center">
+                          {editingEmployee === emp.id ? (
+                            <button
+                              onClick={() => setEditingEmployee(null)}
+                              className="p-1 text-green-600 hover:text-green-800"
+                            >
+                              <Save className="w-4 h-4" />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => setEditingEmployee(emp.id)}
+                              className="p-1 text-blue-600 hover:text-blue-800"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => removeEmployee(emp.id, setEmployees, quickSave)}
+                            className="p-1 text-red-600 hover:text-red-800"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Task Management */}
@@ -1157,7 +1179,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                     {editingTask === task.id ? (
                       <select
                         value={task.priority}
-                        onChange={(e) => updateTask(task.id, 'priority', e.target.value, setTasks)}
+                        onChange={(e) => updateTask(task.id, 'priority', e.target.value, setTasks, quickSave)}
                         className="w-full px-2 py-1 border rounded"
                       >
                         <option value="low">Low</option>
@@ -1181,7 +1203,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                         min="1"
                         max="100"
                         value={task.points}
-                        onChange={(e) => updateTask(task.id, 'points', e.target.value, setTasks)}
+                        onChange={(e) => updateTask(task.id, 'points', e.target.value, setTasks, quickSave)}
                         className="w-full px-2 py-1 border rounded"
                       />
                     ) : (
@@ -1221,7 +1243,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                         </button>
                       )}
                       <button
-                        onClick={() => removeTask(task.id, setTasks)}
+                        onClick={() => removeTask(task.id, setTasks, quickSave)}
                         className="p-1 text-red-600 hover:text-red-800"
                         title="Delete Task"
                       >
