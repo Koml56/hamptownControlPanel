@@ -8,10 +8,7 @@ import {
   updateTask,
   removeTask,
   addCustomRole,
-  removeCustomRole,
-  addStoreItem,
-  updateStoreItem,
-  deleteStoreItem
+  removeCustomRole
 } from './adminFunctions';
 import type { Task, StoreItem, PrepItem, Recipe, AdminPanelProps } from './types';
 import debounce from 'lodash/debounce';
@@ -112,7 +109,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
         icon: newItemIcon,
         available: true
       };
-      addStoreItem(storeItems, setStoreItems, newItem);
+      setStoreItems(prev => {
+        const updated = [...prev, newItem];
+        quickSave('storeItems', updated);
+        return updated;
+      });
       setNewItemName('');
       setNewItemDescription('');
       setNewItemCost('');
@@ -122,11 +123,21 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   const handleUpdateStoreItem = (id: number, field: keyof StoreItem, value: any) => {
-    updateStoreItem(storeItems, id, field, value, setStoreItems);
+    setStoreItems(prev => {
+      const updated = prev.map(item => item.id === id ? { ...item, [field]: value } : item);
+      quickSave('storeItems', updated);
+      return updated;
+    });
   };
 
   const handleRemoveStoreItem = (id: number) => {
-    deleteStoreItem(storeItems, id, setStoreItems);
+    if (window.confirm('Are you sure you want to delete this store item?')) {
+      setStoreItems(prev => {
+        const updated = prev.filter(item => item.id !== id);
+        quickSave('storeItems', updated);
+        return updated;
+      });
+    }
   };
 
   // --- Prep management functions ---

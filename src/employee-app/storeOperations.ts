@@ -1,5 +1,5 @@
 // storeOperations.ts
-// Операційний CRUD для storeItems через OperationManager
+// Store items CRUD operations with proper Firebase sync and multi-device support
 import { OperationManager, SyncOperation } from './OperationManager';
 import { StoreItem } from './types';
 import { offlineQueue } from './taskOperations';
@@ -16,7 +16,7 @@ const DEVICE_ID = (() => {
 const opManager = new OperationManager(DEVICE_ID);
 
 export function addStoreItem(storeItems: StoreItem[], setStoreItems: (updater: (prev: StoreItem[]) => StoreItem[]) => void, newItem: StoreItem) {
-  const op = opManager.createOperation('ADD_TASK', newItem, 'storeItems');
+  const op = opManager.createOperation('ADD_STORE_ITEM', newItem, 'storeItems');
   offlineQueue.enqueue(op);
   setStoreItems(prev => applyStoreItemOperation(prev, op));
 }
@@ -25,7 +25,7 @@ export function updateStoreItem(storeItems: StoreItem[], id: number, field: keyo
   const oldItem = storeItems.find(i => i.id === id);
   if (!oldItem) throw new Error('StoreItem not found');
   const updatedItem = { ...oldItem, [field]: value };
-  const op = opManager.createOperation('ADD_TASK', updatedItem, 'storeItems');
+  const op = opManager.createOperation('UPDATE_STORE_ITEM', updatedItem, 'storeItems');
   offlineQueue.enqueue(op);
   setStoreItems(prev => applyStoreItemOperation(prev, op));
 }
@@ -33,7 +33,7 @@ export function updateStoreItem(storeItems: StoreItem[], id: number, field: keyo
 export function deleteStoreItem(storeItems: StoreItem[], id: number, setStoreItems: (updater: (prev: StoreItem[]) => StoreItem[]) => void) {
   const oldItem = storeItems.find(i => i.id === id);
   if (!oldItem) throw new Error('StoreItem not found');
-  const op = opManager.createOperation('DELETE_ITEM', oldItem, 'storeItems');
+  const op = opManager.createOperation('DELETE_STORE_ITEM', oldItem, 'storeItems');
   offlineQueue.enqueue(op);
   setStoreItems(prev => applyStoreItemOperation(prev, op));
 }

@@ -4,7 +4,7 @@ import { VectorClock } from './VectorClock';
 
 export interface SyncOperation {
   id: string;
-  type: 'ADD_TASK' | 'UPDATE_EMPLOYEE' | 'COMPLETE_TASK' | 'DELETE_ITEM';
+  type: 'ADD_TASK' | 'UPDATE_EMPLOYEE' | 'COMPLETE_TASK' | 'DELETE_ITEM' | 'ADD_STORE_ITEM' | 'UPDATE_STORE_ITEM' | 'DELETE_STORE_ITEM';
   payload: any;
   timestamp: number;
   deviceId: string;
@@ -61,7 +61,28 @@ export class OperationManager {
           return currentState;
       }
     }
-    // Додаємо підтримку для співробітників
+    // Store items operations
+    if (operation.targetField === 'storeItems') {
+      switch (operation.type) {
+        case 'ADD_STORE_ITEM':
+          return { ...currentState, storeItems: [...currentState.storeItems, operation.payload] };
+        case 'UPDATE_STORE_ITEM':
+          return {
+            ...currentState,
+            storeItems: currentState.storeItems.map((item: any) =>
+              item.id === operation.payload.id ? { ...item, ...operation.payload } : item
+            ),
+          };
+        case 'DELETE_STORE_ITEM':
+          return {
+            ...currentState,
+            storeItems: currentState.storeItems.filter((item: any) => item.id !== operation.payload.id),
+          };
+        default:
+          return currentState;
+      }
+    }
+    // Employee operations
     if (operation.targetField === 'employees') {
       switch (operation.type) {
         case 'UPDATE_EMPLOYEE':
@@ -106,7 +127,7 @@ export class OperationManager {
   }
 
   rollbackOperations(operations: SyncOperation[], currentState: any): any {
-    // Для прикладу: просто видаляємо застосовані операції
+    // For example: just remove applied operations
     let state = { ...currentState };
     for (const op of operations) {
       if (op.targetField === 'tasks') {
@@ -121,6 +142,20 @@ export class OperationManager {
             break;
           case 'DELETE_ITEM':
             state.tasks = [...state.tasks, op.payload];
+            break;
+        }
+      }
+      if (op.targetField === 'storeItems') {
+        switch (op.type) {
+          case 'ADD_STORE_ITEM':
+            state.storeItems = state.storeItems.filter((item: any) => item.id !== op.payload.id);
+            break;
+          case 'UPDATE_STORE_ITEM':
+            // For rollback, we'd need to store the previous state, but for simplicity, skip complex rollback
+            console.warn('Store item update rollback not fully implemented');
+            break;
+          case 'DELETE_STORE_ITEM':
+            state.storeItems = [...state.storeItems, op.payload];
             break;
         }
       }

@@ -1,5 +1,5 @@
 // Store.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { ShoppingCart, Trophy, Clock, Gift, Users, Coffee, Star, History } from 'lucide-react';
 import { purchaseItem, canAffordItem, getEmployeePoints, getEmployeePurchaseHistory, getLeaderboard } from './storeFunctions';
 import type { Employee, StoreItem, DailyDataMap, CurrentUser, Purchase } from './types';
