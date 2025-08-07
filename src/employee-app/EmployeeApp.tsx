@@ -319,7 +319,7 @@ const EmployeeApp: React.FC = () => {
 
   // Check for daily reset notification when switching to cleaning tasks tab
   useEffect(() => {
-    if (activeTab === 'tasks' && !isLoading && connectionStatus === 'connected') {
+    if (activeTab === 'tasks') {
       const checkDailyResetOnTabSwitch = () => {
         const lastNotificationDate = localStorage.getItem('lastDailyResetNotification');
         const lastResetDate = localStorage.getItem('lastTaskResetDate');
@@ -355,7 +355,7 @@ const EmployeeApp: React.FC = () => {
       const timer = setTimeout(checkDailyResetOnTabSwitch, 500);
       return () => clearTimeout(timer);
     }
-  }, [activeTab, isLoading, connectionStatus, completedTasks.size, taskAssignments]);
+  }, [activeTab, completedTasks.size, taskAssignments]);
 
   // Update user mood when current user changes
   useEffect(() => {
