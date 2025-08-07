@@ -158,6 +158,7 @@ const RestaurantInventory: React.FC<InventoryTabProps> = ({
 }) => {
   return (
     <InventoryProvider
+      currentUser={currentUser}
       employees={employees}
       inventoryDailyItems={inventoryDailyItems}
       inventoryWeeklyItems={inventoryWeeklyItems}

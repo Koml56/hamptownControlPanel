@@ -325,6 +325,20 @@ const EmployeeApp: React.FC = () => {
     }
   }, [currentUser.id, employees]);
 
+  // Restore current user from localStorage when employees are loaded
+  useEffect(() => {
+    if (employees.length > 0) {
+      const savedUserName = localStorage.getItem('currentUserName');
+      if (savedUserName) {
+        const savedEmployee = employees.find(emp => emp.name === savedUserName);
+        if (savedEmployee && savedEmployee.id !== currentUser.id) {
+          // Restore the saved user
+          switchUser(savedEmployee);
+        }
+      }
+    }
+  }, [employees, currentUser.id, switchUser]);
+
   // Sync Firebase store items with local state
   useEffect(() => {
     if (firebaseStoreItems && firebaseStoreItems.length > 0) {
