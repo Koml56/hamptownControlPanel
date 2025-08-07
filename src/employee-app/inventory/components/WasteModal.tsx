@@ -91,6 +91,8 @@ const WasteModal: React.FC<WasteModalProps> = ({ frequency, selectedItemId, onCl
     setSelectedEmployeeName(employeeName);
   };
 
+  const selectedItemData = items.find(i => i.id.toString() === selectedItem);
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
@@ -119,16 +121,23 @@ const WasteModal: React.FC<WasteModalProps> = ({ frequency, selectedItemId, onCl
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Waste Amount</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Waste Amount {selectedItemData?.box ? '(boxes)' : ''}
+            </label>
             <input 
               type="number" 
               min="0" 
-              step="0.1" 
-              placeholder="Enter waste amount"
+              step={selectedItemData?.box ? "0.1" : "1"}
+              placeholder={selectedItemData?.box ? "e.g., 0.5" : "Enter waste amount"}
               value={wasteAmount}
               onChange={(e) => setWasteAmount(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
             />
+            {selectedItemData?.box && (
+              <div className="mt-1 text-xs text-gray-500">
+                This item uses fractional quantities (e.g., 0.5, 1.5, 2.5 boxes)
+              </div>
+            )}
           </div>
           
           <div>

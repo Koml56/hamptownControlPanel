@@ -114,13 +114,21 @@ const CountModal: React.FC<CountModalProps> = ({ frequency, selectedItemId, onCl
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Current Count</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Current Count {selectedItemData?.box ? '(boxes)' : ''}
+            </label>
             <ScrollPicker
               value={currentCount}
               onChange={setCurrentCount}
               min={0}
               max={Math.max(100, (selectedItemData?.currentStock || 0) + 20)}
+              step={selectedItemData?.box ? 0.1 : 1}
             />
+            {selectedItemData?.box && (
+              <div className="mt-2 text-xs text-gray-500 text-center">
+                This item uses fractional quantities (e.g., 0.5, 1.5, 2.5 boxes)
+              </div>
+            )}
           </div>
           
           <div className="relative">

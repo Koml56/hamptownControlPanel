@@ -59,7 +59,7 @@ export interface InventoryContextType {
   reportWaste: (itemId: number | string, amount: number, reason: WasteReason, frequency: InventoryFrequency, employee: string, notes?: string) => void;
   importFromExcel: (data: any[]) => void;
   addManualItem: (item: Omit<DatabaseItem, 'id' | 'frequency'>) => void;
-  assignToCategory: (itemIds: (number | string)[], frequency: InventoryFrequency, category: InventoryCategory | string, minLevel: number, initialStock: number) => void;
+  assignToCategory: (itemIds: (number | string)[], frequency: InventoryFrequency, category: InventoryCategory | string, minLevel: number, initialStock: number, box?: boolean) => void;
   unassignFromCategory: (itemId: number | string) => void;
   cleanupDuplicates: () => void;
   deleteItems: (itemIds: (number | string)[]) => void;

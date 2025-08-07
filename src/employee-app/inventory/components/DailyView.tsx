@@ -164,7 +164,7 @@ const DailyView: React.FC = () => {
                       <div>
                         <div className="font-medium text-gray-800">{typeText}: {activity.item}</div>
                         <div className="text-sm text-gray-600">
-                          {activity.employee} • {activity.timestamp}
+                          {activity.employee} • {new Date(activity.timestamp).toLocaleString()}
                           {activity.notes && ` • ${activity.notes}`}
                           {activity.reason && ` (${activity.reason})`}
                         </div>

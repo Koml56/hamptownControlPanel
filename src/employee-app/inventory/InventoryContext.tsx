@@ -108,7 +108,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     const newEntry: ActivityLogEntry = {
       ...entry,
       id: generateId(),
-      timestamp: new Date().toLocaleString()
+      timestamp: new Date().toISOString() // Use ISO string for consistent parsing
     };
     const updatedLog = [newEntry, ...activityLog];
     setInventoryActivityLog(updatedLog);
@@ -281,7 +281,8 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     frequency: InventoryFrequency,
     category: InventoryCategory | string,
     minLevel: number,
-    initialStock: number
+    initialStock: number,
+    box: boolean = false
   ) => {
     const selectedItemsData = databaseItems.filter(item => itemIds.includes(item.id));
     
@@ -318,7 +319,8 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
                       category: category,
                       minLevel: minLevel,
                       currentStock: initialStock,
-                      lastUsed: new Date().toISOString().split('T')[0]
+                      lastUsed: new Date().toISOString().split('T')[0],
+                      box: box
                     }
                   : item
               );
@@ -341,7 +343,8 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
             lastUsed: new Date().toISOString().split('T')[0],
             cost: dbItem.cost || 0,
             ean: dbItem.ean || '',
-            databaseId: dbItem.id
+            databaseId: dbItem.id,
+            box: box
           };
           newItemsToAdd.push(newInventoryItem);
         }
@@ -357,7 +360,8 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
           lastUsed: new Date().toISOString().split('T')[0],
           cost: dbItem.cost || 0,
           ean: dbItem.ean || '',
-          databaseId: dbItem.id
+          databaseId: dbItem.id,
+          box: box
         };
         newItemsToAdd.push(newInventoryItem);
       }
@@ -385,7 +389,8 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
             isAssigned: true,
             assignedTo: frequency,
             assignedCategory: category,
-            assignedDate: new Date().toISOString().split('T')[0]
+            assignedDate: new Date().toISOString().split('T')[0],
+            box: box
           }
         : item
     );

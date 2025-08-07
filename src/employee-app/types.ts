@@ -155,8 +155,8 @@ export interface InventoryItem {
   id: number | string;
   name: string;
   category: InventoryCategory | string;
-  currentStock: number;
-  minLevel: number;
+  currentStock: number; // Now supports decimal values when box=true
+  minLevel: number; // Also supports decimal values when box=true
   optimalLevel?: number; // Optional for backward compatibility, default to 2x minimum
   unit: string;
   lastUsed: string;
@@ -172,6 +172,7 @@ export interface InventoryItem {
     orderedQuantity?: number;
     expectedDelivery?: Date;
   };
+  box?: boolean; // Whether this item is measured in boxes (allows fractional quantities like 0.5, 1.5, etc.)
 }
 
 export interface DatabaseItem {
@@ -188,6 +189,7 @@ export interface DatabaseItem {
   assignedCategory?: InventoryCategory | string; // Which category it's assigned to
   assignedDate?: string; // When it was assigned
   isAssigned?: boolean; // Whether it's currently assigned to any inventory list
+  box?: boolean; // Whether this item is measured in boxes (allows fractional quantities like 0.5, 1.5, etc.)
 }
 
 export interface ActivityLogEntry {
