@@ -7,12 +7,14 @@ import type {
   DatabaseItem,
   ActivityLogEntry,
   WasteReason,
-  CustomCategory
+  CustomCategory,
+  Employee
 } from '../types';
 
 export interface InventoryTabProps {
   currentUser: any;
   connectionStatus: string;
+  employees: Employee[];
   // Firebase props
   inventoryDailyItems: InventoryItem[];
   inventoryWeeklyItems: InventoryItem[];
@@ -37,6 +39,7 @@ export interface InventoryContextType {
   databaseItems: DatabaseItem[];
   activityLog: ActivityLogEntry[];
   customCategories: CustomCategory[];
+  employees: Employee[];
   selectedItems: Set<number | string>;
   
   // UI State
