@@ -133,13 +133,56 @@ export const handleStockUpdate = (
 };
 
 /**
- * Mark items as ordered
+ * Calculate the next realistic delivery date based on Monday/Wednesday/Friday schedule
+ */
+export const getNextDeliveryDate = (orderDate: Date = new Date()): Date => {
+  const deliveryDays = [1, 3, 5]; // Monday=1, Wednesday=3, Friday=5
+  const today = new Date(orderDate);
+  const currentDay = today.getDay(); // 0=Sunday, 1=Monday, etc.
+  
+  // Find the next delivery day
+  let nextDeliveryDay = deliveryDays.find(day => day > currentDay);
+  
+  // If no delivery day found this week, use Monday of next week
+  if (!nextDeliveryDay) {
+    nextDeliveryDay = 1; // Monday
+  }
+  
+  // Calculate days to add
+  let daysToAdd = nextDeliveryDay - currentDay;
+  if (daysToAdd <= 0) {
+    daysToAdd += 7; // Next week
+  }
+  
+  const deliveryDate = new Date(today);
+  deliveryDate.setDate(today.getDate() + daysToAdd);
+  
+  return deliveryDate;
+};
+
+/**
+ * Format date for display as "DD.MM DayName"
+ */
+export const formatExpectedDate = (date: Date): string => {
+  const day = date.getDate().toString().padStart(2, '0');
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const dayName = dayNames[date.getDay()];
+  
+  return `${day}.${month} ${dayName}`;
+};
+
+/**
+ * Mark items as ordered with realistic delivery dates
  */
 export const markAsOrdered = (
   items: InventoryItem[],
   itemIds: string[],
   quantities: number[]
 ): InventoryItem[] => {
+  const orderDate = new Date();
+  const expectedDelivery = getNextDeliveryDate(orderDate);
+  
   return items.map(item => {
     const orderIndex = itemIds.indexOf(item.id.toString());
     if (orderIndex === -1) return item;
@@ -148,9 +191,9 @@ export const markAsOrdered = (
       ...item,
       orderedStatus: {
         isOrdered: true,
-        orderedDate: new Date(),
+        orderedDate: orderDate,
         orderedQuantity: quantities[orderIndex],
-        expectedDelivery: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000) // +3 days
+        expectedDelivery: expectedDelivery
       }
     };
   });

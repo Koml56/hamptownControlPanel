@@ -43,7 +43,7 @@ const Store: React.FC<StoreProps> = ({
     ? storeItems 
     : storeItems.filter(item => item.category === activeCategory);
 
-  const handlePurchase = (item: StoreItem) => {
+  const handlePurchase = async (item: StoreItem) => {
     if (!currentEmployee) return;
     
     const success = purchaseItem(
@@ -55,7 +55,14 @@ const Store: React.FC<StoreProps> = ({
     );
     
     if (success) {
-      alert(`🎉 Successfully purchased: ${item.name}! Check with your manager to redeem.`);
+      // Trigger immediate save to Firebase
+      try {
+        saveToFirebase();
+        alert(`🎉 Successfully purchased: ${item.name}! Check with your manager to redeem.`);
+      } catch (error) {
+        console.error('Failed to save purchase to Firebase:', error);
+        alert(`⚠️ Purchase successful but failed to save to cloud. Please try again or contact IT.`);
+      }
     }
   };
 

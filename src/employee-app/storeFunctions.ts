@@ -13,78 +13,83 @@ export const purchaseItem = (
   setEmployees: (updater: (prev: Employee[]) => Employee[]) => void,
   setDailyData: (updater: (prev: DailyDataMap) => DailyDataMap) => void
 ): boolean => {
-  const employee = employees.find(emp => emp.id === employeeId);
+  try {
+    const employee = employees.find(emp => emp.id === employeeId);
 
-  if (!employee) {
-    alert(`Employee with id ${employeeId} not found`);
-    return false;
-  }
+    if (!employee) {
+      alert(`Employee with id ${employeeId} not found`);
+      return false;
+    }
 
-  if (!canAffordItem(employee, item)) {
-    alert(`Insufficient points! You need ${item.cost} points but only have ${employee.points}.`);
-    return false;
-  }
+    if (!canAffordItem(employee, item)) {
+      alert(`Insufficient points! You need ${item.cost} points but only have ${employee.points}.`);
+      return false;
+    }
 
-  const today = new Date();
-  const todayStr = getFormattedDate(today);
-  const now = new Date().toLocaleTimeString('en-US', {
-    hour12: false,
-    hour: '2-digit',
-    minute: '2-digit'
-  });
+    const today = new Date();
+    const todayStr = getFormattedDate(today);
+    const now = new Date().toLocaleTimeString('en-US', {
+      hour12: false,
+      hour: '2-digit',
+      minute: '2-digit'
+    });
 
-  // Обновляем баллы сотрудника
-  setEmployees(prevEmployees =>
-    prevEmployees.map(emp =>
-      emp.id === employeeId ? { ...emp, points: emp.points - item.cost } : emp
-    )
-  );
+    // Update employee points
+    setEmployees(prevEmployees =>
+      prevEmployees.map(emp =>
+        emp.id === employeeId ? { ...emp, points: emp.points - item.cost } : emp
+      )
+    );
 
-  // Создаем запись покупки
-  const purchase: Purchase = {
-    id: Date.now(),
-    employeeId,
-    itemId: item.id,
-    itemName: item.name,
-    cost: item.cost,
-    purchasedAt: now,
-    date: todayStr,
-    status: 'pending'
-  };
-
-  // Обновляем dailyData — иммутабельно!
-  setDailyData(prev => {
-
-    const todayData = prev[todayStr] || {
-      completedTasks: [],
-      employeeMoods: [],
-      purchases: [],
-      totalTasks: 22,
-      completionRate: 0,
-      totalPointsEarned: 0,
-      totalPointsSpent: 0
+    // Create purchase record
+    const purchase: Purchase = {
+      id: Date.now(),
+      employeeId,
+      itemId: item.id,
+      itemName: item.name,
+      cost: item.cost,
+      purchasedAt: now,
+      date: todayStr,
+      status: 'pending'
     };
 
-    const updatedPurchases = Array.isArray(todayData.purchases)
-      ? [...todayData.purchases, purchase]
-      : [purchase];
+    // Update dailyData immutably
+    setDailyData(prev => {
+      const todayData = prev[todayStr] || {
+        completedTasks: [],
+        employeeMoods: [],
+        purchases: [],
+        totalTasks: 22,
+        completionRate: 0,
+        totalPointsEarned: 0,
+        totalPointsSpent: 0
+      };
 
-    const newTotalSpent = (todayData.totalPointsSpent || 0) + item.cost;
+      const updatedPurchases = Array.isArray(todayData.purchases)
+        ? [...todayData.purchases, purchase]
+        : [purchase];
 
-    const updatedDailyData = {
-      ...prev,
-      [todayStr]: {
-        ...todayData,
-        purchases: updatedPurchases,
-        totalPointsSpent: newTotalSpent
-      }
-    };
+      const newTotalSpent = (todayData.totalPointsSpent || 0) + item.cost;
 
-    return updatedDailyData;
-  });
+      const updatedDailyData = {
+        ...prev,
+        [todayStr]: {
+          ...todayData,
+          purchases: updatedPurchases,
+          totalPointsSpent: newTotalSpent
+        }
+      };
 
-  console.log("🛒 Purchase logged:", purchase);
-  return true;
+      return updatedDailyData;
+    });
+
+    console.log("🛒 Purchase logged successfully:", purchase);
+    return true;
+  } catch (error) {
+    console.error("❌ Error during purchase:", error);
+    alert("An error occurred during purchase. Please try again.");
+    return false;
+  }
 };
 
 export const getEmployeePoints = (employeeId: number, employees: Employee[]): number => {
