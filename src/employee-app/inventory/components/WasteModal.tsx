@@ -1,8 +1,9 @@
 // src/employee-app/inventory/components/WasteModal.tsx
 import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, ChevronDown } from 'lucide-react';
 import { useInventory } from '../InventoryContext';
 import { InventoryFrequency, WasteReason } from '../../types';
+import EmployeeSelector, { loadSelectedEmployee, saveSelectedEmployee } from './EmployeeSelector';
 
 interface WasteModalProps {
   frequency: InventoryFrequency;
@@ -11,12 +12,14 @@ interface WasteModalProps {
 }
 
 const WasteModal: React.FC<WasteModalProps> = ({ frequency, selectedItemId, onClose }) => {
-  const { dailyItems, weeklyItems, monthlyItems, reportWaste } = useInventory();
+  const { dailyItems, weeklyItems, monthlyItems, employees, reportWaste } = useInventory();
   const [selectedItem, setSelectedItem] = useState('');
   const [wasteAmount, setWasteAmount] = useState('');
   const [reason, setReason] = useState<WasteReason>('expired');
-  const [employee, setEmployee] = useState('1');
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
+  const [selectedEmployeeName, setSelectedEmployeeName] = useState('');
   const [notes, setNotes] = useState('');
+  const [showEmployeeSelector, setShowEmployeeSelector] = useState(false);
 
   // Get items based on frequency
   const getItems = () => {
@@ -30,6 +33,33 @@ const WasteModal: React.FC<WasteModalProps> = ({ frequency, selectedItemId, onCl
 
   const items = getItems();
 
+  // Load saved employee on component mount
+  useEffect(() => {
+    const savedEmployee = loadSelectedEmployee();
+    if (savedEmployee && employees.length > 0) {
+      // Verify the saved employee still exists in the current employee list
+      const employee = employees.find(emp => emp.id === savedEmployee.id);
+      if (employee) {
+        setSelectedEmployeeId(savedEmployee.id);
+        setSelectedEmployeeName(savedEmployee.name);
+      } else {
+        // If saved employee doesn't exist, default to first employee
+        const firstEmployee = employees[0];
+        if (firstEmployee) {
+          setSelectedEmployeeId(firstEmployee.id);
+          setSelectedEmployeeName(firstEmployee.name);
+          saveSelectedEmployee(firstEmployee.id, firstEmployee.name);
+        }
+      }
+    } else if (employees.length > 0) {
+      // No saved employee, default to first employee
+      const firstEmployee = employees[0];
+      setSelectedEmployeeId(firstEmployee.id);
+      setSelectedEmployeeName(firstEmployee.name);
+      saveSelectedEmployee(firstEmployee.id, firstEmployee.name);
+    }
+  }, [employees]);
+
   useEffect(() => {
     if (selectedItemId) {
       setSelectedItem(selectedItemId.toString());
@@ -38,9 +68,14 @@ const WasteModal: React.FC<WasteModalProps> = ({ frequency, selectedItemId, onCl
 
   const handleSubmit = () => {
     const amount = parseFloat(wasteAmount);
-    
+
     if (!selectedItem || !wasteAmount || amount <= 0) {
       alert('Please select an item and enter a valid waste amount!');
+      return;
+    }
+
+    if (!selectedEmployeeName) {
+      alert('Please select an employee!');
       return;
     }
 
@@ -56,23 +91,21 @@ const WasteModal: React.FC<WasteModalProps> = ({ frequency, selectedItemId, onCl
       return;
     }
 
-    const employeeNames = {
-      '1': 'John Smith',
-      '2': 'Sarah Johnson', 
-      '3': 'Mike Wilson',
-      '4': 'Emily Davis'
-    };
-
     reportWaste(
       selectedItem, 
       amount, 
       reason, 
       frequency, 
-      employeeNames[employee as keyof typeof employeeNames], 
+      selectedEmployeeName, 
       notes
     );
     
     onClose();
+  };
+
+  const handleEmployeeSelect = (employeeId: number, employeeName: string) => {
+    setSelectedEmployeeId(employeeId);
+    setSelectedEmployeeName(employeeName);
   };
 
   return (
@@ -131,18 +164,26 @@ const WasteModal: React.FC<WasteModalProps> = ({ frequency, selectedItemId, onCl
             </select>
           </div>
           
-          <div>
+          <div className="relative">
             <label className="block text-sm font-medium text-gray-700 mb-2">Employee</label>
-            <select 
-              value={employee}
-              onChange={(e) => setEmployee(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+            <button
+              type="button"
+              onClick={() => setShowEmployeeSelector(!showEmployeeSelector)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 flex items-center justify-between text-left"
             >
-              <option value="1">John Smith - Kitchen</option>
-              <option value="2">Sarah Johnson - Prep</option>
-              <option value="3">Mike Wilson - Grill</option>
-              <option value="4">Emily Davis - Pantry</option>
-            </select>
+              <span>
+                {selectedEmployeeName || 'Select Employee'}
+              </span>
+              <ChevronDown className="w-4 h-4 text-gray-400" />
+            </button>
+            
+            <EmployeeSelector
+              employees={employees}
+              selectedEmployeeId={selectedEmployeeId}
+              onEmployeeSelect={handleEmployeeSelect}
+              isOpen={showEmployeeSelector}
+              onClose={() => setShowEmployeeSelector(false)}
+            />
           </div>
           
           <div>

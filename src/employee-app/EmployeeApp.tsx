@@ -980,6 +980,7 @@ const EmployeeApp: React.FC = () => {
           <RestaurantInventory
             currentUser={currentUser}
             connectionStatus={connectionStatus}
+            employees={employees}
             inventoryDailyItems={inventoryDailyItems}
             inventoryWeeklyItems={inventoryWeeklyItems}
             inventoryMonthlyItems={inventoryMonthlyItems}
