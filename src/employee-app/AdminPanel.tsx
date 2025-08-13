@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Users, CheckSquare, Plus, Trash2, Edit3, Save, Settings, UserPlus, Star, ShoppingBag, Package, ChefHat, Clock } from 'lucide-react';
+import { Users, CheckSquare, Plus, Trash2, Edit3, Save, Settings, UserPlus, Star, ChefHat, Clock } from 'lucide-react';
 import { getMoodColor } from './utils';
 import { 
   addEmployee, 
@@ -10,24 +10,21 @@ import {
   addCustomRole,
   removeCustomRole
 } from './adminFunctions';
-import type { Task, StoreItem, PrepItem, Recipe, AdminPanelProps } from './types';
+import type { Task, PrepItem, Recipe, AdminPanelProps } from './types';
 import debounce from 'lodash/debounce';
 
 const AdminPanel: React.FC<AdminPanelProps> = ({
   employees,
   tasks,
   customRoles,
-  storeItems,
   prepItems,
   setEmployees,
   setTasks,
   setCustomRoles,
-  setStoreItems,
   setPrepItems,
   quickSave
 }) => {
   const [showRoleManagement, setShowRoleManagement] = useState(false);
-  const [showStoreManagement, setShowStoreManagement] = useState(false);
   const [showPrepManagement, setShowPrepManagement] = useState(false);
   const [showEmployeeManagement, setShowEmployeeManagement] = useState(false);
   const [newEmployeeName, setNewEmployeeName] = useState('');
@@ -35,17 +32,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const [newRoleName, setNewRoleName] = useState('');
   const [editingEmployee, setEditingEmployee] = useState<number | null>(null);
   const [editingTask, setEditingTask] = useState<number | null>(null);
-  const [editingStoreItem, setEditingStoreItem] = useState<number | string | null>(null);
   const [editingPrepItem, setEditingPrepItem] = useState<number | string | null>(null);
   const [showRecipeEditor, setShowRecipeEditor] = useState<number | string | null>(null);
   
-  // Store item form state
-  const [newItemName, setNewItemName] = useState('');
-  const [newItemDescription, setNewItemDescription] = useState('');
-  const [newItemCost, setNewItemCost] = useState('');
-  const [newItemCategory, setNewItemCategory] = useState<'food' | 'break' | 'reward' | 'social'>('food');
-  const [newItemIcon, setNewItemIcon] = useState('🎁');
-
   // Prep item form state
   const [newPrepName, setNewPrepName] = useState('');
   const [newPrepCategory, setNewPrepCategory] = useState('majoneesit');
@@ -95,49 +84,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const handleAddRole = () => {
     addCustomRole(newRoleName, customRoles, setCustomRoles, setNewRoleName, quickSave);
-  };
-
-  // Store management functions
-  const handleAddStoreItem = () => {
-    if (newItemName.trim() && newItemDescription.trim() && newItemCost.trim()) {
-      const newItem: StoreItem = {
-        id: Math.max(...storeItems.map(item => item.id), 0) + 1,
-        name: newItemName.trim(),
-        description: newItemDescription.trim(),
-        cost: parseInt(newItemCost) || 10,
-        category: newItemCategory,
-        icon: newItemIcon,
-        available: true
-      };
-      setStoreItems(prev => {
-        const updated = [...prev, newItem];
-        quickSave('storeItems', updated);
-        return updated;
-      });
-      setNewItemName('');
-      setNewItemDescription('');
-      setNewItemCost('');
-      setNewItemCategory('food');
-      setNewItemIcon('🎁');
-    }
-  };
-
-  const handleUpdateStoreItem = (id: number, field: keyof StoreItem, value: any) => {
-    setStoreItems(prev => {
-      const updated = prev.map(item => item.id === id ? { ...item, [field]: value } : item);
-      quickSave('storeItems', updated);
-      return updated;
-    });
-  };
-
-  const handleRemoveStoreItem = (id: number) => {
-    if (window.confirm('Are you sure you want to delete this store item?')) {
-      setStoreItems(prev => {
-        const updated = prev.filter(item => item.id !== id);
-        quickSave('storeItems', updated);
-        return updated;
-      });
-    }
   };
 
   // --- Prep management functions ---
@@ -346,249 +292,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
         )}
       </div>
 
-      {/* Store Management */}
-      <div className={`bg-white rounded-xl shadow-sm mb-6 ${showStoreManagement ? 'p-6' : 'p-2'}`}>
-        <button
-          onClick={() => setShowStoreManagement(!showStoreManagement)}
-          className={`w-full flex items-center justify-between hover:text-gray-600 ${
-            showStoreManagement 
-              ? 'text-lg font-semibold text-gray-800 mb-4' 
-              : 'text-sm font-medium text-gray-700 py-1'
-          }`}
-        >
-          <div className="flex items-center">
-            <ShoppingBag className={`mr-2 ${showStoreManagement ? 'w-5 h-5' : 'w-4 h-4'}`} />
-            Store Management
-          </div>
-          <span className={`transition-transform ${showStoreManagement ? 'text-xl rotate-180' : 'text-sm'}`}>
-            ▼
-          </span>
-        </button>
-        
-        {showStoreManagement && (
-          <>
-            {/* Add Store Item */}
-            <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-              <h4 className="font-medium text-gray-700 mb-3">Add New Store Item</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Item Name</label>
-                  <input
-                    type="text"
-                    placeholder="e.g., Free Coffee"
-                    value={newItemName}
-                    onChange={(e) => setNewItemName(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Cost (Points)</label>
-                  <input
-                    type="number"
-                    min="1"
-                    placeholder="10"
-                    value={newItemCost}
-                    onChange={(e) => setNewItemCost(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                  <select
-                    value={newItemCategory}
-                    onChange={(e) => setNewItemCategory(e.target.value as any)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="food">Food & Drinks</option>
-                    <option value="break">Time Off</option>
-                    <option value="reward">Rewards</option>
-                    <option value="social">Social</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Icon</label>
-                  <input
-                    type="text"
-                    placeholder="🎁"
-                    value={newItemIcon}
-                    onChange={(e) => setNewItemIcon(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                  <input
-                    type="text"
-                    placeholder="e.g., Get a free coffee from the kitchen"
-                    value={newItemDescription}
-                    onChange={(e) => setNewItemDescription(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <button
-                    onClick={handleAddStoreItem}
-                    className="w-full bg-purple-500 text-white py-2 px-4 rounded-lg hover:bg-purple-600 flex items-center justify-center"
-                  >
-                    <Package className="w-4 h-4 mr-2" />
-                    Add Store Item
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Store Items List */}
-            <div className="space-y-3">
-              <h4 className="font-medium text-gray-700">Current Store Items</h4>
-              {storeItems.map(item => (
-                <div key={item.id} className="border rounded-lg p-4 bg-white">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4">
-                      {/* Name */}
-                      <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1">Name</label>
-                        {editingStoreItem === item.id ? (
-                          <input
-                            type="text"
-                            value={item.name}
-                            onChange={(e) => handleUpdateStoreItem(item.id, 'name', e.target.value)}
-                            className="w-full px-2 py-1 border rounded text-sm"
-                          />
-                        ) : (
-                          <div className="font-medium text-gray-800 flex items-center">
-                            <span className="text-lg mr-2">{item.icon}</span>
-                            {item.name}
-                          </div>
-                        )}
-                      </div>
-                      
-                      {/* Cost */}
-                      <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1">Cost</label>
-                        {editingStoreItem === item.id ? (
-                          <input
-                            type="number"
-                            min="1"
-                            value={item.cost}
-                            onChange={(e) => handleUpdateStoreItem(item.id, 'cost', parseInt(e.target.value) || 1)}
-                            className="w-full px-2 py-1 border rounded text-sm"
-                          />
-                        ) : (
-                          <div className="flex items-center">
-                            <Star className="w-3 h-3 text-purple-500 mr-1" />
-                            <span className="font-medium text-purple-600">{item.cost} pts</span>
-                          </div>
-                        )}
-                      </div>
-                      
-                      {/* Category */}
-                      <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1">Category</label>
-                        {editingStoreItem === item.id ? (
-                          <select
-                            value={item.category}
-                            onChange={(e) => handleUpdateStoreItem(item.id, 'category', e.target.value)}
-                            className="w-full px-2 py-1 border rounded text-sm"
-                          >
-                            <option value="food">Food & Drinks</option>
-                            <option value="break">Time Off</option>
-                            <option value="reward">Rewards</option>
-                            <option value="social">Social</option>
-                          </select>
-                        ) : (
-                          <span className={`px-2 py-1 rounded-full text-xs ${
-                            item.category === 'food' ? 'bg-orange-100 text-orange-700' :
-                            item.category === 'break' ? 'bg-blue-100 text-blue-700' :
-                            item.category === 'reward' ? 'bg-green-100 text-green-700' :
-                            'bg-purple-100 text-purple-700'
-                          }`}>
-                            {item.category}
-                          </span>
-                        )}
-                      </div>
-                      
-                      {/* Available Status */}
-                      <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1">Status</label>
-                        <button
-                          onClick={() => handleUpdateStoreItem(item.id, 'available', !item.available)}
-                          className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            item.available 
-                              ? 'bg-green-100 text-green-700' 
-                              : 'bg-red-100 text-red-700'
-                          }`}
-                        >
-                          {item.available ? 'Available' : 'Unavailable'}
-                        </button>
-                      </div>
-                    </div>
-                    
-                    {/* Actions */}
-                    <div className="flex gap-2 ml-4">
-                      {editingStoreItem === item.id ? (
-                        <button
-                          onClick={() => setEditingStoreItem(null)}
-                          className="p-1 text-green-600 hover:text-green-800"
-                        >
-                          <Save className="w-4 h-4" />
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => setEditingStoreItem(item.id)}
-                          className="p-1 text-blue-600 hover:text-blue-800"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
-                      )}
-                      <button
-                        onClick={() => handleRemoveStoreItem(item.id)}
-                        className="p-1 text-red-600 hover:text-red-800"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                  
-                  {/* Description */}
-                  <div className="mt-3">
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Description</label>
-                    {editingStoreItem === item.id ? (
-                      <input
-                        type="text"
-                        value={item.description}
-                        onChange={(e) => handleUpdateStoreItem(item.id, 'description', e.target.value)}
-                        className="w-full px-2 py-1 border rounded text-sm"
-                      />
-                    ) : (
-                      <p className="text-sm text-gray-600">{item.description}</p>
-                    )}
-                  </div>
-                  
-                  {/* Icon Editor */}
-                  {editingStoreItem === item.id && (
-                    <div className="mt-2">
-                      <label className="block text-xs font-medium text-gray-500 mb-1">Icon</label>
-                      <input
-                        type="text"
-                        value={item.icon}
-                        onChange={(e) => handleUpdateStoreItem(item.id, 'icon', e.target.value)}
-                        className="w-20 px-2 py-1 border rounded text-sm"
-                        placeholder="🎁"
-                      />
-                    </div>
-                  )}
-                </div>
-              ))}
-              
-              {storeItems.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
-                  No store items yet. Add your first item above!
-                </div>
-              )}
-            </div>
-          </>
-        )}
-      </div>
 
       {/* Prep List Management */}
       <div className={`bg-white rounded-xl shadow-sm mb-6 ${showPrepManagement ? 'p-6' : 'p-2'}`}>

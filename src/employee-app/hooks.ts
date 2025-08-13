@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { FirebaseService } from './firebaseService';
 import { getFormattedDate } from './utils';
-import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData, getDefaultStoreItems } from './defaultData';
+import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData } from './defaultData';
 import type {
   Employee,
   Task,
@@ -13,7 +13,6 @@ import type {
   PrepItem,
   ScheduledPrep,
   PrepSelections,
-  StoreItem,
   InventoryItem,
   DatabaseItem,
   ActivityLogEntry,
@@ -91,9 +90,6 @@ export const useFirebaseData = () => {
   const [prepItems, setPrepItems] = useState<PrepItem[]>([]);
   const [scheduledPreps, setScheduledPreps] = useState<ScheduledPrep[]>([]);
   const [prepSelections, setPrepSelections] = useState<PrepSelections>({});
-  
-  // Store data
-  const [storeItems, setStoreItems] = useState<StoreItem[]>([]);
   
   // Inventory data
   const [inventoryDailyItems, setInventoryDailyItems] = useState<InventoryItem[]>([]);
@@ -248,7 +244,7 @@ export const useFirebaseData = () => {
   const debouncedBatchSync = useCallback(async () => {
     // REMOVE: Batch sync logic
   }, [employees, tasks, dailyData, completedTasks, taskAssignments, customRoles, 
-      prepItems, scheduledPreps, prepSelections, storeItems]);
+      prepItems, scheduledPreps, prepSelections]);
 
   // PERFORMANCE: Non-blocking main save function - FIXED to include all fields
   const debouncedSave = useCallback(async () => {
@@ -267,7 +263,6 @@ export const useFirebaseData = () => {
       prepItemsLength: prepItems.length,
       scheduledPrepsLength: scheduledPreps.length,
       prepSelectionsKeys: Object.keys(prepSelections).length,
-      storeItemsLength: storeItems.length,
       inventoryDailyItemsLength: inventoryDailyItems.length,
       inventoryWeeklyItemsLength: inventoryWeeklyItems.length,
       inventoryMonthlyItemsLength: inventoryMonthlyItems.length,
