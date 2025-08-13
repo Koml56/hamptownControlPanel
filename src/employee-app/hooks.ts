@@ -290,7 +290,6 @@ export const useFirebaseData = () => {
         prepItems,
         scheduledPreps,
         prepSelections,
-        storeItems,
         // Inventory fields
         inventoryDailyItems,
         inventoryWeeklyItems,
@@ -311,7 +310,7 @@ export const useFirebaseData = () => {
     }
   }, [
     employees, tasks, dailyData, completedTasks, taskAssignments, customRoles,
-    prepItems, scheduledPreps, prepSelections, storeItems,
+    prepItems, scheduledPreps, prepSelections,
     inventoryDailyItems, inventoryWeeklyItems, inventoryMonthlyItems, inventoryDatabaseItems, inventoryActivityLog,
     connectionStatus, debouncedBatchSync
   ]);
@@ -382,7 +381,6 @@ export const useFirebaseData = () => {
       setPrepItems(data.prepItems || []);
       setScheduledPreps(finalScheduledPreps);
       setPrepSelections(data.prepSelections || {});
-      setStoreItems(data.storeItems || getDefaultStoreItems());
       
       // Set inventory data
       const dailyItems = data.inventoryDailyItems || [];
@@ -433,7 +431,6 @@ export const useFirebaseData = () => {
         setPrepItems([]);
         setScheduledPreps([]);
         setPrepSelections({});
-        setStoreItems(getDefaultStoreItems());
         // DON'T set isInitializedRef.current = true here to prevent sync overwrite
       }
     } finally {
@@ -462,7 +459,7 @@ export const useFirebaseData = () => {
       
       return () => clearTimeout(timer);
     }
-  }, [prepItems, prepSelections, storeItems]);
+  }, [prepItems, prepSelections]);
 
   // --- REAL-TIME SYNC SETUP ---
   // Initialize Firebase app and database (only once)
@@ -537,14 +534,6 @@ export const useFirebaseData = () => {
     };
     onValue(prepSelectionsRef, handlePrepSelections);
     
-    // StoreItems
-    const storeItemsRef = ref(db, 'storeItems');
-    const handleStoreItems = (snapshot: any) => {
-      const data = snapshot.val() || [];
-      setStoreItems(Array.isArray(data) ? data : Object.values(data));
-    };
-    onValue(storeItemsRef, handleStoreItems);
-
     // Inventory Items - Real-time synchronization with notification support
     const inventoryDailyItemsRef = ref(db, 'inventoryDailyItems');
     const handleInventoryDailyItems = (snapshot: any) => {
@@ -625,7 +614,6 @@ export const useFirebaseData = () => {
       off(prepItemsRef, 'value', handlePrepItems);
       off(scheduledPrepsRef, 'value', handleScheduledPreps);
       off(prepSelectionsRef, 'value', handlePrepSelections);
-      off(storeItemsRef, 'value', handleStoreItems);
       // Inventory cleanup
       off(inventoryDailyItemsRef, 'value', handleInventoryDailyItems);
       off(inventoryWeeklyItemsRef, 'value', handleInventoryWeeklyItems);
@@ -654,7 +642,6 @@ export const useFirebaseData = () => {
     prepItems,
     scheduledPreps,
     prepSelections,
-    storeItems,
     inventoryDailyItems,
     inventoryWeeklyItems,
     inventoryMonthlyItems,
@@ -672,7 +659,6 @@ export const useFirebaseData = () => {
     setPrepItems,
     setScheduledPreps,
     setPrepSelections,
-    setStoreItems,
     setInventoryDailyItems,
     setInventoryWeeklyItems,
     setInventoryMonthlyItems,

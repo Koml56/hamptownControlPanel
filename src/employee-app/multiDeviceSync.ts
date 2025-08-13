@@ -1,6 +1,6 @@
 // multiDeviceSync.ts - Optimized for performance and reliability with full prep/store support
 import { FIREBASE_CONFIG } from './constants';
-import type { Employee, Task, DailyDataMap, TaskAssignments, PrepItem, ScheduledPrep, PrepSelections, StoreItem, InventoryItem, DatabaseItem, ActivityLogEntry } from './types';
+import type { Employee, Task, DailyDataMap, TaskAssignments, PrepItem, ScheduledPrep, PrepSelections, InventoryItem, DatabaseItem, ActivityLogEntry } from './types';
 
 export interface DeviceInfo {
   id: string;
@@ -33,7 +33,6 @@ export interface SyncData {
   prepItems?: PrepItem[];
   scheduledPreps?: ScheduledPrep[];
   prepSelections?: PrepSelections;
-  storeItems?: StoreItem[];
   // FIXED: Add inventory fields for multi-device sync
   inventoryDailyItems?: InventoryItem[];
   inventoryWeeklyItems?: InventoryItem[];
@@ -337,7 +336,6 @@ export class MultiDeviceSyncService {
       'prepItems',
       'scheduledPreps',
       'prepSelections',
-      'storeItems',
       // FIXED: Add inventory fields for multi-device sync
       'inventoryDailyItems',
       'inventoryWeeklyItems', 
@@ -588,7 +586,6 @@ export class MultiDeviceSyncService {
         'prepItems',
         'scheduledPreps',
         'prepSelections',
-        'storeItems',
         // FIXED: Include inventory fields for multi-device sync
         'inventoryDailyItems',
         'inventoryWeeklyItems',

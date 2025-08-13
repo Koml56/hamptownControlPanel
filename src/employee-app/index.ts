@@ -22,13 +22,11 @@ export { useFirebaseData, useAuth } from './hooks';
 export * from './moodFunctions';
 export * from './taskFunctions';
 export * from './adminFunctions';
-export * from './storeFunctions';
 export * from './migrationUtils';
 
 // React Components
 export { default as MoodTracker } from './MoodTracker';
 export { default as TaskManager } from './TaskManager';
-export { default as Store } from './Store';
 export { default as AdminPanel } from './AdminPanel';
 export { default as DailyReports } from './DailyReports';
 export { default as PrepListPrototype } from './PrepListPrototype';
