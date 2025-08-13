@@ -1,5 +1,6 @@
 // purchaseHistoryTest.test.ts
 // Test to reproduce and verify the purchase history Firebase sync issue - ENHANCED
+import './testSetup'; // Import IndexedDB mock setup
 import { purchaseItem, getEmployeePurchaseHistory } from './storeFunctions';
 import { FirebaseService } from './firebaseService';
 import { MultiDeviceSyncService } from './multiDeviceSync';

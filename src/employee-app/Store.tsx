@@ -75,7 +75,8 @@ const Store: React.FC<StoreProps> = ({
         item,
         employees,
         setEmployees,
-        setDailyData
+        setDailyData,
+        saveToFirebase // Pass Firebase save function for immediate persistence
       );
       
       if (success) {

@@ -110,7 +110,8 @@ export function executePurchaseOperation(
   employees: Employee[],
   dailyData: DailyDataMap,
   setEmployees: (updater: (prev: Employee[]) => Employee[]) => void,
-  setDailyData: (updater: (prev: DailyDataMap) => DailyDataMap) => void
+  setDailyData: (updater: (prev: DailyDataMap) => DailyDataMap) => void,
+  saveToFirebase?: () => void // Optional Firebase save function
 ): boolean {
   const operations = createPurchaseOperation(employeeId, item, employees);
   
@@ -132,6 +133,16 @@ export function executePurchaseOperation(
     setDailyData(prev => applyPurchaseOperation(prev, purchaseOp));
 
     console.log("🛒 Purchase operation completed successfully:", purchase);
+
+    // Trigger immediate Firebase save if function is provided
+    if (saveToFirebase) {
+      console.log("🔥 Triggering immediate Firebase save for store purchase");
+      // Use setTimeout to ensure state updates have been applied first
+      setTimeout(() => {
+        saveToFirebase();
+      }, 100);
+    }
+
     return true;
   } catch (error) {
     console.error("❌ Error during purchase operation:", error);
