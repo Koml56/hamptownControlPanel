@@ -1,7 +1,7 @@
 // firebaseService.ts - FIXED to include all prep and store fields
 import { FIREBASE_CONFIG } from './constants';
 import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData } from './defaultData';
-import type { Employee, Task, DailyDataMap, TaskAssignments, PrepItem, ScheduledPrep, PrepSelections, StoreItem, InventoryItem, DatabaseItem, ActivityLogEntry } from './types';
+import type { Employee, Task, DailyDataMap, TaskAssignments, PrepItem, ScheduledPrep, PrepSelections, InventoryItem, DatabaseItem, ActivityLogEntry } from './types';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, onValue, off } from 'firebase/database';
 
@@ -257,8 +257,6 @@ export class FirebaseService {
         return allData.scheduledPreps;
       case 'prepSelections':
         return allData.prepSelections;
-      case 'storeItems':
-        return allData.storeItems;
       // Inventory fields
       case 'inventoryDailyItems':
         return allData.inventoryDailyItems;
@@ -332,11 +330,6 @@ export class FirebaseService {
           totalSelections: Object.keys(data || {}).length,
           sampleKeys: Object.keys(data || {}).slice(0, 3)
         };
-      case 'storeItems':
-        return {
-          totalCount: data?.length || 0,
-          availableCount: (data || []).filter((item: any) => item.available).length
-        };
       case 'inventoryDailyItems':
         return {
           totalCount: data?.length || 0,
@@ -382,7 +375,6 @@ export class FirebaseService {
         prepItemsRes,
         scheduledPrepsRes,
         prepSelectionsRes,
-        storeItemsRes,
         inventoryDailyRes,
         inventoryWeeklyRes,
         inventoryMonthlyRes,
@@ -398,7 +390,6 @@ export class FirebaseService {
         fetch(`${this.baseUrl}/prepItems.json`),
         fetch(`${this.baseUrl}/scheduledPreps.json`),
         fetch(`${this.baseUrl}/prepSelections.json`),
-        fetch(`${this.baseUrl}/storeItems.json`),
         fetch(`${this.baseUrl}/inventoryDailyItems.json`),
         fetch(`${this.baseUrl}/inventoryWeeklyItems.json`),
         fetch(`${this.baseUrl}/inventoryMonthlyItems.json`),
@@ -415,7 +406,6 @@ export class FirebaseService {
       const prepItemsData = await prepItemsRes.json();
       const scheduledPrepsData = await scheduledPrepsRes.json();
       const prepSelectionsData = await prepSelectionsRes.json();
-      const storeItemsData = await storeItemsRes.json();
       const inventoryDailyData = await inventoryDailyRes.json();
       const inventoryWeeklyData = await inventoryWeeklyRes.json();
       const inventoryMonthlyData = await inventoryMonthlyRes.json();
@@ -456,7 +446,6 @@ export class FirebaseService {
         prepItems: prepItemsData || [],
         scheduledPreps: scheduledPrepsData || [],
         prepSelections: prepSelectionsData || {},
-        storeItems: storeItemsData || [],
         // Inventory data
         inventoryDailyItems: inventoryDailyData || [],
         inventoryWeeklyItems: inventoryWeeklyData || [],
@@ -488,7 +477,6 @@ export class FirebaseService {
       migrated[date] = {
         completedTasks: dayData.completedTasks || [],
         employeeMoods: dayData.employeeMoods || [],
-        purchases: dayData.purchases || [],
         totalTasks: dayData.totalTasks || 22,
         completionRate: dayData.completionRate || 0,
         totalPointsEarned: dayData.totalPointsEarned || 0,
@@ -511,7 +499,6 @@ export class FirebaseService {
     prepItems: PrepItem[];
     scheduledPreps: ScheduledPrep[];
     prepSelections: PrepSelections;
-    storeItems: StoreItem[];
     // Inventory fields
     inventoryDailyItems: InventoryItem[];
     inventoryWeeklyItems: InventoryItem[];
@@ -532,7 +519,6 @@ export class FirebaseService {
       'prepItems',
       'scheduledPreps', 
       'prepSelections',
-      'storeItems',
       'inventoryDailyItems',
       'inventoryWeeklyItems',
       'inventoryMonthlyItems',

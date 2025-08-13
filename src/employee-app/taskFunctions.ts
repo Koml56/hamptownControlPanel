@@ -58,7 +58,6 @@ export const saveDailyTaskCompletion = (
     const todayData = prev[todayStr] || { 
       completedTasks: [], 
       employeeMoods: [], 
-      purchases: [],
       totalTasks: tasks.length, 
       completionRate: 0,
       totalPointsEarned: 0,
@@ -102,7 +101,6 @@ export const removeDailyTaskCompletion = (
     const todayData = prev[todayStr] || { 
       completedTasks: [], 
       employeeMoods: [], 
-      purchases: [],
       totalTasks: tasks.length, 
       completionRate: 0,
       totalPointsEarned: 0,

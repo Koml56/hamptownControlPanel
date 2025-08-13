@@ -1,5 +1,5 @@
 // defaultData.ts
-import type { Employee, Task, DailyDataMap, StoreItem } from './types';
+import type { Employee, Task, DailyDataMap } from './types';
 import { getFormattedDate } from './utils';
 
 export const getDefaultEmployees = (): Employee[] => [
@@ -34,19 +34,6 @@ export const getDefaultTasks = (): Task[] => [
   { id: 22, task: 'Organize containers', location: 'Apu-Kitchen', priority: 'low', estimatedTime: '15 min', points: 5 }
 ];
 
-export const getDefaultStoreItems = (): StoreItem[] => [
-  { id: 1, name: 'Free Coffee', description: 'Get a free coffee from the kitchen', cost: 10, category: 'food', icon: '☕', available: true },
-  { id: 2, name: 'Free Lunch', description: 'Get a free meal from the restaurant', cost: 50, category: 'food', icon: '🍽️', available: true },
-  { id: 3, name: 'Free Meal for Friend', description: 'Bring a friend for a free meal', cost: 80, category: 'social', icon: '👥', available: true },
-  { id: 4, name: '30min Break Extension', description: 'Extend your break by 30 minutes', cost: 25, category: 'break', icon: '⏰', available: true },
-  { id: 5, name: 'Early Leave (1 hour)', description: 'Leave work 1 hour early', cost: 60, category: 'break', icon: '🚪', available: true },
-  { id: 6, name: 'Free Snack', description: 'Get any snack from the kitchen', cost: 15, category: 'food', icon: '🍿', available: true },
-  { id: 7, name: 'Choose Next Week Schedule', description: 'Pick your preferred shifts next week', cost: 100, category: 'reward', icon: '📅', available: true },
-  { id: 8, name: 'Team Building Activity', description: 'Organize a fun team activity', cost: 150, category: 'social', icon: '🎉', available: true },
-  { id: 9, name: 'Free Dessert', description: 'Get any dessert from the menu', cost: 20, category: 'food', icon: '🍰', available: true },
-  { id: 10, name: 'Reserved Parking Spot', description: 'Get the best parking spot for a week', cost: 40, category: 'reward', icon: '🚗', available: true }
-];
-
 export const getEmptyDailyData = (): DailyDataMap => {
   const dates = Array.from({length: 30}, (_, i) => {
     const date = new Date();
@@ -59,7 +46,6 @@ export const getEmptyDailyData = (): DailyDataMap => {
     dailyData[date] = {
       completedTasks: [],
       employeeMoods: [],
-      purchases: [],
       totalTasks: 22,
       completionRate: 0,
       totalPointsEarned: 0,

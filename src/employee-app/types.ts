@@ -18,27 +18,6 @@ export interface Task {
   points: number; // New: points awarded for completing this task
 }
 
-export interface StoreItem {
-  id: number;
-  name: string;
-  description: string;
-  cost: number; // Points required to purchase
-  category: 'food' | 'break' | 'reward' | 'social';
-  icon: string; // Emoji or icon
-  available: boolean;
-}
-
-export interface Purchase {
-  id: number;
-  employeeId: number;
-  itemId: number;
-  itemName: string;
-  cost: number;
-  purchasedAt: string;
-  date: string;
-  status: 'pending' | 'approved' | 'redeemed';
-}
-
 // New: Prep List Management Types
 export interface Recipe {
   ingredients: string;
@@ -95,7 +74,6 @@ export interface DailyData {
     mood: number;
     updatedAt: string;
   }>;
-  purchases: Array<Purchase>; // New: daily purchases
   totalTasks: number;
   completionRate: number;
   totalPointsEarned: number; // New: total points earned today
@@ -124,12 +102,10 @@ export interface AdminPanelProps {
   employees: Employee[];
   tasks: Task[];
   customRoles: string[];
-  storeItems: StoreItem[];
   prepItems: PrepItem[];
   setEmployees: (updater: (prev: Employee[]) => Employee[]) => void;
   setTasks: (updater: (prev: Task[]) => Task[]) => void;
   setCustomRoles: (updater: (prev: string[]) => string[]) => void;
-  setStoreItems: (updater: (prev: StoreItem[]) => StoreItem[]) => void;
   setPrepItems: (updater: (prev: PrepItem[]) => PrepItem[]) => void;
   quickSave: (field: string, data: any) => Promise<any>;
 }

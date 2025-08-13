@@ -10,7 +10,6 @@ import {
   ChevronDown, 
   X, 
   Check, 
-  ShoppingBag, 
   ChefHat,
   UtensilsCrossed // New icon for inventory
 } from 'lucide-react';
@@ -18,7 +17,7 @@ import {
 // Components
 import MoodTracker from './MoodTracker';
 import TaskManager from './TaskManager';
-import Store from './Store';
+
 import AdminPanel from './AdminPanel';
 import DailyReports from './DailyReports';
 import PrepListPrototype from './PrepListPrototype';
@@ -36,8 +35,8 @@ import type { DeviceInfo, SyncEvent } from './multiDeviceSync';
 
 // Types and Constants
 import { getFormattedDate } from './utils';
-import { getDefaultStoreItems } from './defaultData';
-import type { ActiveTab, Employee, Task, DailyDataMap, TaskAssignments, StoreItem } from './types';
+
+import type { ActiveTab, Employee, Task, DailyDataMap, TaskAssignments } from './types';
 
 // Extend ActiveTab type to include inventory
 type ExtendedActiveTab = ActiveTab | 'inventory';
@@ -63,7 +62,6 @@ const EmployeeApp: React.FC = () => {
     prepItems,
     scheduledPreps,
     prepSelections,
-    storeItems: firebaseStoreItems,
     inventoryDailyItems,
     inventoryWeeklyItems,
     inventoryMonthlyItems,
@@ -79,7 +77,6 @@ const EmployeeApp: React.FC = () => {
     setPrepItems,
     setScheduledPreps,
     setPrepSelections,
-    setStoreItems: setFirebaseStoreItems,
     setInventoryDailyItems,
     setInventoryWeeklyItems,
     setInventoryMonthlyItems,
@@ -169,7 +166,6 @@ const EmployeeApp: React.FC = () => {
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
   const [selectedDate, setSelectedDate] = useState(getFormattedDate(new Date()));
-  const [storeItems, setStoreItems] = useState<StoreItem[]>(getDefaultStoreItems());
   const [showDailyResetNotification, setShowDailyResetNotification] = useState(false);
   const [conflictCount, setConflictCount] = useState(0);
 
@@ -379,13 +375,6 @@ const EmployeeApp: React.FC = () => {
     }
   }, [employees, currentUser.id, switchUser]);
 
-  // Sync Firebase store items with local state
-  useEffect(() => {
-    if (firebaseStoreItems && firebaseStoreItems.length > 0) {
-      setStoreItems(firebaseStoreItems);
-    }
-  }, [firebaseStoreItems]);
-
   // Calculate conflicts
   useEffect(() => {
     const conflicts = taskOperations.length - resolveTaskConflicts(taskOperations).length;
@@ -511,13 +500,6 @@ const EmployeeApp: React.FC = () => {
     setCustomRoles(value);
     handleDataChange();
   }, [setCustomRoles, handleDataChange]);
-
-  const setStoreItemsWithSave = useCallback((value: React.SetStateAction<StoreItem[]>) => {
-    const newItems = typeof value === 'function' ? value(storeItems) : value;
-    setStoreItems(newItems);
-    setFirebaseStoreItems(() => newItems);
-    handleDataChange();
-  }, [storeItems, setFirebaseStoreItems, handleDataChange]);
 
   // Manual reset function for testing (admin only)
   const handleManualReset = useCallback(() => {
@@ -894,17 +876,6 @@ const EmployeeApp: React.FC = () => {
             <UtensilsCrossed className="w-5 h-5 mx-auto mb-1" />
             <span className="text-sm">Restaurant Inventory</span>
           </button>
-          <button
-            onClick={() => setActiveTab('store')}
-            className={`flex-shrink-0 py-3 px-4 text-center ${
-              activeTab === 'store' 
-                ? 'border-b-2 border-purple-500 text-purple-600 bg-purple-50' 
-                : 'text-gray-600 hover:text-gray-800'
-            }`}
-          >
-            <ShoppingBag className="w-5 h-5 mx-auto mb-1" />
-            <span className="text-sm">Store</span>
-          </button>
           {isAdmin && (
             <button
               onClick={() => setActiveTab('admin')}
@@ -1051,29 +1022,15 @@ const EmployeeApp: React.FC = () => {
           />
         )}
 
-        {activeTab === 'store' && (
-          <Store
-            currentUser={currentUser}
-            employees={employees}
-            storeItems={storeItems}
-            dailyData={dailyData}
-            setEmployees={setEmployeesWithSave}
-            setDailyData={setDailyDataWithSave}
-            saveToFirebase={saveToFirebase}
-          />
-        )}
-
         {activeTab === 'admin' && isAdmin && (
           <AdminPanel
             employees={employees}
             tasks={tasks}
             customRoles={customRoles}
-            storeItems={storeItems}
             prepItems={prepItems}
             setEmployees={setEmployeesWithSave}
             setTasks={setTasksWithSave}
             setCustomRoles={setCustomRolesWithSave}
-            setStoreItems={setStoreItemsWithSave}
             setPrepItems={setPrepItems}
             quickSave={quickSave}
           />
