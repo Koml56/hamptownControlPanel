@@ -12,7 +12,8 @@ export const purchaseItem = (
   item: StoreItem,
   employees: Employee[],
   setEmployees: (updater: (prev: Employee[]) => Employee[]) => void,
-  setDailyData: (updater: (prev: DailyDataMap) => DailyDataMap) => void
+  setDailyData: (updater: (prev: DailyDataMap) => DailyDataMap) => void,
+  saveToFirebase?: () => void // Optional Firebase save function
 ): boolean => {
   try {
     const employee = employees.find(emp => emp.id === employeeId);
@@ -27,14 +28,15 @@ export const purchaseItem = (
       return false;
     }
 
-    // Use the new operation-based purchase system
+    // Use the new operation-based purchase system with Firebase save
     const success = executePurchaseOperation(
       employeeId,
       item,
       employees,
       {} as DailyDataMap, // Will be populated by the operation
       setEmployees,
-      setDailyData
+      setDailyData,
+      saveToFirebase // Pass Firebase save function
     );
 
     if (success) {
