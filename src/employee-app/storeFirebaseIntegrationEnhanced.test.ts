@@ -3,7 +3,7 @@
 import './testSetup'; // Import IndexedDB mock setup
 import { purchaseItem, getEmployeePoints, getEmployeePurchaseHistory } from './storeFunctions';
 import { FirebaseService } from './firebaseService';
-import type { Employee, StoreItem, DailyDataMap } from './types';
+import type { Employee, StoreItem, DailyDataMap, Task, TaskAssignments, PrepItem, ScheduledPrep, PrepSelections, InventoryItem, DatabaseItem, ActivityLogEntry } from './types';
 
 // Mock window.alert
 global.alert = jest.fn();
@@ -379,20 +379,20 @@ describe('Enhanced Store Firebase Integration', () => {
       // Test that store uses the same Firebase service interface as other features
       const mockData = {
         employees: mockEmployees,
-        tasks: [],
+        tasks: [] as Task[],
         dailyData: mockDailyData,
-        completedTasks: new Set(),
-        taskAssignments: {},
-        customRoles: [],
-        prepItems: [],
-        scheduledPreps: [],
-        prepSelections: {},
+        completedTasks: new Set<number>(),
+        taskAssignments: {} as TaskAssignments,
+        customRoles: [] as string[],
+        prepItems: [] as PrepItem[],
+        scheduledPreps: [] as ScheduledPrep[],
+        prepSelections: {} as PrepSelections,
         storeItems: mockStoreItems,
-        inventoryDailyItems: [],
-        inventoryWeeklyItems: [],
-        inventoryMonthlyItems: [],
-        inventoryDatabaseItems: [],
-        inventoryActivityLog: []
+        inventoryDailyItems: [] as InventoryItem[],
+        inventoryWeeklyItems: [] as InventoryItem[],
+        inventoryMonthlyItems: [] as InventoryItem[],
+        inventoryDatabaseItems: [] as DatabaseItem[],
+        inventoryActivityLog: [] as ActivityLogEntry[]
       };
 
       // This should use the same method as other features

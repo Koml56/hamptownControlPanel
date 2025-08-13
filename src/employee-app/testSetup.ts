@@ -24,9 +24,9 @@ const mockDatabase = {
 };
 
 const mockRequest = {
-  onsuccess: null,
-  onerror: null,
-  onupgradeneeded: null,
+  onsuccess: jest.fn(),
+  onerror: jest.fn(),
+  onupgradeneeded: jest.fn(),
   result: mockDatabase
 };
 
@@ -36,7 +36,7 @@ global.indexedDB = {
     const request = { ...mockRequest };
     // Trigger success immediately in tests
     setTimeout(() => {
-      if (request.onsuccess) {
+      if (request.onsuccess && typeof request.onsuccess === 'function') {
         request.onsuccess({ target: request } as any);
       }
     }, 0);
