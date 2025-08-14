@@ -97,16 +97,44 @@ export type Priority = 'low' | 'medium' | 'high';
 export type ConnectionStatus = 'connecting' | 'connected' | 'error';
 export type ActiveTab = 'mood' | 'tasks' | 'store' | 'admin' | 'reports' | 'prep' | 'inventory';
 
+// Store Types
+export interface StoreItem {
+  id: number;
+  name: string;
+  description: string;
+  cost: number; // Points required to purchase
+  category: string;
+  available: boolean;
+  icon: string; // Emoji or icon name
+  createdAt: string;
+}
+
+export interface Purchase {
+  id: number;
+  employeeId: number;
+  employeeName: string;
+  storeItemId: number;
+  storeItemName: string;
+  cost: number;
+  purchasedAt: string;
+  fulfilled: boolean;
+  notes?: string;
+}
+
 // Admin Panel Props Interface
 export interface AdminPanelProps {
   employees: Employee[];
   tasks: Task[];
   customRoles: string[];
   prepItems: PrepItem[];
+  storeItems: StoreItem[];
+  purchases: Purchase[];
   setEmployees: (updater: (prev: Employee[]) => Employee[]) => void;
   setTasks: (updater: (prev: Task[]) => Task[]) => void;
   setCustomRoles: (updater: (prev: string[]) => string[]) => void;
   setPrepItems: (updater: (prev: PrepItem[]) => PrepItem[]) => void;
+  setStoreItems: (updater: (prev: StoreItem[]) => StoreItem[]) => void;
+  setPurchases: (updater: (prev: Purchase[]) => Purchase[]) => void;
   quickSave: (field: string, data: any) => Promise<any>;
 }
 

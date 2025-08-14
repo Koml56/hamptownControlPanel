@@ -11,13 +11,14 @@ import {
   X, 
   Check, 
   ChefHat,
-  UtensilsCrossed // New icon for inventory
+  UtensilsCrossed, // New icon for inventory
+  ShoppingCart // New icon for store
 } from 'lucide-react';
 
 // Components
 import MoodTracker from './MoodTracker';
 import TaskManager from './TaskManager';
-
+import Store from './Store'; // NEW: Store component
 import AdminPanel from './AdminPanel';
 import DailyReports from './DailyReports';
 import PrepListPrototype from './PrepListPrototype';
@@ -36,7 +37,7 @@ import type { DeviceInfo, SyncEvent } from './multiDeviceSync';
 // Types and Constants
 import { getFormattedDate } from './utils';
 
-import type { ActiveTab, Employee, Task, DailyDataMap, TaskAssignments } from './types';
+import type { ActiveTab, Employee, Task, DailyDataMap, TaskAssignments, StoreItem, Purchase } from './types';
 
 // Extend ActiveTab type to include inventory
 type ExtendedActiveTab = ActiveTab | 'inventory';
@@ -68,6 +69,8 @@ const EmployeeApp: React.FC = () => {
     inventoryDatabaseItems,
     inventoryActivityLog,
     inventoryCustomCategories,
+    storeItems,
+    purchases,
     setEmployees,
     setTasks,
     setDailyData,
@@ -83,6 +86,8 @@ const EmployeeApp: React.FC = () => {
     setInventoryDatabaseItems,
     setInventoryActivityLog,
     setInventoryCustomCategories,
+    setStoreItems,
+    setPurchases,
     loadFromFirebase,
     saveToFirebase,
     quickSave,
@@ -501,6 +506,16 @@ const EmployeeApp: React.FC = () => {
     handleDataChange();
   }, [setCustomRoles, handleDataChange]);
 
+  const setStoreItemsWithSave = useCallback((value: React.SetStateAction<StoreItem[]>) => {
+    setStoreItems(value);
+    handleDataChange();
+  }, [setStoreItems, handleDataChange]);
+
+  const setPurchasesWithSave = useCallback((value: React.SetStateAction<Purchase[]>) => {
+    setPurchases(value);
+    handleDataChange();
+  }, [setPurchases, handleDataChange]);
+
   // Manual reset function for testing (admin only)
   const handleManualReset = useCallback(() => {
     if (!isAdmin) return;
@@ -864,6 +879,18 @@ const EmployeeApp: React.FC = () => {
             <ChefHat className="w-5 h-5 mx-auto mb-1" />
             <span className="text-sm">Prep List</span>
           </button>
+          {/* NEW: Store Tab */}
+          <button
+            onClick={() => setActiveTab('store')}
+            className={`flex-shrink-0 py-3 px-4 text-center ${
+              activeTab === 'store' 
+                ? 'border-b-2 border-purple-500 text-purple-600 bg-purple-50' 
+                : 'text-gray-600 hover:text-gray-800'
+            }`}
+          >
+            <ShoppingCart className="w-5 h-5 mx-auto mb-1" />
+            <span className="text-sm">Points Store</span>
+          </button>
           {/* NEW: Restaurant Inventory Tab */}
           <button
             onClick={() => setActiveTab('inventory')}
@@ -1000,6 +1027,19 @@ const EmployeeApp: React.FC = () => {
           />
         )}
 
+        {/* NEW: Store Tab Content */}
+        {activeTab === 'store' && (
+          <Store
+            currentUser={currentUser}
+            employees={employees}
+            storeItems={storeItems}
+            purchases={purchases}
+            setEmployees={setEmployees}
+            setPurchases={setPurchases}
+            quickSave={quickSave}
+          />
+        )}
+
         {/* NEW: Restaurant Inventory Tab Content */}
         {activeTab === 'inventory' && (
           <RestaurantInventory
@@ -1028,10 +1068,14 @@ const EmployeeApp: React.FC = () => {
             tasks={tasks}
             customRoles={customRoles}
             prepItems={prepItems}
+            storeItems={storeItems}
+            purchases={purchases}
             setEmployees={setEmployeesWithSave}
             setTasks={setTasksWithSave}
             setCustomRoles={setCustomRolesWithSave}
             setPrepItems={setPrepItems}
+            setStoreItems={setStoreItemsWithSave}
+            setPurchases={setPurchasesWithSave}
             quickSave={quickSave}
           />
         )}
