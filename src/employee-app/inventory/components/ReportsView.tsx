@@ -11,7 +11,9 @@ const ReportsView: React.FC = () => {
     const today = new Date();
     return today.toISOString().split('T')[0]; // YYYY-MM-DD format
   });
-  const [comparisonMode, setComparisonMode] = useState<'none' | 'previous-day' | 'week-average'>('none');
+  const [comparisonMode, setComparisonMode] = useState<'none' | 'previous-day' | 'week-average' | 'previous-week' | 'previous-month' | 'trend-7-days'>('none');
+  const [trendRange, setTrendRange] = useState<'7days' | '30days' | '90days'>('7days');
+  const [showTrendAnalysis, setShowTrendAnalysis] = useState(false);
 
   // Helper function to format date for display
   const formatDisplayDate = (dateStr: string) => {
@@ -125,6 +127,79 @@ const ReportsView: React.FC = () => {
     };
   }, [selectedDate, dailyItems, weeklyItems, monthlyItems, activityLog, stockCountSnapshots]);
 
+  // Calculate advanced trend and comparison metrics
+  const trendAnalysis = useMemo(() => {
+    const daysToAnalyze = trendRange === '7days' ? 7 : trendRange === '30days' ? 30 : 90;
+    const trendData = [];
+    
+    for (let i = 0; i < daysToAnalyze; i++) {
+      const date = new Date(selectedDate);
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+      const { startOfDay, endOfDay } = getDateRange(dateStr);
+      
+      const dayActivity = activityLog.filter(entry => {
+        const entryDate = new Date(entry.timestamp);
+        return entryDate >= startOfDay && entryDate <= endOfDay;
+      });
+
+      const dayWaste = dayActivity
+        .filter(entry => entry.type === 'waste')
+        .reduce((sum, entry) => sum + entry.quantity, 0);
+      
+      const dayWasteValue = dayActivity
+        .filter(entry => entry.type === 'waste')
+        .reduce((sum, entry) => {
+          const item = [...dailyItems, ...weeklyItems, ...monthlyItems].find(item => item.name === entry.item);
+          return sum + (entry.quantity * (item?.cost || 0));
+        }, 0);
+
+      const dayCountUpdates = dayActivity.filter(a => a.type === 'count_update').length;
+      
+      // Check for historical snapshots on this date
+      const historicalSnapshot = stockCountSnapshots.find(s => s.date === dateStr);
+      let dayInventoryValue = 0;
+      let dayCriticalItems = 0;
+      
+      if (historicalSnapshot) {
+        dayInventoryValue = historicalSnapshot.snapshot.totalValue;
+        dayCriticalItems = historicalSnapshot.snapshot.summary.criticalStockItems;
+      }
+
+      trendData.push({
+        date: dateStr,
+        displayDate: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        waste: dayWaste,
+        wasteValue: dayWasteValue,
+        countUpdates: dayCountUpdates,
+        inventoryValue: dayInventoryValue,
+        criticalItems: dayCriticalItems,
+        hasSnapshot: !!historicalSnapshot
+      });
+    }
+    
+    // Calculate trends
+    const recent = trendData.slice(0, Math.floor(daysToAnalyze / 3));
+    const older = trendData.slice(-Math.floor(daysToAnalyze / 3));
+    
+    const recentAvgWaste = recent.reduce((sum, d) => sum + d.waste, 0) / recent.length;
+    const olderAvgWaste = older.reduce((sum, d) => sum + d.waste, 0) / older.length;
+    const wasteTrend = recentAvgWaste - olderAvgWaste;
+    
+    const recentAvgValue = recent.filter(d => d.hasSnapshot).reduce((sum, d) => sum + d.inventoryValue, 0) / recent.filter(d => d.hasSnapshot).length || 0;
+    const olderAvgValue = older.filter(d => d.hasSnapshot).reduce((sum, d) => sum + d.inventoryValue, 0) / older.filter(d => d.hasSnapshot).length || 0;
+    const valueTrend = recentAvgValue - olderAvgValue;
+
+    return {
+      data: trendData.reverse(), // Show chronologically
+      wasteTrend,
+      valueTrend,
+      avgWastePerDay: trendData.reduce((sum, d) => sum + d.waste, 0) / daysToAnalyze,
+      avgValuePerDay: trendData.filter(d => d.hasSnapshot).reduce((sum, d) => sum + d.inventoryValue, 0) / trendData.filter(d => d.hasSnapshot).length || 0,
+      totalDaysWithData: trendData.filter(d => d.hasSnapshot).length
+    };
+  }, [selectedDate, trendRange, activityLog, dailyItems, weeklyItems, monthlyItems, stockCountSnapshots]);
+
   // Calculate comparison metrics
   const comparisonMetrics = useMemo(() => {
     if (comparisonMode === 'none') return null;
@@ -154,8 +229,75 @@ const ReportsView: React.FC = () => {
       };
     }
 
+    if (comparisonMode === 'previous-week') {
+      const weekAgo = new Date(selectedDate);
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      const weekAgoStr = weekAgo.toISOString().split('T')[0];
+      const { startOfDay, endOfDay } = getDateRange(weekAgoStr);
+      
+      const weekAgoActivity = activityLog.filter(entry => {
+        const entryDate = new Date(entry.timestamp);
+        return entryDate >= startOfDay && entryDate <= endOfDay;
+      });
+
+      const weekAgoWaste = weekAgoActivity
+        .filter(entry => entry.type === 'waste')
+        .reduce((sum, entry) => sum + entry.quantity, 0);
+
+      const weekAgoUpdates = weekAgoActivity.filter(a => a.type === 'count_update').length;
+
+      return {
+        type: 'previous-week',
+        label: formatDisplayDate(weekAgoStr),
+        wasteChange: selectedDateMetrics.wasteToday - weekAgoWaste,
+        countUpdatesChange: selectedDateMetrics.countUpdates - weekAgoUpdates,
+      };
+    }
+
+    if (comparisonMode === 'week-average') {
+      const weekData = [];
+      for (let i = 1; i <= 7; i++) {
+        const date = new Date(selectedDate);
+        date.setDate(date.getDate() - i);
+        const dateStr = date.toISOString().split('T')[0];
+        const { startOfDay, endOfDay } = getDateRange(dateStr);
+        
+        const dayActivity = activityLog.filter(entry => {
+          const entryDate = new Date(entry.timestamp);
+          return entryDate >= startOfDay && entryDate <= endOfDay;
+        });
+
+        const dayWaste = dayActivity
+          .filter(entry => entry.type === 'waste')
+          .reduce((sum, entry) => sum + entry.quantity, 0);
+        const dayUpdates = dayActivity.filter(a => a.type === 'count_update').length;
+        
+        weekData.push({ waste: dayWaste, updates: dayUpdates });
+      }
+
+      const avgWaste = weekData.reduce((sum, d) => sum + d.waste, 0) / 7;
+      const avgUpdates = weekData.reduce((sum, d) => sum + d.updates, 0) / 7;
+
+      return {
+        type: 'week-average',
+        label: '7-day average',
+        wasteChange: selectedDateMetrics.wasteToday - avgWaste,
+        countUpdatesChange: selectedDateMetrics.countUpdates - avgUpdates,
+      };
+    }
+
+    if (comparisonMode === 'trend-7-days') {
+      return {
+        type: 'trend-7-days',
+        label: '7-day trend analysis',
+        wasteChange: trendAnalysis.wasteTrend,
+        countUpdatesChange: 0, // Not applicable for trend
+        trendData: trendAnalysis
+      };
+    }
+
     return null;
-  }, [comparisonMode, selectedDate, activityLog, selectedDateMetrics]);
+  }, [comparisonMode, selectedDate, activityLog, selectedDateMetrics, trendAnalysis]);
 
   return (
     <div className="space-y-6">
@@ -192,9 +334,23 @@ const ReportsView: React.FC = () => {
               >
                 <option value="none">No Comparison</option>
                 <option value="previous-day">vs Previous Day</option>
+                <option value="previous-week">vs Previous Week</option>
                 <option value="week-average">vs Week Average</option>
+                <option value="trend-7-days">7-Day Trend</option>
               </select>
             </div>
+
+            <button
+              onClick={() => setShowTrendAnalysis(!showTrendAnalysis)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors ${
+                showTrendAnalysis 
+                  ? 'bg-blue-500 text-white border-blue-500' 
+                  : 'border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              <TrendingUp className="w-5 h-5" />
+              Trend Analysis
+            </button>
           </div>
         </div>
 
@@ -233,13 +389,131 @@ const ReportsView: React.FC = () => {
         )}
 
         {/* Comparison Information */}
-        {comparisonMetrics && (
+        {comparisonMetrics && comparisonMetrics.type !== 'trend-7-days' && (
           <div className="bg-green-50 border border-green-200 rounded-lg p-3">
             <div className="text-sm text-green-800">
               <strong>Comparing with {comparisonMetrics.label}:</strong>
               <div className="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <span>Waste: {comparisonMetrics.wasteChange > 0 ? '+' : ''}{comparisonMetrics.wasteChange} items</span>
+                <span>Waste: {comparisonMetrics.wasteChange > 0 ? '+' : ''}{comparisonMetrics.wasteChange.toFixed(1)} items</span>
                 <span>Updates: {comparisonMetrics.countUpdatesChange > 0 ? '+' : ''}{comparisonMetrics.countUpdatesChange} counts</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Trend Analysis Information */}
+        {comparisonMetrics && comparisonMetrics.type === 'trend-7-days' && comparisonMetrics.trendData && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="text-sm text-blue-800">
+              <strong>7-Day Trend Analysis:</strong>
+              <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <div className="text-xs text-blue-600">Waste Trend</div>
+                  <div className={`font-semibold ${comparisonMetrics.trendData.wasteTrend > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    {comparisonMetrics.trendData.wasteTrend > 0 ? '+' : ''}{comparisonMetrics.trendData.wasteTrend.toFixed(1)} items/day
+                    {comparisonMetrics.trendData.wasteTrend > 0 ? ' ↗' : ' ↘'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-blue-600">Avg Daily Waste</div>
+                  <div className="font-semibold text-blue-800">{comparisonMetrics.trendData.avgWastePerDay.toFixed(1)} items</div>
+                </div>
+                <div>
+                  <div className="text-xs text-blue-600">Data Coverage</div>
+                  <div className="font-semibold text-blue-800">{comparisonMetrics.trendData.totalDaysWithData}/7 days</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Advanced Trend Analysis Panel */}
+        {showTrendAnalysis && (
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-lg font-semibold text-blue-800 flex items-center">
+                <TrendingUp className="w-5 h-5 mr-2" />
+                Advanced Trend Analysis
+              </h4>
+              <select
+                value={trendRange}
+                onChange={(e) => setTrendRange(e.target.value as any)}
+                className="px-3 py-1 text-sm border border-blue-300 rounded-md bg-white"
+              >
+                <option value="7days">7 Days</option>
+                <option value="30days">30 Days</option>
+                <option value="90days">90 Days</option>
+              </select>
+            </div>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Trend Statistics */}
+              <div>
+                <h5 className="font-medium text-blue-700 mb-3">Trend Statistics</h5>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Waste Trend:</span>
+                    <span className={`font-semibold ${trendAnalysis.wasteTrend > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      {trendAnalysis.wasteTrend > 0 ? 'Increasing' : 'Decreasing'} 
+                      ({trendAnalysis.wasteTrend > 0 ? '+' : ''}{trendAnalysis.wasteTrend.toFixed(1)}/day)
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Avg Daily Waste:</span>
+                    <span className="font-semibold text-blue-800">{trendAnalysis.avgWastePerDay.toFixed(1)} items</span>
+                  </div>
+                  {trendAnalysis.avgValuePerDay > 0 && (
+                    <>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Value Trend:</span>
+                        <span className={`font-semibold ${trendAnalysis.valueTrend > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {trendAnalysis.valueTrend > 0 ? 'Increasing' : 'Decreasing'}
+                          (€{trendAnalysis.valueTrend > 0 ? '+' : ''}{trendAnalysis.valueTrend.toFixed(2)}/day)
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Avg Daily Value:</span>
+                        <span className="font-semibold text-blue-800">€{trendAnalysis.avgValuePerDay.toFixed(2)}</span>
+                      </div>
+                    </>
+                  )}
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Data Coverage:</span>
+                    <span className="font-semibold text-blue-800">
+                      {trendAnalysis.totalDaysWithData}/{trendRange === '7days' ? 7 : trendRange === '30days' ? 30 : 90} days
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Simple Trend Visualization */}
+              <div>
+                <h5 className="font-medium text-blue-700 mb-3">Waste Pattern (Last {trendRange === '7days' ? '7' : trendRange === '30days' ? '30' : '90'} Days)</h5>
+                <div className="h-32 flex items-end space-x-1">
+                  {trendAnalysis.data.slice(-20).map((day, index) => {
+                    const maxWaste = Math.max(...trendAnalysis.data.map(d => d.waste));
+                    const height = maxWaste > 0 ? (day.waste / maxWaste) * 100 : 0;
+                    
+                    return (
+                      <div key={day.date} className="flex-1 flex flex-col items-center">
+                        <div
+                          className={`w-full rounded-t transition-all ${
+                            day.waste > trendAnalysis.avgWastePerDay ? 'bg-red-400' : 'bg-green-400'
+                          }`}
+                          style={{ height: `${height}%` }}
+                          title={`${day.displayDate}: ${day.waste} items wasted`}
+                        />
+                        <div className="text-xs text-gray-500 mt-1 writing-mode-vertical transform rotate-45 origin-bottom-left">
+                          {day.displayDate}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="text-xs text-gray-500 mt-2 flex justify-between">
+                  <span>Green: Below average</span>
+                  <span>Red: Above average</span>
+                </div>
               </div>
             </div>
           </div>
@@ -301,9 +575,9 @@ const ReportsView: React.FC = () => {
               </p>
               <p className="text-2xl font-bold text-orange-600">{selectedDateMetrics.wasteToday}</p>
               <p className="text-xs text-gray-500 mt-1">Items wasted</p>
-              {comparisonMetrics && (
+              {comparisonMetrics && comparisonMetrics.type !== 'trend-7-days' && (
                 <p className="text-xs text-orange-600 mt-1">
-                  {comparisonMetrics.wasteChange > 0 ? '+' : ''}{comparisonMetrics.wasteChange} vs {comparisonMetrics.type.replace('-', ' ')}
+                  {comparisonMetrics.wasteChange > 0 ? '+' : ''}{comparisonMetrics.wasteChange.toFixed(1)} vs {comparisonMetrics.type.replace('-', ' ')}
                 </p>
               )}
             </div>
@@ -357,7 +631,7 @@ const ReportsView: React.FC = () => {
               </div>
               <div className="text-right">
                 <span className="font-semibold text-blue-600">{selectedDateMetrics.countUpdates}</span>
-                {comparisonMetrics && (
+                {comparisonMetrics && comparisonMetrics.type !== 'trend-7-days' && (
                   <div className="text-xs text-gray-500">
                     {comparisonMetrics.countUpdatesChange > 0 ? '+' : ''}{comparisonMetrics.countUpdatesChange}
                   </div>

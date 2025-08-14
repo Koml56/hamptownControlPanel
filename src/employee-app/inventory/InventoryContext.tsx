@@ -15,7 +15,7 @@ import {
 import { InventoryContextType } from './types'; // Local context type
 import { generateId, showToast } from './utils';
 import { sendInventoryNotification } from './notificationService';
-import { getSnapshotService, initializeSnapshotService } from './snapshotService';
+import { createStockSnapshot as createInventorySnapshot } from './snapshotService';
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
 
@@ -655,32 +655,22 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
   const createStockSnapshot = useCallback(async (
     date?: string,
     frequencies: ('daily' | 'weekly' | 'monthly')[] = ['daily', 'weekly', 'monthly']
-  ) => {
+  ): Promise<StockCountHistoryEntry[]> => {
     try {
-      // Get or initialize snapshot service
-      const firebaseService = new (require('../firebaseService').FirebaseService)();
-      const snapshotService = getSnapshotService(firebaseService);
-      
-      // Initialize if not already done
-      if (!snapshotService) {
-        await initializeSnapshotService(firebaseService, snapshots);
-      }
-
       const results = [];
-      const snapshotDate = date || new Date().toISOString().split('T')[0];
 
       if (frequencies.includes('daily') && dailyItems.length > 0) {
-        const dailySnapshot = await snapshotService.createSnapshot(dailyItems, 'daily', snapshotDate);
+        const dailySnapshot = await createInventorySnapshot(dailyItems, 'daily', currentUser.name);
         if (dailySnapshot) results.push(dailySnapshot);
       }
 
       if (frequencies.includes('weekly') && weeklyItems.length > 0) {
-        const weeklySnapshot = await snapshotService.createSnapshot(weeklyItems, 'weekly', snapshotDate);
+        const weeklySnapshot = await createInventorySnapshot(weeklyItems, 'weekly', currentUser.name);
         if (weeklySnapshot) results.push(weeklySnapshot);
       }
 
       if (frequencies.includes('monthly') && monthlyItems.length > 0) {
-        const monthlySnapshot = await snapshotService.createSnapshot(monthlyItems, 'monthly', snapshotDate);
+        const monthlySnapshot = await createInventorySnapshot(monthlyItems, 'monthly', currentUser.name);
         if (monthlySnapshot) results.push(monthlySnapshot);
       }
 
@@ -688,6 +678,8 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
         // Update local snapshots state
         const updatedSnapshots = [...snapshots, ...results];
         setStockCountSnapshots(updatedSnapshots);
+        
+        const snapshotDate = date || new Date().toISOString().split('T')[0];
         
         showToast(`Created ${results.length} stock count snapshot${results.length > 1 ? 's' : ''} for ${snapshotDate}`);
         

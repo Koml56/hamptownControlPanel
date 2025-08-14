@@ -1,8 +1,6 @@
 // src/employee-app/inventory/snapshotService.ts
 import { 
-  createAllFrequencySnapshots, 
-  formatSnapshotForStorage,
-  shouldCreateSnapshot
+  createAllFrequencySnapshots
 } from './stockCountSnapshots';
 import type { 
   InventoryItem, 
@@ -11,253 +9,299 @@ import type {
 } from '../types';
 
 /**
- * Snapshot Automation Service
- * Handles automatic creation and management of stock count snapshots
+ * Enhanced validation utilities for snapshot service
+ */
+export class SnapshotValidation {
+  /**
+   * Validates inventory item data
+   */
+  static validateInventoryItem(item: any): item is InventoryItem {
+    if (!item || typeof item !== 'object') {
+      return false;
+    }
+
+    // Required fields validation
+    const requiredFields = ['id', 'name', 'category', 'currentStock', 'minLevel', 'unit', 'cost'];
+    for (const field of requiredFields) {
+      if (item[field] === undefined || item[field] === null) {
+        console.warn(`⚠️ Invalid item - missing field: ${field}`, item);
+        return false;
+      }
+    }
+
+    // Type validation
+    if (typeof item.currentStock !== 'number' || item.currentStock < 0) {
+      console.warn('⚠️ Invalid item - currentStock must be a non-negative number', item);
+      return false;
+    }
+
+    if (typeof item.minLevel !== 'number' || item.minLevel < 0) {
+      console.warn('⚠️ Invalid item - minLevel must be a non-negative number', item);
+      return false;
+    }
+
+    if (typeof item.cost !== 'number' || item.cost < 0) {
+      console.warn('⚠️ Invalid item - cost must be a non-negative number', item);
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Sanitizes inventory item data
+   */
+  static sanitizeInventoryItem(item: any): InventoryItem | null {
+    if (!this.validateInventoryItem(item)) {
+      return null;
+    }
+
+    return {
+      ...item,
+      currentStock: Math.max(0, Number(item.currentStock) || 0),
+      minLevel: Math.max(0, Number(item.minLevel) || 0),
+      cost: Math.max(0, Number(item.cost) || 0),
+      optimalLevel: item.optimalLevel ? Math.max(0, Number(item.optimalLevel)) : item.minLevel * 2,
+      lastUsed: item.lastUsed || new Date().toISOString().split('T')[0]
+    };
+  }
+
+  /**
+   * Validates snapshot data integrity
+   */
+  static validateSnapshot(snapshot: any): boolean {
+    if (!snapshot || typeof snapshot !== 'object') {
+      return false;
+    }
+
+    const requiredFields = ['date', 'frequency', 'timestamp', 'totalItems', 'totalValue', 'itemCounts', 'summary'];
+    for (const field of requiredFields) {
+      if (snapshot[field] === undefined || snapshot[field] === null) {
+        console.warn(`⚠️ Invalid snapshot - missing field: ${field}`);
+        return false;
+      }
+    }
+
+    // Validate item counts structure
+    if (typeof snapshot.itemCounts !== 'object') {
+      console.warn('⚠️ Invalid snapshot - itemCounts must be an object');
+      return false;
+    }
+
+    return true;
+  }
+}
+
+/**
+ * Enhanced error handling utilities
+ */
+export class SnapshotErrorHandler {
+  /**
+   * Wraps async operations with error handling
+   */
+  static async withErrorHandling<T>(
+    operation: () => Promise<T>,
+    context: string,
+    fallback?: T
+  ): Promise<T | null> {
+    try {
+      return await operation();
+    } catch (error) {
+      console.error(`❌ Error in ${context}:`, error);
+      
+      // Log additional context for debugging
+      if (error instanceof Error) {
+        console.error(`Stack trace:`, error.stack);
+      }
+      
+      if (fallback !== undefined) {
+        console.log(`🔄 Using fallback value for ${context}`);
+        return fallback;
+      }
+      
+      return null;
+    }
+  }
+
+  /**
+   * Validates and retries Firebase operations
+   */
+  static async retryOperation<T>(
+    operation: () => Promise<T>,
+    maxRetries: number = 3,
+    delay: number = 1000
+  ): Promise<T> {
+    let lastError: Error = new Error('Unknown error');
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (error) {
+        lastError = error as Error;
+        console.warn(`⚠️ Attempt ${attempt}/${maxRetries} failed:`, error);
+        
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, delay * attempt));
+        }
+      }
+    }
+    
+    throw new Error(lastError?.message || 'Operation failed after retries');
+  }
+}
+
+// Helper functions for creating snapshots - export the key functions
+export const createStockSnapshot = (
+  items: InventoryItem[],
+  frequency: InventoryFrequency,
+  currentUser: string = 'System'
+): Promise<StockCountHistoryEntry> => {
+  return new Promise((resolve, reject) => {
+    try {
+      const snapshots = createAllFrequencySnapshots(
+        frequency === 'daily' ? items : [],
+        frequency === 'weekly' ? items : [],
+        frequency === 'monthly' ? items : [],
+        currentUser
+      );
+
+      const snapshot = snapshots.find(s => s.frequency === frequency);
+      if (!snapshot) {
+        reject(new Error(`No snapshot generated for frequency: ${frequency}`));
+        return;
+      }
+
+      // Convert StockCountSnapshot to StockCountHistoryEntry
+      const historyEntry: StockCountHistoryEntry = {
+        snapshotId: `${frequency}_${snapshot.date.replace(/-/g, '')}`,
+        date: snapshot.date,
+        frequency: snapshot.frequency,
+        snapshot: snapshot
+      };
+
+      resolve(historyEntry);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+export const generateSnapshotSummary = (snapshot: any) => {
+  if (!snapshot || !snapshot.itemCounts) {
+    return {
+      dailyItemsCount: 0,
+      weeklyItemsCount: 0,
+      monthlyItemsCount: 0,
+      totalInventoryValue: 0,
+      outOfStockItems: 0,
+      criticalStockItems: 0,
+      lowStockItems: 0
+    };
+  }
+
+  const items = Object.values(snapshot.itemCounts) as any[];
+  let dailyItemsCount = 0;
+  let weeklyItemsCount = 0;
+  let monthlyItemsCount = 0;
+  let outOfStockItems = 0;
+  let criticalStockItems = 0;
+  let lowStockItems = 0;
+
+  items.forEach(item => {
+    if (item.frequency === 'daily') dailyItemsCount++;
+    if (item.frequency === 'weekly') weeklyItemsCount++;
+    if (item.frequency === 'monthly') monthlyItemsCount++;
+
+    if (item.currentStock === 0) outOfStockItems++;
+    else if (item.currentStock <= item.minLevel * 0.5) criticalStockItems++;
+    else if (item.currentStock <= item.minLevel) lowStockItems++;
+  });
+
+  return {
+    dailyItemsCount,
+    weeklyItemsCount,
+    monthlyItemsCount,
+    totalInventoryValue: snapshot.totalValue || 0,
+    outOfStockItems,
+    criticalStockItems,
+    lowStockItems
+  };
+};
+
+/**
+ * Enhanced Snapshot Automation Service
+ * Handles automatic creation and management of stock count snapshots with robust error handling
  */
 export class SnapshotService {
   private firebaseService: any;
   private snapshots: StockCountHistoryEntry[] = [];
   private isInitialized = false;
+  private readonly maxRetries = 3;
+  private readonly retryDelay = 1000;
 
   constructor(firebaseService: any) {
     this.firebaseService = firebaseService;
   }
 
   /**
-   * Initialize the service with existing snapshots
+   * Initialize the service with existing snapshots and validation
    */
   async initialize(existingSnapshots: StockCountHistoryEntry[] = []) {
-    this.snapshots = existingSnapshots;
-    this.isInitialized = true;
-    console.log('📸 SnapshotService initialized with', this.snapshots.length, 'existing snapshots');
-  }
-
-  /**
-   * Get the latest snapshot date for a specific frequency
-   */
-  private getLatestSnapshotDate(frequency: 'daily' | 'weekly' | 'monthly'): string | undefined {
-    const frequencySnapshots = this.snapshots
-      .filter(s => s.frequency === frequency)
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    
-    return frequencySnapshots[0]?.date;
-  }
-
-  /**
-   * Check if snapshots should be created and create them
-   */
-  async checkAndCreateSnapshots(
-    dailyItems: InventoryItem[],
-    weeklyItems: InventoryItem[],
-    monthlyItems: InventoryItem[]
-  ): Promise<void> {
-    if (!this.isInitialized) {
-      console.warn('⚠️ SnapshotService not initialized');
-      return;
-    }
-
-    const today = new Date().toISOString().split('T')[0];
-    const frequencies: ('daily' | 'weekly' | 'monthly')[] = ['daily', 'weekly', 'monthly'];
-    const itemsByFrequency = {
-      daily: dailyItems,
-      weekly: weeklyItems,
-      monthly: monthlyItems
-    };
-
-    for (const frequency of frequencies) {
-      const lastSnapshotDate = this.getLatestSnapshotDate(frequency);
-      const shouldCreate = shouldCreateSnapshot(frequency, lastSnapshotDate);
-      
-      if (shouldCreate && itemsByFrequency[frequency].length > 0) {
-        console.log(`📸 Creating ${frequency} snapshot for ${today}`);
-        await this.createSnapshot(itemsByFrequency[frequency], frequency, today);
-      }
-    }
-  }
-
-  /**
-   * Manually create a snapshot for a specific date and frequency
-   */
-  async createSnapshot(
-    items: InventoryItem[],
-    frequency: InventoryFrequency,
-    date?: string
-  ): Promise<StockCountHistoryEntry | null> {
-    try {
-      const snapshots = createAllFrequencySnapshots(
-        frequency === 'daily' ? items : [],
-        frequency === 'weekly' ? items : [],
-        frequency === 'monthly' ? items : [],
-        date
-      );
-
-      if (snapshots.length === 0) {
-        console.warn('⚠️ No snapshots created for', frequency);
-        return null;
-      }
-
-      const snapshot = snapshots[0]; // Take the first (and should be only) snapshot
-      const entry = formatSnapshotForStorage(snapshot);
-
-      // Save to Firebase
-      const success = await this.firebaseService.saveStockCountSnapshot(entry);
-      
-      if (success) {
-        // Add to local cache
-        this.snapshots.push(entry);
-        console.log('✅ Snapshot saved successfully:', entry.snapshotId);
-        return entry;
-      } else {
-        console.error('❌ Failed to save snapshot to Firebase');
-        return null;
-      }
-    } catch (error) {
-      console.error('❌ Error creating snapshot:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Create a comprehensive snapshot with all frequencies
-   */
-  async createComprehensiveSnapshot(
-    dailyItems: InventoryItem[],
-    weeklyItems: InventoryItem[],
-    monthlyItems: InventoryItem[],
-    date?: string
-  ): Promise<StockCountHistoryEntry[]> {
-    const results: StockCountHistoryEntry[] = [];
-    const snapshotDate = date || new Date().toISOString().split('T')[0];
-
-    try {
-      // Create snapshots for each frequency that has items
-      if (dailyItems.length > 0) {
-        const dailySnapshot = await this.createSnapshot(dailyItems, 'daily', snapshotDate);
-        if (dailySnapshot) results.push(dailySnapshot);
-      }
-
-      if (weeklyItems.length > 0) {
-        const weeklySnapshot = await this.createSnapshot(weeklyItems, 'weekly', snapshotDate);
-        if (weeklySnapshot) results.push(weeklySnapshot);
-      }
-
-      if (monthlyItems.length > 0) {
-        const monthlySnapshot = await this.createSnapshot(monthlyItems, 'monthly', snapshotDate);
-        if (monthlySnapshot) results.push(monthlySnapshot);
-      }
-
-      console.log(`📸 Created ${results.length} comprehensive snapshots for ${snapshotDate}`);
-      return results;
-    } catch (error) {
-      console.error('❌ Error creating comprehensive snapshots:', error);
-      return results;
-    }
-  }
-
-  /**
-   * Get all snapshots
-   */
-  getSnapshots(): StockCountHistoryEntry[] {
-    return [...this.snapshots];
-  }
-
-  /**
-   * Get snapshots for a specific date
-   */
-  getSnapshotsForDate(date: string): StockCountHistoryEntry[] {
-    return this.snapshots.filter(s => s.date === date);
-  }
-
-  /**
-   * Get snapshots for a date range
-   */
-  getSnapshotsForDateRange(startDate: string, endDate: string): StockCountHistoryEntry[] {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    
-    return this.snapshots.filter(s => {
-      const snapshotDate = new Date(s.date);
-      return snapshotDate >= start && snapshotDate <= end;
-    });
-  }
-
-  /**
-   * Get available snapshot dates
-   */
-  getAvailableDates(): string[] {
-    const dates = new Set(this.snapshots.map(s => s.date));
-    return Array.from(dates).sort().reverse(); // Most recent first
-  }
-
-  /**
-   * Clean up old snapshots (keep last N snapshots per frequency)
-   */
-  async cleanupOldSnapshots(keepCount: number = 100): Promise<void> {
-    try {
-      const frequencies: ('daily' | 'weekly' | 'monthly')[] = ['daily', 'weekly', 'monthly'];
-      
-      for (const frequency of frequencies) {
-        const frequencySnapshots = this.snapshots
-          .filter(s => s.frequency === frequency)
-          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        
-        if (frequencySnapshots.length > keepCount) {
-          const toDelete = frequencySnapshots.slice(keepCount);
-          console.log(`🧹 Cleaning up ${toDelete.length} old ${frequency} snapshots`);
-          
-          // In a real implementation, you'd delete these from Firebase
-          // For now, just remove from local cache
-          this.snapshots = this.snapshots.filter(s => 
-            !toDelete.some(d => d.snapshotId === s.snapshotId)
-          );
+    return SnapshotErrorHandler.withErrorHandling(async () => {
+      // Validate and sanitize existing snapshots
+      this.snapshots = existingSnapshots.filter(snapshot => {
+        if (!SnapshotValidation.validateSnapshot(snapshot)) {
+          console.warn('⚠️ Skipping invalid snapshot during initialization:', snapshot);
+          return false;
         }
+        return true;
+      });
+
+      this.isInitialized = true;
+      console.log('📸 SnapshotService initialized with', this.snapshots.length, 'valid snapshots');
+      
+      return this.snapshots.length;
+    }, 'SnapshotService initialization', 0);
+  }
+
+  /**
+   * Get all snapshots with error handling
+   */
+  async getAllSnapshots(): Promise<StockCountHistoryEntry[]> {
+    const result = await SnapshotErrorHandler.withErrorHandling(async () => {
+      if (!this.isInitialized) {
+        console.warn('⚠️ SnapshotService not initialized, returning empty array');
+        return [];
       }
-    } catch (error) {
-      console.error('❌ Error cleaning up snapshots:', error);
-    }
-  }
 
-  /**
-   * Force create a snapshot for testing purposes
-   */
-  async forceCreateSnapshot(
-    dailyItems: InventoryItem[],
-    weeklyItems: InventoryItem[],
-    monthlyItems: InventoryItem[],
-    date?: string
-  ): Promise<StockCountHistoryEntry[]> {
-    console.log('🔧 Force creating snapshots for testing...');
-    return await this.createComprehensiveSnapshot(dailyItems, weeklyItems, monthlyItems, date);
-  }
-
-  /**
-   * Check if we have historical data for a specific date
-   */
-  hasHistoricalData(date: string): boolean {
-    return this.snapshots.some(s => s.date === date);
-  }
-
-  /**
-   * Get summary statistics for all snapshots
-   */
-  getSummaryStats() {
-    const totalSnapshots = this.snapshots.length;
-    const dailySnapshots = this.snapshots.filter(s => s.frequency === 'daily').length;
-    const weeklySnapshots = this.snapshots.filter(s => s.frequency === 'weekly').length;
-    const monthlySnapshots = this.snapshots.filter(s => s.frequency === 'monthly').length;
+      return this.snapshots.filter(snapshot => 
+        SnapshotValidation.validateSnapshot(snapshot)
+      );
+    }, 'Getting all snapshots', []);
     
-    const dates = this.getAvailableDates();
-    const oldestDate = dates.length > 0 ? dates[dates.length - 1] : null;
-    const newestDate = dates.length > 0 ? dates[0] : null;
+    return result || [];
+  }
+
+  /**
+   * Health check for the snapshot service
+   */
+  async healthCheck(): Promise<{ healthy: boolean; issues: string[] }> {
+    const issues: string[] = [];
+
+    // Check initialization
+    if (!this.isInitialized) {
+      issues.push('Service not initialized');
+    }
+
+    // Check snapshot data integrity
+    const invalidSnapshots = this.snapshots.filter(s => !SnapshotValidation.validateSnapshot(s));
+    if (invalidSnapshots.length > 0) {
+      issues.push(`${invalidSnapshots.length} invalid snapshots found`);
+    }
 
     return {
-      totalSnapshots,
-      dailySnapshots,
-      weeklySnapshots,
-      monthlySnapshots,
-      availableDates: dates.length,
-      oldestDate,
-      newestDate
+      healthy: issues.length === 0,
+      issues
     };
   }
 }
