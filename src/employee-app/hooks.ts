@@ -1,5 +1,5 @@
 // hooks.ts - FIXED: Enhanced Firebase save/load for prep completions with better debugging
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { FirebaseService } from './firebaseService';
 import { getFormattedDate } from './utils';
 import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData, getDefaultStoreItems } from './defaultData';
@@ -17,7 +17,8 @@ import type {
   InventoryItem,
   DatabaseItem,
   ActivityLogEntry,
-  CustomCategory
+  CustomCategory,
+  StockCountHistoryEntry
 } from './types';
 import type { SyncOperation } from './OperationManager';
 import { getDatabase, ref, onValue, off } from 'firebase/database';
@@ -102,13 +103,14 @@ export const useFirebaseData = () => {
   const [inventoryDatabaseItems, setInventoryDatabaseItems] = useState<DatabaseItem[]>([]);
   const [inventoryActivityLog, setInventoryActivityLog] = useState<ActivityLogEntry[]>([]);
   const [inventoryCustomCategories, setInventoryCustomCategories] = useState<CustomCategory[]>([]);
+  const [stockCountSnapshots, setStockCountSnapshots] = useState<StockCountHistoryEntry[]>([]);
   
   // Previous inventory state for change detection
   const previousInventoryDailyRef = useRef<InventoryItem[]>([]);
   const previousInventoryWeeklyRef = useRef<InventoryItem[]>([]);
   const previousInventoryMonthlyRef = useRef<InventoryItem[]>([]);
   
-  const firebaseService = new FirebaseService();
+  const firebaseService = useMemo(() => new FirebaseService(), []);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSaveDataRef = useRef<string>('');
   const isInitializedRef = useRef<boolean>(false);
@@ -239,17 +241,6 @@ export const useFirebaseData = () => {
     }
   }, []);
 
-  // PERFORMANCE OPTIMIZATION: Initialize sync service lazily after initial load
-  const initializeSyncService = useCallback(async () => {
-    // REMOVE: MultiDeviceSyncService initialization
-  }, []);
-
-  // PERFORMANCE: Debounced batch sync function (with sync pause protection and prep data protection)
-  const debouncedBatchSync = useCallback(async () => {
-    // REMOVE: Batch sync logic
-  }, [employees, tasks, dailyData, completedTasks, taskAssignments, customRoles, 
-      prepItems, scheduledPreps, prepSelections, storeItems]);
-
   // PERFORMANCE: Non-blocking main save function - FIXED to include all fields
   const debouncedSave = useCallback(async () => {
     if (isSavingRef.current || connectionStatus === 'error') {
@@ -272,7 +263,8 @@ export const useFirebaseData = () => {
       inventoryWeeklyItemsLength: inventoryWeeklyItems.length,
       inventoryMonthlyItemsLength: inventoryMonthlyItems.length,
       inventoryDatabaseItemsLength: inventoryDatabaseItems.length,
-      inventoryActivityLogLength: inventoryActivityLog.length
+      inventoryActivityLogLength: inventoryActivityLog.length,
+      stockCountSnapshotsLength: stockCountSnapshots.length
     });
 
     if (currentDataHash === lastSaveDataRef.current) {
@@ -301,7 +293,8 @@ export const useFirebaseData = () => {
         inventoryWeeklyItems,
         inventoryMonthlyItems,
         inventoryDatabaseItems,
-        inventoryActivityLog
+        inventoryActivityLog,
+        stockCountSnapshots
       });
 
       setLastSync(new Date().toLocaleTimeString());
@@ -317,8 +310,8 @@ export const useFirebaseData = () => {
   }, [
     employees, tasks, dailyData, completedTasks, taskAssignments, customRoles,
     prepItems, scheduledPreps, prepSelections, storeItems,
-    inventoryDailyItems, inventoryWeeklyItems, inventoryMonthlyItems, inventoryDatabaseItems, inventoryActivityLog,
-    connectionStatus, debouncedBatchSync
+    inventoryDailyItems, inventoryWeeklyItems, inventoryMonthlyItems, inventoryDatabaseItems, inventoryActivityLog, stockCountSnapshots,
+    connectionStatus, firebaseService
   ]);
 
   // PERFORMANCE: Longer debounce for main saves
@@ -400,6 +393,7 @@ export const useFirebaseData = () => {
       setInventoryDatabaseItems(data.inventoryDatabaseItems || []);
       setInventoryActivityLog(data.inventoryActivityLog || []);
       setInventoryCustomCategories(data.inventoryCustomCategories || []);
+      setStockCountSnapshots(data.stockCountSnapshots || []);
       
       // Initialize previous inventory references for change detection
       previousInventoryDailyRef.current = [...dailyItems];
@@ -444,7 +438,7 @@ export const useFirebaseData = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading]);
+  }, [isLoading, firebaseService]);
 
   // CRITICAL FIX: Auto-save critical data immediately (but respect sync pause)
   useEffect(() => {
@@ -456,7 +450,7 @@ export const useFirebaseData = () => {
       
       return () => clearTimeout(autoSaveTimer);
     }
-  }, [employees, tasks, dailyData, completedTasks, taskAssignments, customRoles, scheduledPreps]);
+  }, [employees, tasks, dailyData, completedTasks, taskAssignments, customRoles, scheduledPreps, saveToFirebase]);
 
   // PERFORMANCE: Separate effect for less critical data with longer debounce
   useEffect(() => {
@@ -467,7 +461,7 @@ export const useFirebaseData = () => {
       
       return () => clearTimeout(timer);
     }
-  }, [prepItems, prepSelections, storeItems]);
+  }, [prepItems, prepSelections, storeItems, saveToFirebase]);
 
   // --- REAL-TIME SYNC SETUP ---
   // Initialize Firebase app and database (only once)
@@ -619,6 +613,13 @@ export const useFirebaseData = () => {
       setInventoryCustomCategories(Array.isArray(data) ? data : Object.values(data));
     };
     onValue(inventoryCustomCategoriesRef, handleInventoryCustomCategories);
+
+    const stockCountSnapshotsRef = ref(db, 'stockCountSnapshots');
+    const handleStockCountSnapshots = (snapshot: any) => {
+      const data = snapshot.val() || [];
+      setStockCountSnapshots(Array.isArray(data) ? data : Object.values(data));
+    };
+    onValue(stockCountSnapshotsRef, handleStockCountSnapshots);
     // Cleanup
     return () => {
       off(employeesRef, 'value', handleEmployees);
@@ -637,6 +638,7 @@ export const useFirebaseData = () => {
       off(inventoryMonthlyItemsRef, 'value', handleInventoryMonthlyItems);
       off(inventoryDatabaseItemsRef, 'value', handleInventoryDatabaseItems);
       off(inventoryActivityLogRef, 'value', handleInventoryActivityLog);
+      off(stockCountSnapshotsRef, 'value', handleStockCountSnapshots);
     };
   }, []);
 
@@ -666,6 +668,7 @@ export const useFirebaseData = () => {
     inventoryDatabaseItems,
     inventoryActivityLog,
     inventoryCustomCategories,
+    stockCountSnapshots,
 
     // Setters
     setEmployees,
@@ -684,6 +687,7 @@ export const useFirebaseData = () => {
     setInventoryDatabaseItems,
     setInventoryActivityLog,
     setInventoryCustomCategories,
+    setStockCountSnapshots,
 
     // Actions
     loadFromFirebase,
@@ -707,7 +711,7 @@ export const useAuth = () => {
       // by the EmployeeApp component when employees are loaded
       setCurrentUser(prev => ({ ...prev, name: savedUserName }));
     }
-  }, []); // Empty dependency array - only run once on mount
+  }, [currentUser.name]); // Empty dependency array - only run once on mount
 
   const switchUser = useCallback((employee: Employee) => {
     setCurrentUser({ id: employee.id, name: employee.name });

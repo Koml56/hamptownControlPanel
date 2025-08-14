@@ -5,7 +5,7 @@ import { useInventory } from '../InventoryContext';
 import ItemCard from './ItemCard';
 import CountModal from './CountModal';
 import WasteModal from './WasteModal';
-import { getAllCategoryOptions, getCategoryDisplayName } from '../utils';
+import { getAllCategoryOptions } from '../utils';
 
 const MonthlyView: React.FC = () => {
   const { monthlyItems, customCategories } = useInventory();
@@ -24,9 +24,6 @@ const MonthlyView: React.FC = () => {
     const matchesCategory = categoryFilter === 'all' || item.category === categoryFilter;
     return matchesSearch && matchesCategory;
   });
-
-  // Get unique categories for filter
-  const categories = [...new Set(monthlyItems.map(item => item.category))];
 
   const handleUpdateCount = (itemId: number | string) => {
     setSelectedItemId(itemId);

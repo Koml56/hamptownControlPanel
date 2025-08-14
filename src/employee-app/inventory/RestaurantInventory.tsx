@@ -12,6 +12,7 @@ import ReportsView from './components/ReportsView';
 import OutOfStockView from './components/OutOfStockView';
 import TabNavigation from './components/TabNavigation';
 import ToastContainer from './components/ToastContainer';
+import StockCountHistoryView from './components/StockCountHistoryView';
 
 // Simple Header Component - No background wrapper
 const InventoryHeader: React.FC = () => {
@@ -121,6 +122,8 @@ const InventoryContent: React.FC = () => {
         return <DatabaseView />;
       case 'reports':
         return <ReportsView />;
+      case 'stock-history':
+        return <StockCountHistoryView />;
       default:
         return <DailyView />;
     }
@@ -148,12 +151,14 @@ const RestaurantInventory: React.FC<InventoryTabProps> = ({
   inventoryDatabaseItems,
   inventoryActivityLog,
   inventoryCustomCategories,
+  stockCountSnapshots,
   setInventoryDailyItems,
   setInventoryWeeklyItems,
   setInventoryMonthlyItems,
   setInventoryDatabaseItems,
   setInventoryActivityLog,
   setInventoryCustomCategories,
+  setStockCountSnapshots,
   quickSave
 }) => {
   return (
@@ -166,12 +171,14 @@ const RestaurantInventory: React.FC<InventoryTabProps> = ({
       inventoryDatabaseItems={inventoryDatabaseItems}
       inventoryActivityLog={inventoryActivityLog}
       inventoryCustomCategories={inventoryCustomCategories}
+      stockCountSnapshots={stockCountSnapshots}
       setInventoryDailyItems={setInventoryDailyItems}
       setInventoryWeeklyItems={setInventoryWeeklyItems}
       setInventoryMonthlyItems={setInventoryMonthlyItems}
       setInventoryDatabaseItems={setInventoryDatabaseItems}
       setInventoryActivityLog={setInventoryActivityLog}
       setInventoryCustomCategories={setInventoryCustomCategories}
+      setStockCountSnapshots={setStockCountSnapshots}
       quickSave={quickSave}
     >
       <InventoryContent />

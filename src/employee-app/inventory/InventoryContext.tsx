@@ -9,11 +9,13 @@ import {
   WasteReason,
   CustomCategory,
   Employee,
-  CurrentUser
+  CurrentUser,
+  StockCountHistoryEntry
 } from '../types'; // Import from main types.ts
 import { InventoryContextType } from './types'; // Local context type
 import { generateId, showToast } from './utils';
 import { sendInventoryNotification } from './notificationService';
+import { createStockSnapshot as createInventorySnapshot } from './snapshotService';
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
 
@@ -36,12 +38,14 @@ interface InventoryProviderProps {
   inventoryDatabaseItems: DatabaseItem[];
   inventoryActivityLog: ActivityLogEntry[];
   inventoryCustomCategories: CustomCategory[];
+  stockCountSnapshots: StockCountHistoryEntry[];
   setInventoryDailyItems: (items: InventoryItem[]) => void;
   setInventoryWeeklyItems: (items: InventoryItem[]) => void;
   setInventoryMonthlyItems: (items: InventoryItem[]) => void;
   setInventoryDatabaseItems: (items: DatabaseItem[]) => void;
   setInventoryActivityLog: (log: ActivityLogEntry[]) => void;
   setInventoryCustomCategories: (categories: CustomCategory[]) => void;
+  setStockCountSnapshots: (snapshots: StockCountHistoryEntry[]) => void;
   quickSave: (field: string, data: any) => Promise<boolean>;
 }
 
@@ -55,12 +59,14 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
   inventoryDatabaseItems,
   inventoryActivityLog,
   inventoryCustomCategories,
+  stockCountSnapshots,
   setInventoryDailyItems,
   setInventoryWeeklyItems,
   setInventoryMonthlyItems,
   setInventoryDatabaseItems,
   setInventoryActivityLog,
   setInventoryCustomCategories,
+  setStockCountSnapshots,
   quickSave
 }) => {
   // Use Firebase state instead of local state
@@ -70,10 +76,11 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
   const databaseItems = inventoryDatabaseItems;
   const activityLog = inventoryActivityLog;
   const customCategories = inventoryCustomCategories;
+  const snapshots = stockCountSnapshots;
   
   // UI-only state (not synced to Firebase)
   const [selectedItems, setSelectedItems] = useState<Set<number | string>>(new Set());
-  const [currentTab, setCurrentTab] = useState<InventoryFrequency | 'reports'>('daily');
+  const [currentTab, setCurrentTab] = useState<InventoryFrequency | 'reports' | 'stock-history'>('daily');
 
   // Helper function to get items by frequency
   const getItemsByFrequency = useCallback((frequency: InventoryFrequency): InventoryItem[] => {
@@ -454,7 +461,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     quickSave('inventoryDatabaseItems', updatedDatabaseItems);
 
     showToast(`Successfully unassigned ${dbItem.name} from inventory (removed all duplicates)`);
-  }, [databaseItems]);
+  }, [databaseItems, getItemsByFrequency, quickSave, setInventoryDatabaseItems, setItemsByFrequency]);
 
   // Delete items from database
   const deleteItems = useCallback((itemIds: (number | string)[]) => {
@@ -503,7 +510,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     
     setSelectedItems(new Set());
     showToast(`Deleted ${itemIds.length} items from database`);
-  }, [databaseItems, dailyItems.length, weeklyItems.length, monthlyItems.length, setInventoryDatabaseItems, setInventoryDailyItems, setInventoryWeeklyItems, setInventoryMonthlyItems, quickSave]);
+  }, [databaseItems, dailyItems.length, weeklyItems.length, monthlyItems.length, setInventoryDatabaseItems, setInventoryDailyItems, setInventoryWeeklyItems, setInventoryMonthlyItems, quickSave, getItemsByFrequency]);
 
   // Toggle item selection
   const toggleItemSelection = useCallback((itemId: number | string) => {
@@ -586,7 +593,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
   }, [databaseItems, setInventoryDatabaseItems, quickSave, getItemsByFrequency, setItemsByFrequency]);
 
   // Switch tab
-  const switchTab = useCallback((tab: InventoryFrequency | 'reports') => {
+  const switchTab = useCallback((tab: InventoryFrequency | 'reports' | 'stock-history') => {
     setCurrentTab(tab);
     setSelectedItems(new Set()); // Clear selections when switching tabs
   }, []);
@@ -644,6 +651,58 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     });
   }, [customCategories, setInventoryCustomCategories, quickSave, addActivityEntry]);
 
+  // Snapshot management
+  const createStockSnapshot = useCallback(async (
+    date?: string,
+    frequencies: ('daily' | 'weekly' | 'monthly')[] = ['daily', 'weekly', 'monthly']
+  ): Promise<StockCountHistoryEntry[]> => {
+    try {
+      const results = [];
+
+      if (frequencies.includes('daily') && dailyItems.length > 0) {
+        const dailySnapshot = await createInventorySnapshot(dailyItems, 'daily', currentUser.name);
+        if (dailySnapshot) results.push(dailySnapshot);
+      }
+
+      if (frequencies.includes('weekly') && weeklyItems.length > 0) {
+        const weeklySnapshot = await createInventorySnapshot(weeklyItems, 'weekly', currentUser.name);
+        if (weeklySnapshot) results.push(weeklySnapshot);
+      }
+
+      if (frequencies.includes('monthly') && monthlyItems.length > 0) {
+        const monthlySnapshot = await createInventorySnapshot(monthlyItems, 'monthly', currentUser.name);
+        if (monthlySnapshot) results.push(monthlySnapshot);
+      }
+
+      if (results.length > 0) {
+        // Update local snapshots state
+        const updatedSnapshots = [...snapshots, ...results];
+        setStockCountSnapshots(updatedSnapshots);
+        
+        const snapshotDate = date || new Date().toISOString().split('T')[0];
+        
+        showToast(`Created ${results.length} stock count snapshot${results.length > 1 ? 's' : ''} for ${snapshotDate}`);
+        
+        // Add activity entry
+        addActivityEntry({
+          type: 'manual_add',
+          item: `Stock Count Snapshot: ${results.map(r => r.frequency).join(', ')}`,
+          quantity: results.length,
+          unit: 'snapshots',
+          employee: currentUser.name
+        });
+      } else {
+        showToast('No snapshots created - no items found for selected frequencies');
+      }
+
+      return results;
+    } catch (error) {
+      console.error('❌ Error creating stock snapshot:', error);
+      showToast('Failed to create stock snapshot');
+      return [];
+    }
+  }, [dailyItems, weeklyItems, monthlyItems, snapshots, setStockCountSnapshots, currentUser.name, addActivityEntry]);
+
   const value: InventoryContextType = {
     // Data
     dailyItems,
@@ -652,6 +711,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     databaseItems,
     activityLog,
     customCategories,
+    stockCountSnapshots: snapshots,
     employees,
     currentUser,
     selectedItems,
@@ -666,6 +726,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     setDatabaseItems: setInventoryDatabaseItems,
     setActivityLog: setInventoryActivityLog,
     setCustomCategories: setInventoryCustomCategories,
+    setStockCountSnapshots,
     addActivityEntry,
     updateItemStock,
     reportWaste,
@@ -683,6 +744,8 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     addCustomCategory,
     updateCustomCategory,
     deleteCustomCategory,
+    // Stock Count Snapshots
+    createStockSnapshot,
     // Firebase integration
     quickSave
   };

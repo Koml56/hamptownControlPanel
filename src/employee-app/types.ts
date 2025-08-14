@@ -299,3 +299,77 @@ export interface DailyInventorySnapshot {
     };
   };
 }
+
+// Stock Count History Types - NEW Feature
+export interface StockCountSnapshot {
+  date: string; // YYYY-MM-DD
+  frequency: InventoryFrequency;
+  timestamp: string; // ISO string when snapshot was created
+  totalItems: number;
+  totalValue: number;
+  itemCounts: {
+    [itemId: string]: {
+      itemName: string;
+      category: string;
+      frequency: InventoryFrequency;
+      currentStock: number;
+      unit: string;
+      unitCost: number;
+      totalValue: number;
+      lastCountDate: string;
+      countedBy: string;
+      minLevel: number;
+      optimalLevel: number;
+    };
+  };
+  summary: {
+    dailyItemsCount: number;
+    weeklyItemsCount: number;
+    monthlyItemsCount: number;
+    totalInventoryValue: number;
+    outOfStockItems: number;
+    criticalStockItems: number;
+    lowStockItems: number;
+  };
+}
+
+export interface StockCountHistoryEntry {
+  snapshotId: string;
+  date: string;
+  frequency: InventoryFrequency;
+  snapshot: StockCountSnapshot;
+}
+
+// Enhanced types for stock count history views
+export interface HistoricalStockData {
+  date: string;
+  itemId: string;
+  itemName: string;
+  category: string;
+  frequency: InventoryFrequency;
+  stockLevel: number;
+  unit: string;
+  unitCost: number;
+  totalValue: number;
+  stockStatus: 'out' | 'critical' | 'low' | 'ok';
+}
+
+export interface StockCountComparison {
+  currentDate: string;
+  previousDate: string;
+  itemComparisons: {
+    [itemId: string]: {
+      itemName: string;
+      current: number;
+      previous: number;
+      change: number;
+      changePercent: number;
+    };
+  };
+  summaryChanges: {
+    totalValueChange: number;
+    totalValueChangePercent: number;
+    itemsCountChange: number;
+    outOfStockChange: number;
+  };
+}

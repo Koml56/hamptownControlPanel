@@ -29,7 +29,6 @@ import SyncStatusIndicator from './SyncStatusIndicator';
 import { useFirebaseData, useAuth, useTaskRealtimeSync } from './hooks';
 import { handleAdminLogin } from './adminFunctions';
 import { offlineQueue, resolveTaskConflicts } from './taskOperations';
-import { applyEmployeeOperation, resolveEmployeeConflicts } from './employeeOperations';
 import type { SyncOperation } from './OperationManager';
 import { MultiDeviceSyncService } from './multiDeviceSync';
 import type { DeviceInfo, SyncEvent } from './multiDeviceSync';
@@ -71,6 +70,7 @@ const EmployeeApp: React.FC = () => {
     inventoryDatabaseItems,
     inventoryActivityLog,
     inventoryCustomCategories,
+    stockCountSnapshots,
     setEmployees,
     setTasks,
     setDailyData,
@@ -87,6 +87,7 @@ const EmployeeApp: React.FC = () => {
     setInventoryDatabaseItems,
     setInventoryActivityLog,
     setInventoryCustomCategories,
+    setStockCountSnapshots,
     loadFromFirebase,
     saveToFirebase,
     quickSave,
@@ -195,8 +196,6 @@ const EmployeeApp: React.FC = () => {
 
   // State for task operations history
   const [taskOperations, setTaskOperations] = useState<SyncOperation[]>([]);
-  // State for employee operations history
-  const [employeeOperations, setEmployeeOperations] = useState<SyncOperation[]>([]);
 
   // Initialize on mount - with better control
   useEffect(() => {
@@ -213,7 +212,7 @@ const EmployeeApp: React.FC = () => {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [employees.length, loadFromFirebase]);
 
   // Initialize Multi-Device Sync Service
   useEffect(() => {
@@ -256,7 +255,7 @@ const EmployeeApp: React.FC = () => {
         syncServiceRef.current = null;
       }
     };
-  }, [currentUser]);
+  }, [currentUser, setCompletedTasks, setDailyData, setEmployees, setTaskAssignments, setTasks]);
 
   // Set up periodic auto-save (every 5 minutes)
   // Set up periodic auto-save (every 5 minutes) with logging for cleaning tasks
@@ -414,11 +413,6 @@ const EmployeeApp: React.FC = () => {
     setConflictCount(conflicts);
   }, [taskOperations]);
 
-  useEffect(() => {
-    const conflicts = employeeOperations.length - resolveEmployeeConflicts(employeeOperations).length;
-    setConflictCount(prev => prev + conflicts);
-  }, [employeeOperations]);
-
   // Handle task operations
   const handleTaskOperation = useCallback((op: SyncOperation) => {
     setTaskOperations(prev => [...prev, op]);
@@ -427,17 +421,6 @@ const EmployeeApp: React.FC = () => {
 
   // Subscribe to WebSocket
   useTaskRealtimeSync(handleTaskOperation);
-
-  // Handle local task operations
-  const handleLocalTaskOperation = (op: SyncOperation) => {
-    setTaskOperations(prev => [...prev, op]);
-  };
-
-  // Handle employee operations
-  const handleEmployeeOperation = useCallback((op: SyncOperation) => {
-    setEmployeeOperations(prev => [...prev, op]);
-    applyEmployeeOperation(employees, op);
-  }, [employees]);
 
   // Offline queue handler
   useEffect(() => {
@@ -1007,12 +990,14 @@ const EmployeeApp: React.FC = () => {
             inventoryDatabaseItems={inventoryDatabaseItems}
             inventoryActivityLog={inventoryActivityLog}
             inventoryCustomCategories={inventoryCustomCategories}
+            stockCountSnapshots={stockCountSnapshots}
             setInventoryDailyItems={setInventoryDailyItems}
             setInventoryWeeklyItems={setInventoryWeeklyItems}
             setInventoryMonthlyItems={setInventoryMonthlyItems}
             setInventoryDatabaseItems={setInventoryDatabaseItems}
             setInventoryActivityLog={setInventoryActivityLog}
             setInventoryCustomCategories={setInventoryCustomCategories}
+            setStockCountSnapshots={setStockCountSnapshots}
             quickSave={quickSave}
           />
         )}

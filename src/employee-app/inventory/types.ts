@@ -1,5 +1,5 @@
 // src/employee-app/inventory/types.ts
-// Import inventory types from main types.ts for Firebase integration
+  // Import inventory types from main types.ts for Firebase integration
 import type {
   InventoryFrequency,
   InventoryCategory,
@@ -9,7 +9,8 @@ import type {
   WasteReason,
   CustomCategory,
   Employee,
-  CurrentUser
+  CurrentUser,
+  StockCountHistoryEntry
 } from '../types';
 
 export interface InventoryTabProps {
@@ -23,12 +24,14 @@ export interface InventoryTabProps {
   inventoryDatabaseItems: DatabaseItem[];
   inventoryActivityLog: ActivityLogEntry[];
   inventoryCustomCategories: CustomCategory[];
+  stockCountSnapshots: StockCountHistoryEntry[];
   setInventoryDailyItems: (items: InventoryItem[]) => void;
   setInventoryWeeklyItems: (items: InventoryItem[]) => void;
   setInventoryMonthlyItems: (items: InventoryItem[]) => void;
   setInventoryDatabaseItems: (items: DatabaseItem[]) => void;
   setInventoryActivityLog: (log: ActivityLogEntry[]) => void;
   setInventoryCustomCategories: (categories: CustomCategory[]) => void;
+  setStockCountSnapshots: (snapshots: StockCountHistoryEntry[]) => void;
   quickSave: (field: string, data: any) => Promise<boolean>;
 }
 
@@ -40,12 +43,13 @@ export interface InventoryContextType {
   databaseItems: DatabaseItem[];
   activityLog: ActivityLogEntry[];
   customCategories: CustomCategory[];
+  stockCountSnapshots: StockCountHistoryEntry[];
   employees: Employee[];
   currentUser: CurrentUser;
   selectedItems: Set<number | string>;
   
   // UI State
-  currentTab: InventoryFrequency | 'reports';
+  currentTab: InventoryFrequency | 'reports' | 'stock-history';
   
   // Actions
   setDailyItems: (items: InventoryItem[]) => void;
@@ -54,6 +58,7 @@ export interface InventoryContextType {
   setDatabaseItems: (items: DatabaseItem[]) => void;
   setActivityLog: (log: ActivityLogEntry[]) => void;
   setCustomCategories: (categories: CustomCategory[]) => void;
+  setStockCountSnapshots: (snapshots: StockCountHistoryEntry[]) => void;
   addActivityEntry: (entry: Omit<ActivityLogEntry, 'id' | 'timestamp'>) => void;
   updateItemStock: (itemId: number | string, newStock: number, frequency: InventoryFrequency, employee: string, notes?: string, deliveries?: number) => void;
   reportWaste: (itemId: number | string, amount: number, reason: WasteReason, frequency: InventoryFrequency, employee: string, notes?: string) => void;
@@ -66,11 +71,13 @@ export interface InventoryContextType {
   toggleItemSelection: (itemId: number | string) => void;
   selectMultipleItems: (itemIds: (number | string)[]) => void;
   clearSelection: () => void;
-  switchTab: (tab: InventoryFrequency | 'reports') => void;
+  switchTab: (tab: InventoryFrequency | 'reports' | 'stock-history') => void;
   // Custom Category Management
   addCustomCategory: (category: Omit<CustomCategory, 'id' | 'createdAt' | 'isDefault'>) => void;
   updateCustomCategory: (id: string, category: CustomCategory) => void;
   deleteCustomCategory: (id: string) => void;
+  // Stock Count Snapshots
+  createStockSnapshot: (date?: string, frequencies?: ('daily' | 'weekly' | 'monthly')[]) => Promise<any[]>;
   // Firebase integration
   quickSave: (field: string, data: any) => Promise<boolean>;
 }

@@ -17,3 +17,4 @@ export { default as WasteModal } from './WasteModal';
 export { default as BulkActionsBar } from './BulkActionsBar';
 export { default as ScrollPicker } from './ScrollPicker';
 export { default as ToastContainer } from './ToastContainer';
+export { default as StockCountHistoryView } from './StockCountHistoryView';

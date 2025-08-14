@@ -1,5 +1,5 @@
 // src/employee-app/inventory/utils.ts
-import type { InventoryCategory, StockStatus, InventoryFrequency, CustomCategory } from '../types';
+import type { InventoryCategory, InventoryFrequency, CustomCategory } from '../types';
 
 export const getCategoryIcon = (category: InventoryCategory | string | undefined, customCategories?: CustomCategory[]): string => {
   if (!category) return '❓';
@@ -178,12 +178,6 @@ export const exportToCSV = (data: any[], filename: string): void => {
 };
 
 export const validateExcelFile = (file: File): { valid: boolean; error?: string } => {
-  const validTypes = [
-    'application/vnd.ms-excel', // .xls
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
-    'text/csv' // .csv
-  ];
-  
   const validExtensions = ['.xls', '.xlsx', '.csv'];
   const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
   
