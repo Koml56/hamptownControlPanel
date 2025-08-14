@@ -49,7 +49,7 @@ export interface InventoryContextType {
   selectedItems: Set<number | string>;
   
   // UI State
-  currentTab: InventoryFrequency | 'reports' | 'stock-history';
+  currentTab: InventoryFrequency | 'reports' | 'stock-history' | 'outofstock';
   
   // Actions
   setDailyItems: (items: InventoryItem[]) => void;
@@ -71,7 +71,7 @@ export interface InventoryContextType {
   toggleItemSelection: (itemId: number | string) => void;
   selectMultipleItems: (itemIds: (number | string)[]) => void;
   clearSelection: () => void;
-  switchTab: (tab: InventoryFrequency | 'reports' | 'stock-history') => void;
+  switchTab: (tab: InventoryFrequency | 'reports' | 'stock-history' | 'outofstock') => void;
   // Custom Category Management
   addCustomCategory: (category: Omit<CustomCategory, 'id' | 'createdAt' | 'isDefault'>) => void;
   updateCustomCategory: (id: string, category: CustomCategory) => void;
