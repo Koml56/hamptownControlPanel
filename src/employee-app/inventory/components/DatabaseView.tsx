@@ -20,14 +20,17 @@ interface ItemEditModalProps {
 
 const ItemEditModal: React.FC<ItemEditModalProps> = ({ item, onClose, onSave, onUnassign }) => {
   const { customCategories } = useInventory();
+  
+  // Get all available categories
+  const allCategoryOptions = getAllCategoryOptions(customCategories);
+  
   const [frequency, setFrequency] = useState<InventoryFrequency>(item.assignedTo || 'daily');
-  const [category, setCategory] = useState<InventoryCategory | string>(item.assignedCategory || 'produce');
+  const [category, setCategory] = useState<InventoryCategory | string>(
+    item.assignedCategory || (allCategoryOptions.length > 0 ? allCategoryOptions[0].value : 'meat')
+  );
   const [minLevel, setMinLevel] = useState(5);
   const [initialStock, setInitialStock] = useState(0);
   const [box, setBox] = useState(item.box || false);
-
-  // Get all available categories
-  const allCategoryOptions = getAllCategoryOptions(customCategories);
 
   const handleSave = () => {
     onSave(frequency, category, minLevel, initialStock, box);
