@@ -12,6 +12,7 @@ import ReportsView from './components/ReportsView';
 import OutOfStockView from './components/OutOfStockView';
 import TabNavigation from './components/TabNavigation';
 import ToastContainer from './components/ToastContainer';
+import StockCountHistoryView from './components/StockCountHistoryView';
 
 // Simple Header Component - No background wrapper
 const InventoryHeader: React.FC = () => {
@@ -121,6 +122,8 @@ const InventoryContent: React.FC = () => {
         return <DatabaseView />;
       case 'reports':
         return <ReportsView />;
+      case 'stock-history':
+        return <StockCountHistoryView />;
       default:
         return <DailyView />;
     }

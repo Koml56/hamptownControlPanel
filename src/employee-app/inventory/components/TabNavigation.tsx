@@ -1,11 +1,11 @@
 // src/employee-app/inventory/components/TabNavigation.tsx
 import React from 'react';
-import { Flame, Calendar, Package, Database, BarChart3, AlertTriangle } from 'lucide-react';
+import { Flame, Calendar, Package, Database, BarChart3, AlertTriangle, Clock } from 'lucide-react';
 import { useInventory } from '../InventoryContext';
 import { getOutOfStockItems } from '../consumptionAnalytics';
 
 const TabNavigation: React.FC = () => {
-  const { currentTab, switchTab, dailyItems, weeklyItems, monthlyItems, databaseItems } = useInventory();
+  const { currentTab, switchTab, dailyItems, weeklyItems, monthlyItems, databaseItems, stockCountSnapshots } = useInventory();
 
   // Calculate out of stock count
   const outOfStockCount = React.useMemo(() => {
@@ -55,6 +55,13 @@ const TabNavigation: React.FC = () => {
       icon: BarChart3,
       count: 0,
       color: 'purple'
+    },
+    {
+      id: 'stock-history' as const,
+      label: 'Stock History',
+      icon: Clock,
+      count: stockCountSnapshots.length,
+      color: 'indigo'
     }
   ];
 
