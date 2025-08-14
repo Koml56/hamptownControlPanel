@@ -1060,6 +1060,7 @@ const EmployeeApp: React.FC = () => {
             setEmployees={setEmployeesWithSave}
             setDailyData={setDailyDataWithSave}
             saveToFirebase={saveToFirebase}
+            quickSave={quickSave}
           />
         )}
 
