@@ -51,7 +51,7 @@ const TabNavigation: React.FC = () => {
     },
     {
       id: 'reports' as const,
-      label: 'Analytics',
+      label: 'Daily Reports',
       icon: BarChart3,
       count: 0,
       color: 'purple'
