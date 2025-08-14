@@ -145,6 +145,7 @@ const RestaurantInventory: React.FC<InventoryTabProps> = ({
   currentUser, 
   connectionStatus,
   employees,
+  isAdmin, // NEW: Admin state from main app
   inventoryDailyItems,
   inventoryWeeklyItems,
   inventoryMonthlyItems,
@@ -165,6 +166,7 @@ const RestaurantInventory: React.FC<InventoryTabProps> = ({
     <InventoryProvider
       currentUser={currentUser}
       employees={employees}
+      isAdmin={isAdmin} // NEW: Pass admin state to provider
       inventoryDailyItems={inventoryDailyItems}
       inventoryWeeklyItems={inventoryWeeklyItems}
       inventoryMonthlyItems={inventoryMonthlyItems}

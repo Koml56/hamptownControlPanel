@@ -807,6 +807,7 @@ const EmployeeApp: React.FC = () => {
             currentUser={currentUser}
             connectionStatus={connectionStatus}
             employees={employees}
+            isAdmin={isAdmin} // NEW: Pass admin state to inventory
             inventoryDailyItems={inventoryDailyItems}
             inventoryWeeklyItems={inventoryWeeklyItems}
             inventoryMonthlyItems={inventoryMonthlyItems}

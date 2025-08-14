@@ -170,6 +170,7 @@ describe('StockCountHistoryView', () => {
     currentUser: { id: 1, name: 'John Doe' },
     selectedItems: new Set(),
     currentTab: 'stock-history' as const,
+    isAdmin: true, // NEW: Mock admin state
     
     // Mock functions
     setDailyItems: jest.fn(),

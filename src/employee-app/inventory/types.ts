@@ -17,6 +17,7 @@ export interface InventoryTabProps {
   currentUser: CurrentUser;
   connectionStatus: string;
   employees: Employee[];
+  isAdmin: boolean; // NEW: Admin state from main app
   // Firebase props
   inventoryDailyItems: InventoryItem[];
   inventoryWeeklyItems: InventoryItem[];
@@ -50,6 +51,7 @@ export interface InventoryContextType {
   
   // UI State
   currentTab: InventoryFrequency | 'reports' | 'stock-history' | 'outofstock';
+  isAdmin: boolean; // NEW: Admin state from main app
   
   // Actions
   setDailyItems: (items: InventoryItem[]) => void;

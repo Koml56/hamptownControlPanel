@@ -31,6 +31,7 @@ interface InventoryProviderProps {
   children: React.ReactNode;
   currentUser: CurrentUser;
   employees: Employee[];
+  isAdmin: boolean; // NEW: Admin state from main app
   // Firebase props
   inventoryDailyItems: InventoryItem[];
   inventoryWeeklyItems: InventoryItem[];
@@ -53,6 +54,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
   children,
   currentUser,
   employees,
+  isAdmin, // NEW: Admin state from main app
   inventoryDailyItems,
   inventoryWeeklyItems,
   inventoryMonthlyItems,
@@ -718,6 +720,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     
     // UI State
     currentTab,
+    isAdmin, // NEW: Admin state from main app
     
     // Actions
     setDailyItems: setInventoryDailyItems,
