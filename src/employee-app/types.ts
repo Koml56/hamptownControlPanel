@@ -260,3 +260,42 @@ export interface EnhancedInventoryItem extends InventoryItem {
   daysRemaining?: number;
   recommendedOrder?: number;
 }
+
+// Daily Inventory Snapshot for Daily Reports
+export interface DailyInventorySnapshot {
+  date: string; // YYYY-MM-DD format
+  timestamp: string; // ISO string when snapshot was created
+  inventoryValue: number; // Total value of all inventory
+  itemSnapshots: {
+    [itemId: string]: {
+      itemName: string;
+      category: string;
+      frequency: InventoryFrequency;
+      beginningCount: number;
+      endingCount: number;
+      received: number; // Deliveries/additions
+      used: number; // Consumed/sold
+      wasted: number; // Waste reported
+      wasteReason?: string;
+      unitCost: number;
+      totalValue: number;
+    };
+  };
+  dailyMetrics: {
+    totalPurchases: number; // Value of new inventory added
+    totalWaste: number; // Value of wasted inventory
+    totalUsage: number; // Value of inventory consumed
+    deliveriesReceived: number; // Count of delivery transactions
+    lowStockAlerts: number; // Items below minimum
+    outOfStockEvents: string[]; // Item IDs that went out of stock
+    countUpdates: number; // Number of stock count updates
+    wasteReports: number; // Number of waste reports
+  };
+  employeeActivity: {
+    [employeeId: string]: {
+      countsPerformed: number;
+      wasteReported: number;
+      lastActivity: string; // timestamp
+    };
+  };
+}
