@@ -33,6 +33,7 @@ import { applyEmployeeOperation, resolveEmployeeConflicts } from './employeeOper
 import type { SyncOperation } from './OperationManager';
 import { MultiDeviceSyncService } from './multiDeviceSync';
 import type { DeviceInfo, SyncEvent } from './multiDeviceSync';
+import DailyResetManager from './resetManager';
 
 // Types and Constants
 import { getFormattedDate } from './utils';
@@ -172,6 +173,16 @@ const EmployeeApp: React.FC = () => {
   const [storeItems, setStoreItems] = useState<StoreItem[]>(getDefaultStoreItems());
   const [showDailyResetNotification, setShowDailyResetNotification] = useState(false);
   const [conflictCount, setConflictCount] = useState(0);
+  
+  // Daily Reset Manager - centralized reset logic with proper debouncing
+  const resetManager = React.useRef<DailyResetManager | null>(null);
+  if (!resetManager.current && quickSave && setShowDailyResetNotification) {
+    resetManager.current = new DailyResetManager(
+      firebaseMeta.current,
+      quickSave,
+      setShowDailyResetNotification
+    );
+  }
 
   // Multi-device sync state
   const [activeDevices, setActiveDevices] = useState<DeviceInfo[]>([]);
@@ -279,71 +290,82 @@ const EmployeeApp: React.FC = () => {
     return () => clearInterval(interval);
   }, [connectionStatus, isLoading, saveToFirebase, completedTasks, taskAssignments]);
 
-  // Check for daily reset notification - improved logic with better debouncing
+  // Time-based daily reset check - uses current state without dependencies to avoid reactivity
   useEffect(() => {
-    const checkDailyReset = () => {
-      const lastNotificationDate = localStorage.getItem('lastDailyResetNotification');
-      const lastResetDate = localStorage.getItem('lastTaskResetDate');
-      const today = getFormattedDate(new Date());
-      
-      console.log('🔍 Checking notification:', { 
-        lastNotificationDate, 
-        lastResetDate, 
-        today, 
-        completedTasksSize: completedTasks.size,
-        taskAssignmentsCount: Object.keys(taskAssignments).length,
-        shouldShow: lastResetDate === today && lastNotificationDate !== today && 
-                   (completedTasks.size === 0 && Object.keys(taskAssignments).length === 0)
-      });
-      
-      if (lastResetDate === today && 
-          lastNotificationDate !== today && 
-          completedTasks.size === 0 &&
-          Object.keys(taskAssignments).length === 0) {
+    if (!isLoading && connectionStatus === 'connected' && resetManager.current) {
+      // Check every 30 seconds for date changes, getting current task state without dependencies
+      const checkInterval = setInterval(async () => {
+        // Get current state directly without triggering re-renders
+        const currentCompletedTasks = (window as any).getCurrentCompletedTasks?.() || new Set();
+        const currentTaskAssignments = (window as any).getCurrentTaskAssignments?.() || {};
+        const completedTasksCount = currentCompletedTasks.size || 0;
+        const taskAssignmentsCount = Object.keys(currentTaskAssignments).length;
         
-        console.log('📢 Showing daily reset notification');
-        setShowDailyResetNotification(true);
-        localStorage.setItem('lastDailyResetNotification', today);
-        
-        setTimeout(() => {
-          setShowDailyResetNotification(false);
-        }, 8000);
-      }
-    };
+        if (await resetManager.current!.shouldPerformReset(completedTasksCount, taskAssignmentsCount)) {
+          console.log('🔄 [TIME-BASED] Performing scheduled daily reset check');
+          await resetManager.current!.performReset(completedTasksCount, taskAssignmentsCount);
+        }
+      }, 30000); // Check every 30 seconds
 
-    if (!isLoading && connectionStatus === 'connected') {
-      const timer = setTimeout(checkDailyReset, 2000);
+      // Also check immediately on app startup (with delay)
+      const initialTimer = setTimeout(async () => {
+        const currentCompletedTasks = (window as any).getCurrentCompletedTasks?.() || new Set();
+        const currentTaskAssignments = (window as any).getCurrentTaskAssignments?.() || {};
+        const completedTasksCount = currentCompletedTasks.size || 0;
+        const taskAssignmentsCount = Object.keys(currentTaskAssignments).length;
+        
+        if (await resetManager.current!.shouldPerformReset(completedTasksCount, taskAssignmentsCount)) {
+          console.log('🔄 [STARTUP] Performing initial daily reset check');
+          await resetManager.current!.performReset(completedTasksCount, taskAssignmentsCount);
+        }
+      }, 2000);
+
+      return () => {
+        clearInterval(checkInterval);
+        clearTimeout(initialTimer);
+      };
+    }
+  }, [isLoading, connectionStatus]); // Only depend on loading and connection, NOT task state
+
+  // Expose current state to window for reset manager (avoid dependency issues)
+  useEffect(() => {
+    (window as any).getCurrentCompletedTasks = () => completedTasks;
+    (window as any).getCurrentTaskAssignments = () => taskAssignments;
+    
+    return () => {
+      delete (window as any).getCurrentCompletedTasks;
+      delete (window as any).getCurrentTaskAssignments;
+    };
+  }, [completedTasks, taskAssignments]); // This one CAN have dependencies since it's just exposing state
+
+  // Daily reset notification display - separate from reset logic
+  useEffect(() => {
+    if (!isLoading && connectionStatus === 'connected' && resetManager.current) {
+      const checkNotification = () => {
+        if (resetManager.current!.shouldShowNotification()) {
+          console.log('📢 Showing daily reset notification');
+          setShowDailyResetNotification(true);
+          resetManager.current!.markNotificationShown();
+          
+          setTimeout(() => {
+            setShowDailyResetNotification(false);
+          }, 8000);
+        }
+      };
+
+      const timer = setTimeout(checkNotification, 2000);
       return () => clearTimeout(timer);
     }
-  }, [completedTasks.size, taskAssignments, isLoading, connectionStatus]);
+  }, [isLoading, connectionStatus]); // Only depend on loading and connection
 
-  // Check for daily reset notification when switching to cleaning tasks tab
+  // Tab switch notification check - only shows notification, no reset triggers
   useEffect(() => {
-    if (activeTab === 'tasks') {
-      const checkDailyResetOnTabSwitch = () => {
-        const lastNotificationDate = localStorage.getItem('lastDailyResetNotification');
-        const lastResetDate = localStorage.getItem('lastTaskResetDate');
-        const today = getFormattedDate(new Date());
-        
-        console.log('🎯 [TAB-SWITCH] Checking notification on tasks tab open:', { 
-          activeTab,
-          lastNotificationDate, 
-          lastResetDate, 
-          today, 
-          completedTasksSize: completedTasks.size,
-          taskAssignmentsCount: Object.keys(taskAssignments).length,
-          shouldShow: lastResetDate === today && lastNotificationDate !== today && 
-                     (completedTasks.size === 0 && Object.keys(taskAssignments).length === 0)
-        });
-        
-        if (lastResetDate === today && 
-            lastNotificationDate !== today && 
-            completedTasks.size === 0 &&
-            Object.keys(taskAssignments).length === 0) {
-          
-          console.log('📢 [TAB-SWITCH] Showing daily reset notification immediately');
+    if (activeTab === 'tasks' && !isLoading && connectionStatus === 'connected' && resetManager.current) {
+      const checkNotificationOnTabSwitch = () => {
+        if (resetManager.current!.shouldShowNotification()) {
+          console.log('📢 [TAB-SWITCH] Showing daily reset notification on tasks tab');
           setShowDailyResetNotification(true);
-          localStorage.setItem('lastDailyResetNotification', today);
+          resetManager.current!.markNotificationShown();
           
           setTimeout(() => {
             setShowDailyResetNotification(false);
@@ -352,10 +374,10 @@ const EmployeeApp: React.FC = () => {
       };
 
       // Small delay to ensure state is properly loaded
-      const timer = setTimeout(checkDailyResetOnTabSwitch, 500);
+      const timer = setTimeout(checkNotificationOnTabSwitch, 500);
       return () => clearTimeout(timer);
     }
-  }, [activeTab, completedTasks.size, taskAssignments]);
+  }, [activeTab, isLoading, connectionStatus]); // Removed task state dependencies
 
   // Update user mood when current user changes
   useEffect(() => {
@@ -618,139 +640,83 @@ const EmployeeApp: React.FC = () => {
     }
   }, [loadFromFirebase, setEmployees, setTasks, setDailyData, setCompletedTasks, setTaskAssignments]);
 
-  // DAILY RESET LOGIC with distributed synchronization
+  // REMOVED: Old daily reset logic - now handled by resetManager with proper time-based checking
+
+  // Visibility change handler with debouncing - only triggers reset check, not immediate reset
   useEffect(() => {
-    const performAutomaticDailyReset = async () => {
-      const today = getFormattedDate(new Date());
-      const lastResetDate = await firebaseMeta.current.getLastTaskResetDate();
-      console.log('🔍 [CROSS-DEVICE] Checking for automatic daily reset:', {
-        today,
-        lastResetDate,
-        needsReset: lastResetDate !== today,
-        completedTasksCount: completedTasks.size,
-        taskAssignmentsCount: Object.keys(taskAssignments).length
-      });
-      
-      if (lastResetDate !== today && (completedTasks.size > 0 || Object.keys(taskAssignments).length > 0)) {
-        console.log('🌅 [CROSS-DEVICE] NEW DAY DETECTED: Attempting synchronized daily reset');
+    let visibilityTimeout: NodeJS.Timeout;
+    
+    const handleVisibilityChange = async () => {
+      if (!document.hidden && !isLoading && connectionStatus === 'connected' && resetManager.current) {
+        console.log('👁️ [VISIBILITY] App became visible, scheduling reset check');
         
-        // Distributed lock mechanism to prevent simultaneous resets from multiple devices
-        const lockKey = `daily_reset_lock_${today}`;
-        const deviceId = localStorage.getItem('deviceId') || `device-${Date.now()}`;
-        const lockExpiry = Date.now() + 30000; // 30 second lock
-        
-        try {
-          // Try to acquire the lock
-          const lockResult = await firebaseMeta.current.acquireResetLock?.(lockKey, deviceId, lockExpiry);
-          
-          if (lockResult === true) {
-            console.log('🔒 [CROSS-DEVICE] Reset lock acquired, performing reset');
-            
-            const saveResults = await Promise.all([
-              quickSave('completedTasks', []),
-              quickSave('taskAssignments', {})
-            ]);
-            
-            if (saveResults.every(result => result === true)) {
-              await firebaseMeta.current.setLastTaskResetDate(today);
-              console.log('✅ [CROSS-DEVICE] Daily reset completed successfully');
-              setShowDailyResetNotification(true);
-              setTimeout(() => {
-                setShowDailyResetNotification(false);
-              }, 8000);
-            } else {
-              console.error('❌ [CROSS-DEVICE] AUTOMATIC RESET: Failed to save to Firebase');
-            }
-            
-            // Release the lock
-            await firebaseMeta.current.releaseResetLock?.(lockKey, deviceId);
-            console.log('🔓 [CROSS-DEVICE] Reset lock released');
-          } else {
-            console.log('⏳ [CROSS-DEVICE] Another device is handling the daily reset, skipping');
-          }
-        } catch (error) {
-          console.error('❌ [CROSS-DEVICE] AUTOMATIC RESET: Error during reset:', error);
-          // Try to release lock on error
-          try {
-            await firebaseMeta.current.releaseResetLock?.(lockKey, deviceId);
-          } catch (releaseError) {
-            console.error('❌ [CROSS-DEVICE] Failed to release lock after error:', releaseError);
-          }
+        // Clear any existing timeout to debounce rapid visibility changes
+        if (visibilityTimeout) {
+          clearTimeout(visibilityTimeout);
         }
+        
+        // Debounced reset check after 2 seconds
+        visibilityTimeout = setTimeout(async () => {
+          const currentCompletedTasks = (window as any).getCurrentCompletedTasks?.() || new Set();
+          const currentTaskAssignments = (window as any).getCurrentTaskAssignments?.() || {};
+          const completedTasksCount = currentCompletedTasks.size || 0;
+          const taskAssignmentsCount = Object.keys(currentTaskAssignments).length;
+          
+          if (await resetManager.current!.shouldPerformReset(completedTasksCount, taskAssignmentsCount)) {
+            console.log('🔄 [VISIBILITY] Performing debounced daily reset check');
+            await resetManager.current!.performReset(completedTasksCount, taskAssignmentsCount);
+          }
+        }, 2000);
       }
     };
     
-    if (!isLoading && connectionStatus === 'connected' && employees.length > 0) {
-      const timer = setTimeout(() => {
-        performAutomaticDailyReset();
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [isLoading, connectionStatus, employees.length, completedTasks.size, Object.keys(taskAssignments).length, quickSave]);
-
-  // Check for daily reset on visibility change
-  useEffect(() => {
-    const handleVisibilityChange = async () => {
-      if (!document.hidden && !isLoading && connectionStatus === 'connected') {
-        const today = getFormattedDate(new Date());
-        const lastResetDate = await firebaseMeta.current.getLastTaskResetDate();
-        console.log('👁️ [CROSS-DEVICE] App became visible, checking for daily reset:', {
-          today,
-          lastResetDate,
-          needsReset: lastResetDate !== today
-        });
-        if (lastResetDate !== today && (completedTasks.size > 0 || Object.keys(taskAssignments).length > 0)) {
-          setTimeout(async () => {
-            try {
-              const saveResults = await Promise.all([
-                quickSave('completedTasks', []),
-                quickSave('taskAssignments', {})
-              ]);
-              if (saveResults.every(result => result === true)) {
-                await firebaseMeta.current.setLastTaskResetDate(today);
-                setShowDailyResetNotification(true);
-                setTimeout(() => setShowDailyResetNotification(false), 8000);
-              }
-            } catch (error) {
-              console.error('❌ [CROSS-DEVICE] VISIBILITY RESET: Failed:', error);
-            }
-          }, 1000);
-        }
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (visibilityTimeout) {
+        clearTimeout(visibilityTimeout);
       }
     };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [isLoading, connectionStatus, completedTasks.size, Object.keys(taskAssignments).length, quickSave]);
+  }, [isLoading, connectionStatus]); // Removed task state dependencies
 
-  // Debug helper
+  // Debug helper - now shows reset manager state  
   useEffect(() => {
-    if (!isLoading && connectionStatus === 'connected') {
+    if (!isLoading && connectionStatus === 'connected' && resetManager.current) {
+      const currentCompletedTasks = (window as any).getCurrentCompletedTasks?.() || new Set();
+      const currentTaskAssignments = (window as any).getCurrentTaskAssignments?.() || {};
+      
       console.log('📊 DAILY RESET DEBUG:', {
         currentDate: getFormattedDate(new Date()),
         lastResetDate: localStorage.getItem('lastTaskResetDate'),
-        completedTasksCount: completedTasks.size,
-        taskAssignmentsCount: Object.keys(taskAssignments).length,
+        completedTasksCount: currentCompletedTasks.size || 0,
+        taskAssignmentsCount: Object.keys(currentTaskAssignments).length,
         isLoading,
         connectionStatus,
-        employeeCount: employees.length
+        employeeCount: employees.length,
+        resetManagerState: resetManager.current.getState()
       });
     }
-  }, [completedTasks.size, Object.keys(taskAssignments).length, isLoading, connectionStatus]);
+  }, [isLoading, connectionStatus, employees.length]); // Added employees.length dependency
 
-  // Manual trigger for testing
+  // Manual trigger for testing - now uses reset manager
   useEffect(() => {
     (window as any).triggerDailyReset = async () => {
-      console.log('🧪 MANUAL TRIGGER: Forcing daily reset from console');
-      const today = getFormattedDate(new Date());
-      localStorage.setItem('lastTaskResetDate', today);
+      console.log('🧪 MANUAL TRIGGER: Forcing daily reset via reset manager');
+      
+      if (!resetManager.current) {
+        console.error('❌ Reset manager not available');
+        return false;
+      }
       
       try {
-        const results = await Promise.all([
-          quickSave('completedTasks', []),
-          quickSave('taskAssignments', {})
-        ]);
-        console.log('✅ Manual trigger results:', results);
-        return results;
+        const currentCompletedTasks = (window as any).getCurrentCompletedTasks?.() || new Set();
+        const currentTaskAssignments = (window as any).getCurrentTaskAssignments?.() || {};
+        const completedTasksCount = currentCompletedTasks.size || 0;
+        const taskAssignmentsCount = Object.keys(currentTaskAssignments).length;
+        
+        const result = await resetManager.current.performReset(completedTasksCount, taskAssignmentsCount);
+        console.log('✅ Manual trigger result:', result);
+        return result;
       } catch (error) {
         console.error('❌ Manual trigger failed:', error);
         return false;
@@ -760,7 +726,7 @@ const EmployeeApp: React.FC = () => {
     return () => {
       delete (window as any).triggerDailyReset;
     };
-  }, [quickSave]);
+  }, [quickSave]); // Keep quickSave dependency since manual trigger needs current function
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
