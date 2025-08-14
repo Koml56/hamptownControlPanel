@@ -120,13 +120,26 @@ export const handleStockUpdate = (
     updatedHistory.splice(0, updatedHistory.length - 100);
   }
   
+  // Auto-clear ordered status if stock is replenished above critical levels
+  let clearedOrderedStatus = item.orderedStatus;
+  if (item.orderedStatus?.isOrdered && newStock > item.currentStock) {
+    // Stock increased (indicating delivery/restocking)
+    const newStockStatus = getStockStatus(newStock, item.minLevel);
+    if (newStockStatus === 'ok' || newStockStatus === 'low') {
+      // Stock is now above critical levels (>20%), clear ordered status
+      clearedOrderedStatus = undefined;
+    }
+  }
+
   const updatedItem: InventoryItem = {
     ...item,
     currentStock: newStock,
     lastUsed: new Date().toISOString(),
     consumptionHistory: updatedHistory,
     // Ensure optimal level is set
-    optimalLevel: item.optimalLevel || item.minLevel * 2
+    optimalLevel: item.optimalLevel || item.minLevel * 2,
+    // Clear ordered status if conditions are met
+    orderedStatus: clearedOrderedStatus
   };
   
   return { updatedItem, consumptionEntry };
