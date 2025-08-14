@@ -461,7 +461,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     quickSave('inventoryDatabaseItems', updatedDatabaseItems);
 
     showToast(`Successfully unassigned ${dbItem.name} from inventory (removed all duplicates)`);
-  }, [databaseItems]);
+  }, [databaseItems, getItemsByFrequency, quickSave, setInventoryDatabaseItems, setItemsByFrequency]);
 
   // Delete items from database
   const deleteItems = useCallback((itemIds: (number | string)[]) => {
@@ -510,7 +510,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     
     setSelectedItems(new Set());
     showToast(`Deleted ${itemIds.length} items from database`);
-  }, [databaseItems, dailyItems.length, weeklyItems.length, monthlyItems.length, setInventoryDatabaseItems, setInventoryDailyItems, setInventoryWeeklyItems, setInventoryMonthlyItems, quickSave]);
+  }, [databaseItems, dailyItems.length, weeklyItems.length, monthlyItems.length, setInventoryDatabaseItems, setInventoryDailyItems, setInventoryWeeklyItems, setInventoryMonthlyItems, quickSave, getItemsByFrequency]);
 
   // Toggle item selection
   const toggleItemSelection = useCallback((itemId: number | string) => {

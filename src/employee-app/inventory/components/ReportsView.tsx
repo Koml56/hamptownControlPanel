@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { BarChart3, TrendingUp, AlertTriangle, DollarSign, Calendar, GitCompare } from 'lucide-react';
 import { useInventory } from '../InventoryContext';
 import { getStockStatus } from '../stockUtils';
-import type { DailyInventorySnapshot } from '../../types';
+import type { } from '../../types';
 
 const ReportsView: React.FC = () => {
   const { dailyItems, weeklyItems, monthlyItems, activityLog, stockCountSnapshots } = useInventory();

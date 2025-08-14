@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { useInventory } from '../InventoryContext';
 import { getStockStatus } from '../stockUtils';
-import type { StockCountSnapshot, InventoryFrequency, StockCountHistoryEntry } from '../../types';
+import type { StockCountSnapshot, InventoryFrequency } from '../../types';
 
 interface HistoricalItemData {
   itemId: string;
@@ -119,12 +119,6 @@ const StockCountHistoryView: React.FC = () => {
     
     return combinedSnapshot;
   }, [selectedDate, stockCountSnapshots]);
-
-  // Get comparison snapshot
-  const comparisonSnapshot = useMemo(() => {
-    if (!comparisonDate) return null;
-    return stockCountSnapshots.find(s => s.date === comparisonDate)?.snapshot || null;
-  }, [comparisonDate, stockCountSnapshots]);
 
   // Convert snapshot to historical item data
   const historicalData = useMemo((): HistoricalItemData[] => {
@@ -287,7 +281,6 @@ const StockCountHistoryView: React.FC = () => {
     }
   }, [createStockSnapshot]);
 
-  const isToday = selectedDate === new Date().toISOString().split('T')[0];
   const hasHistoricalData = selectedSnapshot !== null;
 
   return (

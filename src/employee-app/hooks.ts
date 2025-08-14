@@ -1,5 +1,5 @@
 // hooks.ts - FIXED: Enhanced Firebase save/load for prep completions with better debugging
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { FirebaseService } from './firebaseService';
 import { getFormattedDate } from './utils';
 import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData, getDefaultStoreItems } from './defaultData';
@@ -110,7 +110,7 @@ export const useFirebaseData = () => {
   const previousInventoryWeeklyRef = useRef<InventoryItem[]>([]);
   const previousInventoryMonthlyRef = useRef<InventoryItem[]>([]);
   
-  const firebaseService = new FirebaseService();
+  const firebaseService = useMemo(() => new FirebaseService(), []);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSaveDataRef = useRef<string>('');
   const isInitializedRef = useRef<boolean>(false);
@@ -241,17 +241,6 @@ export const useFirebaseData = () => {
     }
   }, []);
 
-  // PERFORMANCE OPTIMIZATION: Initialize sync service lazily after initial load
-  const initializeSyncService = useCallback(async () => {
-    // REMOVE: MultiDeviceSyncService initialization
-  }, []);
-
-  // PERFORMANCE: Debounced batch sync function (with sync pause protection and prep data protection)
-  const debouncedBatchSync = useCallback(async () => {
-    // REMOVE: Batch sync logic
-  }, [employees, tasks, dailyData, completedTasks, taskAssignments, customRoles, 
-      prepItems, scheduledPreps, prepSelections, storeItems]);
-
   // PERFORMANCE: Non-blocking main save function - FIXED to include all fields
   const debouncedSave = useCallback(async () => {
     if (isSavingRef.current || connectionStatus === 'error') {
@@ -322,7 +311,7 @@ export const useFirebaseData = () => {
     employees, tasks, dailyData, completedTasks, taskAssignments, customRoles,
     prepItems, scheduledPreps, prepSelections, storeItems,
     inventoryDailyItems, inventoryWeeklyItems, inventoryMonthlyItems, inventoryDatabaseItems, inventoryActivityLog, stockCountSnapshots,
-    connectionStatus, debouncedBatchSync
+    connectionStatus, firebaseService
   ]);
 
   // PERFORMANCE: Longer debounce for main saves
@@ -449,7 +438,7 @@ export const useFirebaseData = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading]);
+  }, [isLoading, firebaseService]);
 
   // CRITICAL FIX: Auto-save critical data immediately (but respect sync pause)
   useEffect(() => {
@@ -461,7 +450,7 @@ export const useFirebaseData = () => {
       
       return () => clearTimeout(autoSaveTimer);
     }
-  }, [employees, tasks, dailyData, completedTasks, taskAssignments, customRoles, scheduledPreps]);
+  }, [employees, tasks, dailyData, completedTasks, taskAssignments, customRoles, scheduledPreps, saveToFirebase]);
 
   // PERFORMANCE: Separate effect for less critical data with longer debounce
   useEffect(() => {
@@ -472,7 +461,7 @@ export const useFirebaseData = () => {
       
       return () => clearTimeout(timer);
     }
-  }, [prepItems, prepSelections, storeItems]);
+  }, [prepItems, prepSelections, storeItems, saveToFirebase]);
 
   // --- REAL-TIME SYNC SETUP ---
   // Initialize Firebase app and database (only once)
@@ -722,7 +711,7 @@ export const useAuth = () => {
       // by the EmployeeApp component when employees are loaded
       setCurrentUser(prev => ({ ...prev, name: savedUserName }));
     }
-  }, []); // Empty dependency array - only run once on mount
+  }, [currentUser.name]); // Empty dependency array - only run once on mount
 
   const switchUser = useCallback((employee: Employee) => {
     setCurrentUser({ id: employee.id, name: employee.name });

@@ -20,9 +20,6 @@ const ItemCard: React.FC<ItemCardProps> = ({
 }) => {
   const stockStatus = getStockStatus(item.currentStock, item.minLevel);
   const status = stockStatus; // This is now a string directly
-  const stockColor = stockStatus === 'out' ? 'red' :
-                     stockStatus === 'critical' ? 'orange' :
-                     stockStatus === 'low' ? 'yellow' : 'green';
   
   const getStatusClasses = () => {
     switch (status) {

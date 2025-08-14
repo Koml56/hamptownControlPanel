@@ -2,8 +2,7 @@
 import { 
   createAllFrequencySnapshots, 
   formatSnapshotForStorage,
-  shouldCreateSnapshot,
-  generateSnapshotId 
+  shouldCreateSnapshot
 } from './stockCountSnapshots';
 import type { 
   InventoryItem, 
