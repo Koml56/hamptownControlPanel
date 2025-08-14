@@ -11,7 +11,8 @@ export const purchaseItem = (
   item: StoreItem,
   employees: Employee[],
   setEmployees: (updater: (prev: Employee[]) => Employee[]) => void,
-  setDailyData: (updater: (prev: DailyDataMap) => DailyDataMap) => void
+  setDailyData: (updater: (prev: DailyDataMap) => DailyDataMap) => void,
+  quickSave?: (field: string, data: any) => Promise<boolean>
 ): boolean => {
   const employee = employees.find(emp => emp.id === employeeId);
 
@@ -34,11 +35,20 @@ export const purchaseItem = (
   });
 
   // Обновляем баллы сотрудника
-  setEmployees(prevEmployees =>
-    prevEmployees.map(emp =>
+  setEmployees(prevEmployees => {
+    const updatedEmployees = prevEmployees.map(emp =>
       emp.id === employeeId ? { ...emp, points: emp.points - item.cost } : emp
-    )
-  );
+    );
+    
+    // Immediately save updated employees to Firebase if quickSave is available
+    if (quickSave) {
+      quickSave('employees', updatedEmployees).catch(error => {
+        console.error('❌ Failed to save employee points immediately:', error);
+      });
+    }
+    
+    return updatedEmployees;
+  });
 
   // Создаем запись покупки
   const purchase: Purchase = {
@@ -79,6 +89,13 @@ export const purchaseItem = (
         totalPointsSpent: newTotalSpent
       }
     };
+
+    // Immediately save updated dailyData to Firebase if quickSave is available
+    if (quickSave) {
+      quickSave('dailyData', updatedDailyData).catch(error => {
+        console.error('❌ Failed to save purchase data immediately:', error);
+      });
+    }
 
     return updatedDailyData;
   });

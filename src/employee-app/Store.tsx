@@ -12,6 +12,7 @@ interface StoreProps {
   setEmployees: (updater: (prev: Employee[]) => Employee[]) => void;
   setDailyData: (updater: (prev: DailyDataMap) => DailyDataMap) => void;
   saveToFirebase: () => void;
+  quickSave: (field: string, data: any) => Promise<boolean>;
 }
 
 const Store: React.FC<StoreProps> = ({
@@ -21,7 +22,8 @@ const Store: React.FC<StoreProps> = ({
   dailyData,
   setEmployees,
   setDailyData,
-  saveToFirebase
+  saveToFirebase,
+  quickSave
 }) => {
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [showHistory, setShowHistory] = useState(false);
@@ -43,19 +45,27 @@ const Store: React.FC<StoreProps> = ({
     ? storeItems 
     : storeItems.filter(item => item.category === activeCategory);
 
-  const handlePurchase = (item: StoreItem) => {
+  const handlePurchase = async (item: StoreItem) => {
     if (!currentEmployee) return;
     
-    const success = purchaseItem(
-      currentUser.id,
-      item,
-      employees,
-      setEmployees,
-      setDailyData
-    );
-    
-    if (success) {
-      alert(`🎉 Successfully purchased: ${item.name}! Check with your manager to redeem.`);
+    try {
+      const success = purchaseItem(
+        currentUser.id,
+        item,
+        employees,
+        setEmployees,
+        setDailyData,
+        quickSave
+      );
+      
+      if (success) {
+        // Show success message with better feedback
+        alert(`🎉 Successfully purchased: ${item.name}! Your purchase has been saved. Check with your manager to redeem.`);
+        console.log(`✅ Purchase completed successfully: ${item.name} for ${item.cost} points`);
+      }
+    } catch (error) {
+      console.error('❌ Purchase failed:', error);
+      alert(`❌ Sorry, your purchase failed due to a technical issue. Please try again.`);
     }
   };
 
