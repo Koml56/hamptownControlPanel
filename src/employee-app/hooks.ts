@@ -701,7 +701,15 @@ export const useFirebaseData = () => {
 
 export const useAuth = () => {
   const [currentUser, setCurrentUser] = useState<CurrentUser>({ id: 1, name: 'Luka' });
-  const [isAdmin, setIsAdmin] = useState(false);
+  
+  // Admin authentication state - persistent across sessions
+  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('adminSession') === 'true';
+    } catch {
+      return false;
+    }
+  });
 
   // Restore user from localStorage on component mount (only once)
   useEffect(() => {
@@ -728,15 +736,29 @@ export const useAuth = () => {
     }
   }, []);
 
-  const logoutAdmin = useCallback(() => {
-    setIsAdmin(false);
+  // Enhanced setIsAdmin with localStorage persistence
+  const setIsAdminWithPersistence = useCallback((isAdminValue: boolean) => {
+    setIsAdmin(isAdminValue);
+    try {
+      if (isAdminValue) {
+        localStorage.setItem('adminSession', 'true');
+      } else {
+        localStorage.removeItem('adminSession');
+      }
+    } catch (error) {
+      console.error('Failed to save admin session:', error);
+    }
   }, []);
+
+  const logoutAdmin = useCallback(() => {
+    setIsAdminWithPersistence(false);
+  }, [setIsAdminWithPersistence]);
 
   return {
     currentUser,
     isAdmin,
     setCurrentUser,
-    setIsAdmin,
+    setIsAdmin: setIsAdminWithPersistence,
     switchUser,
     logoutAdmin
   };
