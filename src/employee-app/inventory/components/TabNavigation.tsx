@@ -8,9 +8,13 @@ import { ADMIN_PASSWORD } from '../../constants';
 const TabNavigation: React.FC = () => {
   const { currentTab, switchTab, dailyItems, weeklyItems, monthlyItems, databaseItems, stockCountSnapshots } = useInventory();
   
-  // Admin authentication state
+  // Admin authentication state - persistent across sessions
   const [isAdmin, setIsAdmin] = useState<boolean>(() => {
-    return localStorage.getItem('inventoryAdminSession') === 'true';
+    try {
+      return localStorage.getItem('inventoryAdminSession') === 'true';
+    } catch {
+      return false;
+    }
   });
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
@@ -31,7 +35,11 @@ const TabNavigation: React.FC = () => {
   const handleAdminLogin = () => {
     if (passwordInput === ADMIN_PASSWORD) {
       setIsAdmin(true);
-      localStorage.setItem('inventoryAdminSession', 'true');
+      try {
+        localStorage.setItem('inventoryAdminSession', 'true');
+      } catch (error) {
+        console.error('Failed to save admin session:', error);
+      }
       setShowPasswordModal(false);
       setPasswordInput('');
       
@@ -142,14 +150,15 @@ const TabNavigation: React.FC = () => {
             const isProtected = isAdminTab(tab.id);
             const shouldShow = !isProtected || isAdmin;
             
-            if (!shouldShow) return null;
-            
             return (
               <button
                 key={tab.id}
                 onClick={() => handleTabClick(tab.id)}
                 className={getTabClasses(tab.id, tab.color)}
-                style={{ minWidth: 'max-content' }}
+                style={{ 
+                  minWidth: 'max-content',
+                  display: shouldShow ? 'flex' : 'none'
+                }}
               >
                 <Icon className="w-5 h-5 mr-2" />
                 {tab.label}
