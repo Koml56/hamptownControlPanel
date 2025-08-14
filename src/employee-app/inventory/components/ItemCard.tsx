@@ -1,8 +1,8 @@
 // src/employee-app/inventory/components/ItemCard.tsx
 import React from 'react';
 import { Edit3, Trash2 } from 'lucide-react';
-import { InventoryItem } from '../../types';
-import { getCategoryIcon } from '../utils';
+import { InventoryItem, CustomCategory } from '../../types';
+import { getCategoryIcon, getCategoryDisplayName } from '../utils';
 import { getStockStatus } from '../stockUtils';
 
 interface ItemCardProps {
@@ -10,13 +10,15 @@ interface ItemCardProps {
   onUpdateCount: (itemId: number | string) => void;
   onReportWaste: (itemId: number | string) => void;
   showQuickActions?: boolean;
+  customCategories?: CustomCategory[];
 }
 
 const ItemCard: React.FC<ItemCardProps> = ({ 
   item, 
   onUpdateCount, 
   onReportWaste, 
-  showQuickActions = true 
+  showQuickActions = true,
+  customCategories = []
 }) => {
   const stockStatus = getStockStatus(item.currentStock, item.minLevel);
   const status = stockStatus; // This is now a string directly
@@ -61,10 +63,10 @@ const ItemCard: React.FC<ItemCardProps> = ({
       {/* Header */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center">
-          <span className="text-2xl mr-3">{getCategoryIcon(item.category)}</span>
+          <span className="text-2xl mr-3">{getCategoryIcon(item.category, customCategories)}</span>
           <div>
             <h4 className="font-semibold text-gray-800">{item.name}</h4>
-            <p className="text-sm text-gray-600 capitalize">{item.category}</p>
+            <p className="text-sm text-gray-600 capitalize">{getCategoryDisplayName(item.category, customCategories)}</p>
           </div>
         </div>
         {getStatusBadge()}
