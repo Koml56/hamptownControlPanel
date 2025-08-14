@@ -1,7 +1,7 @@
 // firebaseService.ts - FIXED to include all prep and store fields
 import { FIREBASE_CONFIG } from './constants';
 import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData } from './defaultData';
-import type { Employee, Task, DailyDataMap, TaskAssignments, PrepItem, ScheduledPrep, PrepSelections, InventoryItem, DatabaseItem, ActivityLogEntry } from './types';
+import type { Employee, Task, DailyDataMap, TaskAssignments, PrepItem, ScheduledPrep, PrepSelections, InventoryItem, DatabaseItem, ActivityLogEntry, StoreItem, Purchase } from './types';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, onValue, off } from 'firebase/database';
 
@@ -379,7 +379,9 @@ export class FirebaseService {
         inventoryWeeklyRes,
         inventoryMonthlyRes,
         inventoryDatabaseRes,
-        inventoryActivityLogRes
+        inventoryActivityLogRes,
+        storeItemsRes,
+        purchasesRes
       ] = await Promise.all([
         fetch(`${this.baseUrl}/employees.json`),
         fetch(`${this.baseUrl}/tasks.json`),
@@ -394,7 +396,9 @@ export class FirebaseService {
         fetch(`${this.baseUrl}/inventoryWeeklyItems.json`),
         fetch(`${this.baseUrl}/inventoryMonthlyItems.json`),
         fetch(`${this.baseUrl}/inventoryDatabaseItems.json`),
-        fetch(`${this.baseUrl}/inventoryActivityLog.json`)
+        fetch(`${this.baseUrl}/inventoryActivityLog.json`),
+        fetch(`${this.baseUrl}/storeItems.json`),
+        fetch(`${this.baseUrl}/purchases.json`)
       ]);
       
       const employeesData = await employeesRes.json();
@@ -411,6 +415,8 @@ export class FirebaseService {
       const inventoryMonthlyData = await inventoryMonthlyRes.json();
       const inventoryDatabaseData = await inventoryDatabaseRes.json();
       const inventoryActivityLogData = await inventoryActivityLogRes.json();
+      const storeItemsData = await storeItemsRes.json();
+      const purchasesData = await purchasesRes.json();
       
       // Migrate employees data to include points if missing
       const migratedEmployees = employeesData ? employeesData.map((emp: any) => ({
@@ -451,7 +457,10 @@ export class FirebaseService {
         inventoryWeeklyItems: inventoryWeeklyData || [],
         inventoryMonthlyItems: inventoryMonthlyData || [],
         inventoryDatabaseItems: inventoryDatabaseData || [],
-        inventoryActivityLog: inventoryActivityLogData || []
+        inventoryActivityLog: inventoryActivityLogData || [],
+        // Store data
+        storeItems: storeItemsData || [],
+        purchases: purchasesData || []
       };
       
     } catch (error) {
@@ -505,6 +514,9 @@ export class FirebaseService {
     inventoryMonthlyItems: InventoryItem[];
     inventoryDatabaseItems: DatabaseItem[];
     inventoryActivityLog: ActivityLogEntry[];
+    // Store fields
+    storeItems: StoreItem[];
+    purchases: Purchase[];
   }) {
     console.log('🔥 Saving all data to Firebase...');
 
@@ -523,7 +535,9 @@ export class FirebaseService {
       'inventoryWeeklyItems',
       'inventoryMonthlyItems',
       'inventoryDatabaseItems',
-      'inventoryActivityLog'
+      'inventoryActivityLog',
+      'storeItems',
+      'purchases'
     ];
 
     const success = await this.batchSave(fields, data);

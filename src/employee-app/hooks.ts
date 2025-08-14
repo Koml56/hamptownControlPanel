@@ -16,7 +16,9 @@ import type {
   InventoryItem,
   DatabaseItem,
   ActivityLogEntry,
-  CustomCategory
+  CustomCategory,
+  StoreItem,
+  Purchase
 } from './types';
 import type { SyncOperation } from './OperationManager';
 import { getDatabase, ref, onValue, off } from 'firebase/database';
@@ -98,6 +100,10 @@ export const useFirebaseData = () => {
   const [inventoryDatabaseItems, setInventoryDatabaseItems] = useState<DatabaseItem[]>([]);
   const [inventoryActivityLog, setInventoryActivityLog] = useState<ActivityLogEntry[]>([]);
   const [inventoryCustomCategories, setInventoryCustomCategories] = useState<CustomCategory[]>([]);
+  
+  // Store data
+  const [storeItems, setStoreItems] = useState<StoreItem[]>([]);
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
   
   // Previous inventory state for change detection
   const previousInventoryDailyRef = useRef<InventoryItem[]>([]);
@@ -267,7 +273,9 @@ export const useFirebaseData = () => {
       inventoryWeeklyItemsLength: inventoryWeeklyItems.length,
       inventoryMonthlyItemsLength: inventoryMonthlyItems.length,
       inventoryDatabaseItemsLength: inventoryDatabaseItems.length,
-      inventoryActivityLogLength: inventoryActivityLog.length
+      inventoryActivityLogLength: inventoryActivityLog.length,
+      storeItemsLength: storeItems.length,
+      purchasesLength: purchases.length
     });
 
     if (currentDataHash === lastSaveDataRef.current) {
@@ -295,7 +303,10 @@ export const useFirebaseData = () => {
         inventoryWeeklyItems,
         inventoryMonthlyItems,
         inventoryDatabaseItems,
-        inventoryActivityLog
+        inventoryActivityLog,
+        // Store fields
+        storeItems,
+        purchases
       });
 
       setLastSync(new Date().toLocaleTimeString());
@@ -312,6 +323,7 @@ export const useFirebaseData = () => {
     employees, tasks, dailyData, completedTasks, taskAssignments, customRoles,
     prepItems, scheduledPreps, prepSelections,
     inventoryDailyItems, inventoryWeeklyItems, inventoryMonthlyItems, inventoryDatabaseItems, inventoryActivityLog,
+    storeItems, purchases,
     connectionStatus, debouncedBatchSync
   ]);
 
@@ -393,6 +405,10 @@ export const useFirebaseData = () => {
       setInventoryDatabaseItems(data.inventoryDatabaseItems || []);
       setInventoryActivityLog(data.inventoryActivityLog || []);
       setInventoryCustomCategories(data.inventoryCustomCategories || []);
+      
+      // Set store data
+      setStoreItems(data.storeItems || []);
+      setPurchases(data.purchases || []);
       
       // Initialize previous inventory references for change detection
       previousInventoryDailyRef.current = [...dailyItems];
@@ -648,6 +664,8 @@ export const useFirebaseData = () => {
     inventoryDatabaseItems,
     inventoryActivityLog,
     inventoryCustomCategories,
+    storeItems,
+    purchases,
 
     // Setters
     setEmployees,
@@ -665,6 +683,8 @@ export const useFirebaseData = () => {
     setInventoryDatabaseItems,
     setInventoryActivityLog,
     setInventoryCustomCategories,
+    setStoreItems,
+    setPurchases,
 
     // Actions
     loadFromFirebase,

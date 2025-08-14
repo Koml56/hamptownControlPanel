@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Users, CheckSquare, Plus, Trash2, Edit3, Save, Settings, UserPlus, Star, ChefHat, Clock } from 'lucide-react';
+import { Users, CheckSquare, Plus, Trash2, Edit3, Save, Settings, UserPlus, Star, ChefHat, Clock, ShoppingCart, X, Check } from 'lucide-react';
 import { getMoodColor } from './utils';
 import { 
   addEmployee, 
@@ -10,7 +10,7 @@ import {
   addCustomRole,
   removeCustomRole
 } from './adminFunctions';
-import type { Task, PrepItem, Recipe, AdminPanelProps } from './types';
+import type { Task, PrepItem, Recipe, AdminPanelProps, StoreItem } from './types';
 import debounce from 'lodash/debounce';
 
 const AdminPanel: React.FC<AdminPanelProps> = ({
@@ -18,21 +18,27 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   tasks,
   customRoles,
   prepItems,
+  storeItems,
+  purchases,
   setEmployees,
   setTasks,
   setCustomRoles,
   setPrepItems,
+  setStoreItems,
+  setPurchases,
   quickSave
 }) => {
   const [showRoleManagement, setShowRoleManagement] = useState(false);
   const [showPrepManagement, setShowPrepManagement] = useState(false);
   const [showEmployeeManagement, setShowEmployeeManagement] = useState(false);
+  const [showStoreManagement, setShowStoreManagement] = useState(false);
   const [newEmployeeName, setNewEmployeeName] = useState('');
   const [newEmployeeRole, setNewEmployeeRole] = useState('Cleaner');
   const [newRoleName, setNewRoleName] = useState('');
   const [editingEmployee, setEditingEmployee] = useState<number | null>(null);
   const [editingTask, setEditingTask] = useState<number | null>(null);
   const [editingPrepItem, setEditingPrepItem] = useState<number | string | null>(null);
+  const [editingStoreItem, setEditingStoreItem] = useState<number | null>(null);
   const [showRecipeEditor, setShowRecipeEditor] = useState<number | string | null>(null);
   
   // Prep item form state
@@ -43,6 +49,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const [newPrepHasRecipe, setNewPrepHasRecipe] = useState(false);
   const [newPrepRecipe, setNewPrepRecipe] = useState<Recipe>({ ingredients: '', instructions: '' });
 
+  // Store item form state
+  const [newStoreName, setNewStoreName] = useState('');
+  const [newStoreDescription, setNewStoreDescription] = useState('');
+  const [newStoreCost, setNewStoreCost] = useState('');
+  const [newStoreCategory, setNewStoreCategory] = useState('food');
+  const [newStoreIcon, setNewStoreIcon] = useState('🍔');
+
   const prepCategories = [
     { id: 'majoneesit', name: 'Majoneesit', icon: '🥄' },
     { id: 'proteiinit', name: 'Proteiinit', icon: '🥩' },
@@ -51,6 +64,74 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     { id: 'kastikkeet', name: 'Kastikkeet', icon: '🧂' },
     { id: 'muut', name: 'Muut', icon: '🔧' }
   ];
+
+  const storeCategories = [
+    { id: 'food', name: 'Food', icon: '🍔' },
+    { id: 'drinks', name: 'Drinks', icon: '☕' },
+    { id: 'rewards', name: 'Rewards', icon: '🏆' },
+    { id: 'gifts', name: 'Gifts', icon: '🎁' }
+  ];
+
+  const storeIcons = ['🍔', '🍟', '🌭', '🥪', '🍕', '☕', '🥤', '🧋', '🍺', '🏆', '🎁', '🎉', '🎊', '⭐', '💎'];
+
+  // Store management functions
+  const handleAddStoreItem = () => {
+    if (!newStoreName.trim() || !newStoreCost.trim()) return;
+    
+    const newItem: StoreItem = {
+      id: Date.now(),
+      name: newStoreName.trim(),
+      description: newStoreDescription.trim(),
+      cost: parseInt(newStoreCost),
+      category: newStoreCategory,
+      available: true,
+      icon: newStoreIcon,
+      createdAt: new Date().toISOString()
+    };
+
+    setStoreItems(prev => {
+      const updated = [...prev, newItem];
+      quickSave('storeItems', updated);
+      return updated;
+    });
+
+    // Reset form
+    setNewStoreName('');
+    setNewStoreDescription('');
+    setNewStoreCost('');
+    setNewStoreCategory('food');
+    setNewStoreIcon('🍔');
+  };
+
+  const handleUpdateStoreItem = (id: number, field: keyof StoreItem, value: any) => {
+    setStoreItems(prev => {
+      const updated = prev.map(item => 
+        item.id === id ? { ...item, [field]: value } : item
+      );
+      quickSave('storeItems', updated);
+      return updated;
+    });
+  };
+
+  const handleRemoveStoreItem = (id: number) => {
+    if (window.confirm('Are you sure you want to remove this store item?')) {
+      setStoreItems(prev => {
+        const updated = prev.filter(item => item.id !== id);
+        quickSave('storeItems', updated);
+        return updated;
+      });
+    }
+  };
+
+  const handleFulfillPurchase = (purchaseId: number) => {
+    setPurchases(prev => {
+      const updated = prev.map(purchase => 
+        purchase.id === purchaseId ? { ...purchase, fulfilled: true } : purchase
+      );
+      quickSave('purchases', updated);
+      return updated;
+    });
+  };
 
   const handleAddEmployee = () => {
     addEmployee(
@@ -774,6 +855,227 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                   ))}
                 </tbody>
               </table>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Store Management */}
+      <div className={`bg-white rounded-xl shadow-sm mb-6 ${showStoreManagement ? 'p-6' : 'p-2'}`}>
+        <button
+          onClick={() => setShowStoreManagement(!showStoreManagement)}
+          className={`w-full flex items-center justify-between hover:text-gray-600 ${
+            showStoreManagement 
+              ? 'text-lg font-semibold text-gray-800 mb-4' 
+              : 'text-sm font-medium text-gray-700 py-1'
+          }`}
+        >
+          <div className="flex items-center">
+            <ShoppingCart className={`mr-2 ${showStoreManagement ? 'w-5 h-5' : 'w-4 h-4'}`} />
+            Store Management
+          </div>
+          <span className={`transition-transform ${showStoreManagement ? 'text-xl rotate-180' : 'text-sm'}`}>
+            ▼
+          </span>
+        </button>
+        
+        {showStoreManagement && (
+          <>
+            {/* Add Store Item */}
+            <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+              <h4 className="font-medium text-gray-700 mb-3">Add New Store Item</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                  <input
+                    type="text"
+                    value={newStoreName}
+                    onChange={(e) => setNewStoreName(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Free lunch for friend"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Cost (points)</label>
+                  <input
+                    type="number"
+                    value={newStoreCost}
+                    onChange={(e) => setNewStoreCost(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                  <select
+                    value={newStoreCategory}
+                    onChange={(e) => setNewStoreCategory(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {storeCategories.map(cat => (
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Icon</label>
+                  <div className="flex flex-wrap gap-2">
+                    {storeIcons.map(icon => (
+                      <button
+                        key={icon}
+                        onClick={() => setNewStoreIcon(icon)}
+                        className={`w-8 h-8 text-lg border rounded ${
+                          newStoreIcon === icon ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'
+                        }`}
+                      >
+                        {icon}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                  <textarea
+                    value={newStoreDescription}
+                    onChange={(e) => setNewStoreDescription(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    rows={2}
+                    placeholder="Treat your friend to a free meal at our restaurant"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <button
+                    onClick={handleAddStoreItem}
+                    disabled={!newStoreName.trim() || !newStoreCost.trim()}
+                    className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white px-4 py-2 rounded-md transition-colors flex items-center"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Store Item
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Store Items List */}
+            <div className="mb-6">
+              <h4 className="font-medium text-gray-700 mb-3">Store Items ({storeItems.length})</h4>
+              <div className="space-y-2">
+                {storeItems.map(item => (
+                  <div key={item.id} className="border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className="text-2xl">{item.icon}</div>
+                        <div>
+                          {editingStoreItem === item.id ? (
+                            <div className="space-y-2">
+                              <input
+                                type="text"
+                                value={item.name}
+                                onChange={(e) => handleUpdateStoreItem(item.id, 'name', e.target.value)}
+                                className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                              />
+                              <input
+                                type="text"
+                                value={item.description}
+                                onChange={(e) => handleUpdateStoreItem(item.id, 'description', e.target.value)}
+                                className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                              />
+                            </div>
+                          ) : (
+                            <div>
+                              <div className="font-medium text-gray-800">{item.name}</div>
+                              <div className="text-sm text-gray-600">{item.description}</div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <div className="text-right">
+                          <div className="font-bold text-blue-600">{item.cost} pts</div>
+                          <div className={`text-xs px-2 py-1 rounded-full ${
+                            item.available ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                          }`}>
+                            {item.available ? 'Available' : 'Disabled'}
+                          </div>
+                        </div>
+                        <div className="flex space-x-1">
+                          <button
+                            onClick={() => setEditingStoreItem(editingStoreItem === item.id ? null : item.id)}
+                            className="p-1 text-blue-600 hover:text-blue-800"
+                            title="Edit Store Item"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleUpdateStoreItem(item.id, 'available', !item.available)}
+                            className={`p-1 ${item.available ? 'text-red-600 hover:text-red-800' : 'text-green-600 hover:text-green-800'}`}
+                            title={item.available ? 'Disable Item' : 'Enable Item'}
+                          >
+                            {item.available ? <X className="w-4 h-4" /> : <Check className="w-4 h-4" />}
+                          </button>
+                          <button
+                            onClick={() => handleRemoveStoreItem(item.id)}
+                            className="p-1 text-red-600 hover:text-red-800"
+                            title="Delete Store Item"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {storeItems.length === 0 && (
+                  <div className="text-center py-4 text-gray-500">
+                    No store items yet. Add some rewards for employees to purchase!
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Recent Purchases */}
+            <div>
+              <h4 className="font-medium text-gray-700 mb-3">Recent Purchases ({purchases.filter(p => !p.fulfilled).length} pending)</h4>
+              <div className="space-y-2">
+                {purchases
+                  .sort((a, b) => new Date(b.purchasedAt).getTime() - new Date(a.purchasedAt).getTime())
+                  .slice(0, 10)
+                  .map(purchase => (
+                    <div key={purchase.id} className="border border-gray-200 rounded-lg p-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-medium text-gray-800">{purchase.storeItemName}</div>
+                          <div className="text-sm text-gray-600">
+                            {purchase.employeeName} • {new Date(purchase.purchasedAt).toLocaleDateString()}
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <div className="text-right">
+                            <div className="text-sm font-medium text-gray-600">{purchase.cost} pts</div>
+                            <div className={`text-xs px-2 py-1 rounded-full ${
+                              purchase.fulfilled ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                            }`}>
+                              {purchase.fulfilled ? 'Fulfilled' : 'Pending'}
+                            </div>
+                          </div>
+                          {!purchase.fulfilled && (
+                            <button
+                              onClick={() => handleFulfillPurchase(purchase.id)}
+                              className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-xs transition-colors"
+                            >
+                              Mark Fulfilled
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                {purchases.length === 0 && (
+                  <div className="text-center py-4 text-gray-500">
+                    No purchases yet.
+                  </div>
+                )}
+              </div>
             </div>
           </>
         )}
