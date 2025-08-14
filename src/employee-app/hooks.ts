@@ -17,7 +17,8 @@ import type {
   InventoryItem,
   DatabaseItem,
   ActivityLogEntry,
-  CustomCategory
+  CustomCategory,
+  StockCountHistoryEntry
 } from './types';
 import type { SyncOperation } from './OperationManager';
 import { getDatabase, ref, onValue, off } from 'firebase/database';
@@ -102,6 +103,7 @@ export const useFirebaseData = () => {
   const [inventoryDatabaseItems, setInventoryDatabaseItems] = useState<DatabaseItem[]>([]);
   const [inventoryActivityLog, setInventoryActivityLog] = useState<ActivityLogEntry[]>([]);
   const [inventoryCustomCategories, setInventoryCustomCategories] = useState<CustomCategory[]>([]);
+  const [stockCountSnapshots, setStockCountSnapshots] = useState<StockCountHistoryEntry[]>([]);
   
   // Previous inventory state for change detection
   const previousInventoryDailyRef = useRef<InventoryItem[]>([]);
@@ -272,7 +274,8 @@ export const useFirebaseData = () => {
       inventoryWeeklyItemsLength: inventoryWeeklyItems.length,
       inventoryMonthlyItemsLength: inventoryMonthlyItems.length,
       inventoryDatabaseItemsLength: inventoryDatabaseItems.length,
-      inventoryActivityLogLength: inventoryActivityLog.length
+      inventoryActivityLogLength: inventoryActivityLog.length,
+      stockCountSnapshotsLength: stockCountSnapshots.length
     });
 
     if (currentDataHash === lastSaveDataRef.current) {
@@ -301,7 +304,8 @@ export const useFirebaseData = () => {
         inventoryWeeklyItems,
         inventoryMonthlyItems,
         inventoryDatabaseItems,
-        inventoryActivityLog
+        inventoryActivityLog,
+        stockCountSnapshots
       });
 
       setLastSync(new Date().toLocaleTimeString());
@@ -317,7 +321,7 @@ export const useFirebaseData = () => {
   }, [
     employees, tasks, dailyData, completedTasks, taskAssignments, customRoles,
     prepItems, scheduledPreps, prepSelections, storeItems,
-    inventoryDailyItems, inventoryWeeklyItems, inventoryMonthlyItems, inventoryDatabaseItems, inventoryActivityLog,
+    inventoryDailyItems, inventoryWeeklyItems, inventoryMonthlyItems, inventoryDatabaseItems, inventoryActivityLog, stockCountSnapshots,
     connectionStatus, debouncedBatchSync
   ]);
 
@@ -400,6 +404,7 @@ export const useFirebaseData = () => {
       setInventoryDatabaseItems(data.inventoryDatabaseItems || []);
       setInventoryActivityLog(data.inventoryActivityLog || []);
       setInventoryCustomCategories(data.inventoryCustomCategories || []);
+      setStockCountSnapshots(data.stockCountSnapshots || []);
       
       // Initialize previous inventory references for change detection
       previousInventoryDailyRef.current = [...dailyItems];
@@ -619,6 +624,13 @@ export const useFirebaseData = () => {
       setInventoryCustomCategories(Array.isArray(data) ? data : Object.values(data));
     };
     onValue(inventoryCustomCategoriesRef, handleInventoryCustomCategories);
+
+    const stockCountSnapshotsRef = ref(db, 'stockCountSnapshots');
+    const handleStockCountSnapshots = (snapshot: any) => {
+      const data = snapshot.val() || [];
+      setStockCountSnapshots(Array.isArray(data) ? data : Object.values(data));
+    };
+    onValue(stockCountSnapshotsRef, handleStockCountSnapshots);
     // Cleanup
     return () => {
       off(employeesRef, 'value', handleEmployees);
@@ -637,6 +649,7 @@ export const useFirebaseData = () => {
       off(inventoryMonthlyItemsRef, 'value', handleInventoryMonthlyItems);
       off(inventoryDatabaseItemsRef, 'value', handleInventoryDatabaseItems);
       off(inventoryActivityLogRef, 'value', handleInventoryActivityLog);
+      off(stockCountSnapshotsRef, 'value', handleStockCountSnapshots);
     };
   }, []);
 
@@ -666,6 +679,7 @@ export const useFirebaseData = () => {
     inventoryDatabaseItems,
     inventoryActivityLog,
     inventoryCustomCategories,
+    stockCountSnapshots,
 
     // Setters
     setEmployees,
@@ -684,6 +698,7 @@ export const useFirebaseData = () => {
     setInventoryDatabaseItems,
     setInventoryActivityLog,
     setInventoryCustomCategories,
+    setStockCountSnapshots,
 
     // Actions
     loadFromFirebase,

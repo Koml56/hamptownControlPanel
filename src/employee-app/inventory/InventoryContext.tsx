@@ -9,7 +9,8 @@ import {
   WasteReason,
   CustomCategory,
   Employee,
-  CurrentUser
+  CurrentUser,
+  StockCountHistoryEntry
 } from '../types'; // Import from main types.ts
 import { InventoryContextType } from './types'; // Local context type
 import { generateId, showToast } from './utils';
@@ -36,12 +37,14 @@ interface InventoryProviderProps {
   inventoryDatabaseItems: DatabaseItem[];
   inventoryActivityLog: ActivityLogEntry[];
   inventoryCustomCategories: CustomCategory[];
+  stockCountSnapshots: StockCountHistoryEntry[];
   setInventoryDailyItems: (items: InventoryItem[]) => void;
   setInventoryWeeklyItems: (items: InventoryItem[]) => void;
   setInventoryMonthlyItems: (items: InventoryItem[]) => void;
   setInventoryDatabaseItems: (items: DatabaseItem[]) => void;
   setInventoryActivityLog: (log: ActivityLogEntry[]) => void;
   setInventoryCustomCategories: (categories: CustomCategory[]) => void;
+  setStockCountSnapshots: (snapshots: StockCountHistoryEntry[]) => void;
   quickSave: (field: string, data: any) => Promise<boolean>;
 }
 
@@ -55,12 +58,14 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
   inventoryDatabaseItems,
   inventoryActivityLog,
   inventoryCustomCategories,
+  stockCountSnapshots,
   setInventoryDailyItems,
   setInventoryWeeklyItems,
   setInventoryMonthlyItems,
   setInventoryDatabaseItems,
   setInventoryActivityLog,
   setInventoryCustomCategories,
+  setStockCountSnapshots,
   quickSave
 }) => {
   // Use Firebase state instead of local state
@@ -70,6 +75,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
   const databaseItems = inventoryDatabaseItems;
   const activityLog = inventoryActivityLog;
   const customCategories = inventoryCustomCategories;
+  const snapshots = stockCountSnapshots;
   
   // UI-only state (not synced to Firebase)
   const [selectedItems, setSelectedItems] = useState<Set<number | string>>(new Set());
@@ -652,6 +658,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     databaseItems,
     activityLog,
     customCategories,
+    stockCountSnapshots: snapshots,
     employees,
     currentUser,
     selectedItems,
@@ -666,6 +673,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     setDatabaseItems: setInventoryDatabaseItems,
     setActivityLog: setInventoryActivityLog,
     setCustomCategories: setInventoryCustomCategories,
+    setStockCountSnapshots,
     addActivityEntry,
     updateItemStock,
     reportWaste,

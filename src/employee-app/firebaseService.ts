@@ -1,7 +1,7 @@
 // firebaseService.ts - FIXED to include all prep and store fields
 import { FIREBASE_CONFIG } from './constants';
 import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData } from './defaultData';
-import type { Employee, Task, DailyDataMap, TaskAssignments, PrepItem, ScheduledPrep, PrepSelections, StoreItem, InventoryItem, DatabaseItem, ActivityLogEntry } from './types';
+import type { Employee, Task, DailyDataMap, TaskAssignments, PrepItem, ScheduledPrep, PrepSelections, StoreItem, InventoryItem, DatabaseItem, ActivityLogEntry, StockCountHistoryEntry } from './types';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, onValue, off } from 'firebase/database';
 
@@ -270,6 +270,8 @@ export class FirebaseService {
         return allData.inventoryDatabaseItems;
       case 'inventoryActivityLog':
         return allData.inventoryActivityLog;
+      case 'stockCountSnapshots':
+        return allData.stockCountSnapshots;
       default:
         console.warn(`Unknown field: ${field}`);
         return null;
@@ -362,6 +364,11 @@ export class FirebaseService {
           totalEntries: data?.length || 0,
           latestEntry: data?.[0]?.timestamp || 'none'
         };
+      case 'stockCountSnapshots':
+        return {
+          totalSnapshots: data?.length || 0,
+          latestSnapshot: data?.[0]?.date || 'none'
+        };
       default:
         return data;
     }
@@ -387,7 +394,8 @@ export class FirebaseService {
         inventoryWeeklyRes,
         inventoryMonthlyRes,
         inventoryDatabaseRes,
-        inventoryActivityLogRes
+        inventoryActivityLogRes,
+        stockCountSnapshotsRes
       ] = await Promise.all([
         fetch(`${this.baseUrl}/employees.json`),
         fetch(`${this.baseUrl}/tasks.json`),
@@ -403,7 +411,8 @@ export class FirebaseService {
         fetch(`${this.baseUrl}/inventoryWeeklyItems.json`),
         fetch(`${this.baseUrl}/inventoryMonthlyItems.json`),
         fetch(`${this.baseUrl}/inventoryDatabaseItems.json`),
-        fetch(`${this.baseUrl}/inventoryActivityLog.json`)
+        fetch(`${this.baseUrl}/inventoryActivityLog.json`),
+        fetch(`${this.baseUrl}/stockCountSnapshots.json`)
       ]);
       
       const employeesData = await employeesRes.json();
@@ -421,6 +430,7 @@ export class FirebaseService {
       const inventoryMonthlyData = await inventoryMonthlyRes.json();
       const inventoryDatabaseData = await inventoryDatabaseRes.json();
       const inventoryActivityLogData = await inventoryActivityLogRes.json();
+      const stockCountSnapshotsData = await stockCountSnapshotsRes.json();
       
       // Migrate employees data to include points if missing
       const migratedEmployees = employeesData ? employeesData.map((emp: any) => ({
@@ -462,7 +472,8 @@ export class FirebaseService {
         inventoryWeeklyItems: inventoryWeeklyData || [],
         inventoryMonthlyItems: inventoryMonthlyData || [],
         inventoryDatabaseItems: inventoryDatabaseData || [],
-        inventoryActivityLog: inventoryActivityLogData || []
+        inventoryActivityLog: inventoryActivityLogData || [],
+        stockCountSnapshots: stockCountSnapshotsData || []
       };
       
     } catch (error) {
@@ -518,6 +529,7 @@ export class FirebaseService {
     inventoryMonthlyItems: InventoryItem[];
     inventoryDatabaseItems: DatabaseItem[];
     inventoryActivityLog: ActivityLogEntry[];
+    stockCountSnapshots: StockCountHistoryEntry[];
   }) {
     console.log('🔥 Saving all data to Firebase...');
 
@@ -537,7 +549,8 @@ export class FirebaseService {
       'inventoryWeeklyItems',
       'inventoryMonthlyItems',
       'inventoryDatabaseItems',
-      'inventoryActivityLog'
+      'inventoryActivityLog',
+      'stockCountSnapshots'
     ];
 
     const success = await this.batchSave(fields, data);
@@ -592,6 +605,8 @@ export class FirebaseService {
         return ['inventoryActivityLog']; // Monthly items affect activity log
       case 'inventoryDatabaseItems':
         return ['inventoryDailyItems', 'inventoryWeeklyItems', 'inventoryMonthlyItems']; // Database changes might affect assigned items
+      case 'stockCountSnapshots':
+        return []; // Snapshots are independent and don't affect other data
       default:
         return [];
     }
@@ -614,5 +629,66 @@ export class FirebaseService {
       callback(data);
     });
     return () => off(assignmentsRef, 'value', handler);
+  }
+
+  // Method to save stock count snapshots
+  async saveStockCountSnapshot(snapshot: StockCountHistoryEntry): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.baseUrl}/stockCountSnapshots.json`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(snapshot)
+      });
+      
+      if (response.ok) {
+        console.log('✅ Stock count snapshot saved successfully:', snapshot.snapshotId);
+        return true;
+      } else {
+        throw new Error(`Failed to save snapshot: ${response.status}`);
+      }
+    } catch (error) {
+      console.error('❌ Error saving stock count snapshot:', error);
+      return false;
+    }
+  }
+
+  // Method to get stock count snapshots by date range
+  async getStockCountSnapshots(startDate?: string, endDate?: string): Promise<StockCountHistoryEntry[]> {
+    try {
+      const response = await fetch(`${this.baseUrl}/stockCountSnapshots.json`);
+      if (!response.ok) throw new Error('Failed to fetch snapshots');
+      
+      const data = await response.json();
+      const snapshots: StockCountHistoryEntry[] = data ? Object.values(data) : [];
+      
+      if (startDate || endDate) {
+        return snapshots.filter(snapshot => {
+          const snapshotDate = new Date(snapshot.date);
+          const start = startDate ? new Date(startDate) : new Date('1900-01-01');
+          const end = endDate ? new Date(endDate) : new Date('2099-12-31');
+          return snapshotDate >= start && snapshotDate <= end;
+        });
+      }
+      
+      return snapshots.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    } catch (error) {
+      console.error('❌ Error fetching stock count snapshots:', error);
+      return [];
+    }
+  }
+
+  // Method to get the latest snapshot for a specific frequency
+  async getLatestSnapshot(frequency?: 'daily' | 'weekly' | 'monthly'): Promise<StockCountHistoryEntry | null> {
+    try {
+      const snapshots = await this.getStockCountSnapshots();
+      const filtered = frequency 
+        ? snapshots.filter(s => s.frequency === frequency)
+        : snapshots;
+      
+      return filtered.length > 0 ? filtered[0] : null;
+    } catch (error) {
+      console.error('❌ Error fetching latest snapshot:', error);
+      return null;
+    }
   }
 }

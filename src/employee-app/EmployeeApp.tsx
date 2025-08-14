@@ -71,6 +71,7 @@ const EmployeeApp: React.FC = () => {
     inventoryDatabaseItems,
     inventoryActivityLog,
     inventoryCustomCategories,
+    stockCountSnapshots,
     setEmployees,
     setTasks,
     setDailyData,
@@ -87,6 +88,7 @@ const EmployeeApp: React.FC = () => {
     setInventoryDatabaseItems,
     setInventoryActivityLog,
     setInventoryCustomCategories,
+    setStockCountSnapshots,
     loadFromFirebase,
     saveToFirebase,
     quickSave,
@@ -1007,12 +1009,14 @@ const EmployeeApp: React.FC = () => {
             inventoryDatabaseItems={inventoryDatabaseItems}
             inventoryActivityLog={inventoryActivityLog}
             inventoryCustomCategories={inventoryCustomCategories}
+            stockCountSnapshots={stockCountSnapshots}
             setInventoryDailyItems={setInventoryDailyItems}
             setInventoryWeeklyItems={setInventoryWeeklyItems}
             setInventoryMonthlyItems={setInventoryMonthlyItems}
             setInventoryDatabaseItems={setInventoryDatabaseItems}
             setInventoryActivityLog={setInventoryActivityLog}
             setInventoryCustomCategories={setInventoryCustomCategories}
+            setStockCountSnapshots={setStockCountSnapshots}
             quickSave={quickSave}
           />
         )}
