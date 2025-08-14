@@ -335,6 +335,86 @@ const ReportsView: React.FC = () => {
         </div>
       </div>
 
+      {/* Inventory Movement Table */}
+      <div className="bg-white rounded-xl shadow-sm">
+        <div className="p-6 border-b">
+          <h3 className="text-lg font-semibold text-gray-800">
+            {selectedDateMetrics.isToday ? 'Today\'s Inventory Movement' : `Inventory Movement for ${formatDisplayDate(selectedDate)}`}
+          </h3>
+          <p className="text-gray-600 text-sm">Detailed breakdown of all inventory changes</p>
+        </div>
+        <div className="p-6">
+          {selectedDateMetrics.dayActivity.length === 0 ? (
+            <div className="text-center py-8">
+              <div className="text-gray-400 text-4xl mb-2">📦</div>
+              <p className="text-gray-500">No inventory movements recorded</p>
+              <p className="text-sm text-gray-400">
+                Inventory movements will appear here when items are updated, wasted, or imported
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left py-3 px-4 font-medium text-gray-700">Time</th>
+                    <th className="text-left py-3 px-4 font-medium text-gray-700">Item</th>
+                    <th className="text-left py-3 px-4 font-medium text-gray-700">Type</th>
+                    <th className="text-left py-3 px-4 font-medium text-gray-700">Quantity</th>
+                    <th className="text-left py-3 px-4 font-medium text-gray-700">Employee</th>
+                    <th className="text-left py-3 px-4 font-medium text-gray-700">Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedDateMetrics.dayActivity.map(entry => {
+                    const time = new Date(entry.timestamp).toLocaleTimeString('en-US', { 
+                      hour: '2-digit', 
+                      minute: '2-digit' 
+                    });
+                    const typeIcon = entry.type === 'count_update' ? '📝' : 
+                                   entry.type === 'waste' ? '🗑️' : 
+                                   entry.type === 'import' ? '📥' : '➕';
+                    const typeLabel = entry.type === 'count_update' ? 'Count Update' : 
+                                    entry.type === 'waste' ? 'Waste Report' : 
+                                    entry.type === 'import' ? 'Import' : 'Manual Add';
+                    const typeColor = entry.type === 'count_update' ? 'text-blue-600' : 
+                                    entry.type === 'waste' ? 'text-orange-600' : 
+                                    entry.type === 'import' ? 'text-green-600' : 'text-purple-600';
+
+                    return (
+                      <tr key={entry.id} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="py-3 px-4 text-sm text-gray-600">{time}</td>
+                        <td className="py-3 px-4">
+                          <div className="font-medium text-gray-800">{entry.item}</div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className={`flex items-center ${typeColor}`}>
+                            <span className="mr-2">{typeIcon}</span>
+                            <span className="text-sm font-medium">{typeLabel}</span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="text-sm">
+                            <span className="font-medium">{entry.quantity}</span> {entry.unit}
+                            {entry.type === 'waste' && entry.reason && (
+                              <div className="text-xs text-gray-500 mt-1">Reason: {entry.reason}</div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-600">{entry.employee}</td>
+                        <td className="py-3 px-4 text-sm text-gray-500">
+                          {entry.notes || '-'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Critical Items Alert */}
       {selectedDateMetrics.criticalItems.length > 0 && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-6">
