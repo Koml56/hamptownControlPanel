@@ -35,7 +35,7 @@ interface HistoricalItemData {
 }
 
 const StockCountHistoryView: React.FC = () => {
-  const { stockCountSnapshots, dailyItems, weeklyItems, monthlyItems } = useInventory();
+  const { stockCountSnapshots, dailyItems, weeklyItems, monthlyItems, createStockSnapshot } = useInventory();
   
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date();
@@ -274,6 +274,19 @@ const StockCountHistoryView: React.FC = () => {
     }
   }, [filteredData, selectedDate]);
 
+  // Handle snapshot creation
+  const handleCreateSnapshot = useCallback(async () => {
+    try {
+      const results = await createStockSnapshot();
+      if (results.length > 0) {
+        // Refresh the available dates
+        window.location.reload(); // Simple refresh to show new data
+      }
+    } catch (error) {
+      console.error('Error creating snapshot:', error);
+    }
+  }, [createStockSnapshot]);
+
   const isToday = selectedDate === new Date().toISOString().split('T')[0];
   const hasHistoricalData = selectedSnapshot !== null;
 
@@ -294,6 +307,14 @@ const StockCountHistoryView: React.FC = () => {
           
           {/* Export Controls */}
           <div className="flex flex-wrap gap-2">
+            <button
+              onClick={handleCreateSnapshot}
+              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center"
+              title="Create a snapshot of current inventory for testing"
+            >
+              <Calendar className="w-4 h-4 mr-2" />
+              Create Snapshot
+            </button>
             <button
               onClick={() => handleExport('csv')}
               className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center"

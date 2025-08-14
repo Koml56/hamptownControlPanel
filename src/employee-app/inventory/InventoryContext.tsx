@@ -15,6 +15,7 @@ import {
 import { InventoryContextType } from './types'; // Local context type
 import { generateId, showToast } from './utils';
 import { sendInventoryNotification } from './notificationService';
+import { getSnapshotService, initializeSnapshotService } from './snapshotService';
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
 
@@ -650,6 +651,66 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     });
   }, [customCategories, setInventoryCustomCategories, quickSave, addActivityEntry]);
 
+  // Snapshot management
+  const createStockSnapshot = useCallback(async (
+    date?: string,
+    frequencies: ('daily' | 'weekly' | 'monthly')[] = ['daily', 'weekly', 'monthly']
+  ) => {
+    try {
+      // Get or initialize snapshot service
+      const firebaseService = new (require('../firebaseService').FirebaseService)();
+      const snapshotService = getSnapshotService(firebaseService);
+      
+      // Initialize if not already done
+      if (!snapshotService) {
+        await initializeSnapshotService(firebaseService, snapshots);
+      }
+
+      const results = [];
+      const snapshotDate = date || new Date().toISOString().split('T')[0];
+
+      if (frequencies.includes('daily') && dailyItems.length > 0) {
+        const dailySnapshot = await snapshotService.createSnapshot(dailyItems, 'daily', snapshotDate);
+        if (dailySnapshot) results.push(dailySnapshot);
+      }
+
+      if (frequencies.includes('weekly') && weeklyItems.length > 0) {
+        const weeklySnapshot = await snapshotService.createSnapshot(weeklyItems, 'weekly', snapshotDate);
+        if (weeklySnapshot) results.push(weeklySnapshot);
+      }
+
+      if (frequencies.includes('monthly') && monthlyItems.length > 0) {
+        const monthlySnapshot = await snapshotService.createSnapshot(monthlyItems, 'monthly', snapshotDate);
+        if (monthlySnapshot) results.push(monthlySnapshot);
+      }
+
+      if (results.length > 0) {
+        // Update local snapshots state
+        const updatedSnapshots = [...snapshots, ...results];
+        setStockCountSnapshots(updatedSnapshots);
+        
+        showToast(`Created ${results.length} stock count snapshot${results.length > 1 ? 's' : ''} for ${snapshotDate}`);
+        
+        // Add activity entry
+        addActivityEntry({
+          type: 'manual_add',
+          item: `Stock Count Snapshot: ${results.map(r => r.frequency).join(', ')}`,
+          quantity: results.length,
+          unit: 'snapshots',
+          employee: currentUser.name
+        });
+      } else {
+        showToast('No snapshots created - no items found for selected frequencies');
+      }
+
+      return results;
+    } catch (error) {
+      console.error('❌ Error creating stock snapshot:', error);
+      showToast('Failed to create stock snapshot');
+      return [];
+    }
+  }, [dailyItems, weeklyItems, monthlyItems, snapshots, setStockCountSnapshots, currentUser.name, addActivityEntry]);
+
   const value: InventoryContextType = {
     // Data
     dailyItems,
@@ -691,6 +752,8 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     addCustomCategory,
     updateCustomCategory,
     deleteCustomCategory,
+    // Stock Count Snapshots
+    createStockSnapshot,
     // Firebase integration
     quickSave
   };

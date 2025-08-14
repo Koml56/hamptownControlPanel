@@ -6,7 +6,7 @@ import { getStockStatus } from '../stockUtils';
 import type { DailyInventorySnapshot } from '../../types';
 
 const ReportsView: React.FC = () => {
-  const { dailyItems, weeklyItems, monthlyItems, activityLog } = useInventory();
+  const { dailyItems, weeklyItems, monthlyItems, activityLog, stockCountSnapshots } = useInventory();
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date();
     return today.toISOString().split('T')[0]; // YYYY-MM-DD format
@@ -63,15 +63,47 @@ const ReportsView: React.FC = () => {
 
     // Calculate current inventory metrics (as of selected date if historical)
     const isToday = selectedDate === new Date().toISOString().split('T')[0];
-    let criticalItems, lowStockItems, totalValue;
     
-    if (isToday) {
+    // Check if we have historical snapshots for this date
+    const historicalSnapshots = stockCountSnapshots.filter(s => s.date === selectedDate);
+    const hasHistoricalData = historicalSnapshots.length > 0;
+    
+    let criticalItems, lowStockItems, totalValue;
+    let historicalItems = allItems; // Use current items as fallback
+    
+    if (hasHistoricalData) {
+      // Use historical snapshot data
+      const combinedSnapshot = historicalSnapshots.reduce((acc, snapshot) => {
+        Object.entries(snapshot.snapshot.itemCounts).forEach(([itemId, item]) => {
+          acc[itemId] = item;
+        });
+        return acc;
+      }, {} as any);
+
+      historicalItems = Object.values(combinedSnapshot).map((item: any) => ({
+        id: item.itemId || Math.random(),
+        name: item.itemName,
+        category: item.category,
+        currentStock: item.currentStock,
+        minLevel: item.minLevel,
+        unit: item.unit,
+        cost: item.unitCost,
+        lastUsed: item.lastCountDate,
+        frequency: item.frequency,
+        optimalLevel: item.optimalLevel
+      }));
+
+      // Calculate stock status using historical data
+      criticalItems = historicalItems.filter(item => getStockStatus(item.currentStock, item.minLevel) === 'critical');
+      lowStockItems = historicalItems.filter(item => getStockStatus(item.currentStock, item.minLevel) === 'low');
+      totalValue = historicalItems.reduce((sum, item) => sum + (item.cost * item.currentStock), 0);
+    } else if (isToday) {
       // Use current data for today
       criticalItems = allItems.filter(item => getStockStatus(item.currentStock, item.minLevel) === 'critical');
       lowStockItems = allItems.filter(item => getStockStatus(item.currentStock, item.minLevel) === 'low');
       totalValue = allItems.reduce((sum, item) => sum + (item.cost * item.currentStock), 0);
     } else {
-      // For historical dates, we'd need to reconstruct state - for now show current with note
+      // For historical dates without snapshots, show current with note
       criticalItems = allItems.filter(item => getStockStatus(item.currentStock, item.minLevel) === 'critical');
       lowStockItems = allItems.filter(item => getStockStatus(item.currentStock, item.minLevel) === 'low');
       totalValue = allItems.reduce((sum, item) => sum + (item.cost * item.currentStock), 0);
@@ -87,10 +119,11 @@ const ReportsView: React.FC = () => {
       criticalItems,
       lowStockItems,
       totalValue,
-      allItems,
-      isToday
+      allItems: hasHistoricalData ? historicalItems : allItems,
+      isToday,
+      hasHistoricalData
     };
-  }, [selectedDate, dailyItems, weeklyItems, monthlyItems, activityLog]);
+  }, [selectedDate, dailyItems, weeklyItems, monthlyItems, activityLog, stockCountSnapshots]);
 
   // Calculate comparison metrics
   const comparisonMetrics = useMemo(() => {
@@ -167,12 +200,33 @@ const ReportsView: React.FC = () => {
 
         {/* Historical Data Notice */}
         {!selectedDateMetrics.isToday && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+          <div className={`border rounded-lg p-3 mb-4 ${
+            selectedDateMetrics.hasHistoricalData 
+              ? 'bg-green-50 border-green-200' 
+              : 'bg-blue-50 border-blue-200'
+          }`}>
             <div className="flex items-center">
-              <AlertTriangle className="w-5 h-5 text-blue-600 mr-2" />
-              <div className="text-sm text-blue-800">
-                <strong>Historical Data:</strong> Viewing data for {formatDisplayDate(selectedDate)}. 
-                Stock levels shown are current values - historical reconstruction coming soon.
+              <AlertTriangle className={`w-5 h-5 mr-2 ${
+                selectedDateMetrics.hasHistoricalData 
+                  ? 'text-green-600' 
+                  : 'text-blue-600'
+              }`} />
+              <div className={`text-sm ${
+                selectedDateMetrics.hasHistoricalData 
+                  ? 'text-green-800' 
+                  : 'text-blue-800'
+              }`}>
+                {selectedDateMetrics.hasHistoricalData ? (
+                  <>
+                    <strong>Historical Data Available:</strong> Viewing actual inventory snapshot for {formatDisplayDate(selectedDate)}. 
+                    Stock levels and metrics reflect the true state on this date.
+                  </>
+                ) : (
+                  <>
+                    <strong>No Historical Data:</strong> Viewing data for {formatDisplayDate(selectedDate)}. 
+                    Stock levels shown are current values - historical snapshots will be created automatically going forward.
+                  </>
+                )}
               </div>
             </div>
           </div>
