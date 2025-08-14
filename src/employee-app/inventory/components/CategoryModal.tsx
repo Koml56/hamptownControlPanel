@@ -12,16 +12,10 @@ interface CategoryModalProps {
 
 const CategoryModal: React.FC<CategoryModalProps> = ({ onClose, preSelectedFrequency }) => {
   const { databaseItems, selectedItems, customCategories, assignToCategory } = useInventory();
-  
-  // Get all available categories
-  const allCategoryOptions = getAllCategoryOptions(customCategories);
-  
   const [frequency, setFrequency] = useState<InventoryFrequency>(
     (preSelectedFrequency as InventoryFrequency) || 'daily'
   );
-  const [category, setCategory] = useState<InventoryCategory | string>(
-    allCategoryOptions.length > 0 ? allCategoryOptions[0].value : 'meat'
-  );
+  const [category, setCategory] = useState<InventoryCategory | string>('produce');
   const [minLevel, setMinLevel] = useState(5);
   const [initialStock, setInitialStock] = useState(0);
 
@@ -31,6 +25,9 @@ const CategoryModal: React.FC<CategoryModalProps> = ({ onClose, preSelectedFrequ
     assignToCategory(Array.from(selectedItems), frequency, category, minLevel, initialStock);
     onClose();
   };
+
+  // Get all available categories
+  const allCategoryOptions = getAllCategoryOptions(customCategories);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
