@@ -164,6 +164,7 @@ const MonthlyView: React.FC = () => {
                   item={item}
                   onUpdateCount={handleUpdateCount}
                   onReportWaste={handleReportWaste}
+                  customCategories={customCategories}
                 />
               ))}
             </div>
