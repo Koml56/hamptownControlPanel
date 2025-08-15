@@ -126,11 +126,45 @@ describe('FirebaseService inventoryCustomCategories Integration', () => {
     ];
 
     const realWorldData = {
-      employees: [{ id: 1, name: 'John Doe', role: 'manager' }],
-      tasks: [{ id: 1, description: 'Check inventory', points: 5 }],
-      dailyData: { '2024-01-22': { completedTasks: [1], employeeMoods: [] } },
+      employees: [{ 
+        id: 1, 
+        name: 'John Doe', 
+        role: 'manager',
+        mood: 4,
+        lastUpdated: '2024-01-22T10:00:00.000Z',
+        lastMoodDate: '2024-01-22',
+        points: 50
+      }],
+      tasks: [{ 
+        id: 1, 
+        task: 'Check inventory', 
+        location: 'Storage Room',
+        priority: 'medium' as const,
+        estimatedTime: '30 min',
+        points: 5 
+      }],
+      dailyData: { 
+        '2024-01-22': { 
+          completedTasks: [
+            {
+              taskId: 1,
+              employeeId: 1,
+              completedAt: '2024-01-22T10:30:00.000Z',
+              taskName: 'Check inventory',
+              date: '2024-01-22',
+              pointsEarned: 5
+            }
+          ], 
+          employeeMoods: [],
+          purchases: [],
+          totalTasks: 1,
+          completionRate: 100,
+          totalPointsEarned: 5,
+          totalPointsSpent: 0
+        } 
+      },
       completedTasks: new Set([1]),
-      taskAssignments: { '1': { employeeId: 1, taskId: 1 } },
+      taskAssignments: { 1: 1 },
       customRoles: ['manager', 'staff'],
       prepItems: [],
       scheduledPreps: [],
