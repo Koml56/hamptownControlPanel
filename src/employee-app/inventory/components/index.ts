@@ -18,3 +18,4 @@ export { default as BulkActionsBar } from './BulkActionsBar';
 export { default as ScrollPicker } from './ScrollPicker';
 export { default as ToastContainer } from './ToastContainer';
 export { default as StockCountHistoryView } from './StockCountHistoryView';
+export { default as TrueHistoricalView } from './TrueHistoricalView';

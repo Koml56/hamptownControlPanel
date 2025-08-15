@@ -16,6 +16,7 @@ import { InventoryContextType } from './types'; // Local context type
 import { generateId, showToast } from './utils';
 import { sendInventoryNotification } from './notificationService';
 import { createStockSnapshot as createInventorySnapshot } from './snapshotService';
+import { getDailySnapshotService, type DailySnapshot } from './dailySnapshotService';
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
 
@@ -705,6 +706,71 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     }
   }, [dailyItems, weeklyItems, monthlyItems, snapshots, setStockCountSnapshots, currentUser.name, addActivityEntry]);
 
+  // === NEW: True Daily Snapshot Functions ===
+  const dailySnapshotService = getDailySnapshotService();
+
+  const createTrueDailySnapshot = useCallback(async (isManual: boolean = false): Promise<DailySnapshot | null> => {
+    try {
+      const snapshot = await dailySnapshotService.createDailySnapshot(
+        dailyItems,
+        weeklyItems,
+        monthlyItems,
+        isManual ? currentUser.name : 'system',
+        isManual
+      );
+
+      const saved = await dailySnapshotService.saveDailySnapshot(snapshot);
+      if (saved) {
+        showToast('✅ Daily snapshot created successfully');
+        addActivityEntry({
+          action: isManual ? 'Manual Daily Snapshot Created' : 'Automatic Daily Snapshot Created',
+          itemName: `${snapshot.dailyTotals.totalItems} items`,
+          details: `Total value: $${snapshot.dailyTotals.totalInventoryValue.toFixed(2)}`,
+          employee: currentUser.name,
+          timestamp: new Date().toISOString(),
+          notes: `Captured at: ${snapshot.capturedAt}`
+        });
+        return snapshot;
+      } else {
+        showToast('❌ Failed to save daily snapshot');
+        return null;
+      }
+    } catch (error) {
+      console.error('Error creating daily snapshot:', error);
+      showToast('❌ Error creating daily snapshot');
+      return null;
+    }
+  }, [dailyItems, weeklyItems, monthlyItems, currentUser.name, addActivityEntry]);
+
+  const loadHistoricalSnapshot = useCallback(async (date: string): Promise<DailySnapshot | null> => {
+    try {
+      return await dailySnapshotService.loadHistoricalSnapshot(date);
+    } catch (error) {
+      console.error('Error loading historical snapshot:', error);
+      return null;
+    }
+  }, []);
+
+  const getAvailableHistoricalDates = useCallback(async (): Promise<string[]> => {
+    try {
+      return await dailySnapshotService.getAvailableHistoricalDates();
+    } catch (error) {
+      console.error('Error loading historical dates:', error);
+      return [];
+    }
+  }, []);
+
+  const initializeDailySnapshots = useCallback(() => {
+    dailySnapshotService.startAutomaticScheduling();
+    showToast('⏰ Daily snapshot scheduling enabled');
+  }, []);
+
+  const stopDailySnapshots = useCallback(() => {
+    dailySnapshotService.stopAutomaticScheduling();
+    showToast('⏰ Daily snapshot scheduling disabled');
+  }, []);
+  // === END: True Daily Snapshot Functions ===
+
   const value: InventoryContextType = {
     // Data
     dailyItems,
@@ -749,6 +815,12 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     deleteCustomCategory,
     // Stock Count Snapshots
     createStockSnapshot,
+    // True Daily Snapshots (New System)
+    createTrueDailySnapshot,
+    loadHistoricalSnapshot,
+    getAvailableHistoricalDates,
+    initializeDailySnapshots,
+    stopDailySnapshots,
     // Firebase integration
     quickSave
   };
