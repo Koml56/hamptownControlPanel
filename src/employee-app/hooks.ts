@@ -294,6 +294,7 @@ export const useFirebaseData = () => {
         inventoryMonthlyItems,
         inventoryDatabaseItems,
         inventoryActivityLog,
+        inventoryCustomCategories,
         stockCountSnapshots
       });
 
@@ -343,7 +344,7 @@ export const useFirebaseData = () => {
   }, [
     employees, tasks, dailyData, completedTasks, taskAssignments, customRoles,
     prepItems, scheduledPreps, prepSelections, storeItems,
-    inventoryDailyItems, inventoryWeeklyItems, inventoryMonthlyItems, inventoryDatabaseItems, inventoryActivityLog, stockCountSnapshots,
+    inventoryDailyItems, inventoryWeeklyItems, inventoryMonthlyItems, inventoryDatabaseItems, inventoryActivityLog, inventoryCustomCategories, stockCountSnapshots,
     connectionStatus, firebaseService
   ]);
 
