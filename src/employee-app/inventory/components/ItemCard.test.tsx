@@ -59,8 +59,9 @@ describe('ItemCard Custom Category Fix', () => {
     // Should display custom icon (🥖) 
     expect(screen.getByText('🥖')).toBeInTheDocument();
     
-    // Should display custom category name, not ID
-    expect(screen.getByText('🥖 Bakery Items')).toBeInTheDocument();
+    // Should display custom category name only (without emoji)
+    expect(screen.getByText('Bakery Items')).toBeInTheDocument();
+    expect(screen.queryByText('🥖 Bakery Items')).not.toBeInTheDocument();
     expect(screen.queryByText('custom-bakery')).not.toBeInTheDocument();
   });
 
@@ -77,8 +78,9 @@ describe('ItemCard Custom Category Fix', () => {
     // Should display default dairy icon
     expect(screen.getByText('🥛')).toBeInTheDocument();
     
-    // Should display default category name
-    expect(screen.getByText('🥛 Dairy')).toBeInTheDocument();
+    // Should display default category name only (without emoji)
+    expect(screen.getByText('Dairy')).toBeInTheDocument();
+    expect(screen.queryByText('🥛 Dairy')).not.toBeInTheDocument();
   });
 
   test('works without customCategories prop', () => {

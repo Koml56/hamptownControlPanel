@@ -247,3 +247,21 @@ export const getCategoryDisplayName = (categoryValue: string, customCategories: 
   // Fallback for unknown categories
   return categoryValue;
 };
+
+// Get category name only (without emoji icon)
+export const getCategoryNameOnly = (categoryValue: string, customCategories: CustomCategory[] = []): string => {
+  // Check custom categories first
+  const customCategory = customCategories.find(cat => cat.id === categoryValue);
+  if (customCategory) {
+    return customCategory.name;
+  }
+  
+  // Check default categories
+  const defaultCategory = defaultCategories.find(cat => cat.id === categoryValue);
+  if (defaultCategory) {
+    return defaultCategory.name;
+  }
+  
+  // Fallback for unknown categories
+  return categoryValue;
+};

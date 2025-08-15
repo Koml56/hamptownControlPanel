@@ -2,7 +2,7 @@
 import React from 'react';
 import { Edit3, Trash2 } from 'lucide-react';
 import { InventoryItem, CustomCategory } from '../../types';
-import { getCategoryIcon, getCategoryDisplayName } from '../utils';
+import { getCategoryIcon, getCategoryNameOnly } from '../utils';
 import { getStockStatus } from '../stockUtils';
 
 interface ItemCardProps {
@@ -66,7 +66,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
           <span className="text-2xl mr-3">{getCategoryIcon(item.category, customCategories)}</span>
           <div>
             <h4 className="font-semibold text-gray-800">{item.name}</h4>
-            <p className="text-sm text-gray-600 capitalize">{getCategoryDisplayName(item.category, customCategories)}</p>
+            <p className="text-sm text-gray-600 capitalize">{getCategoryNameOnly(item.category, customCategories)}</p>
           </div>
         </div>
         {getStatusBadge()}
