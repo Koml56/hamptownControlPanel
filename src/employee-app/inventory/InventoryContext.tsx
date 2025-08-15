@@ -723,12 +723,12 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
       if (saved) {
         showToast('✅ Daily snapshot created successfully');
         addActivityEntry({
-          type: 'manual_add',
-          item: `${snapshot.dailyTotals.totalItems} items`,
-          quantity: snapshot.dailyTotals.totalItems,
-          unit: 'items',
+          action: isManual ? 'Manual Daily Snapshot Created' : 'Automatic Daily Snapshot Created',
+          itemName: `${snapshot.dailyTotals.totalItems} items`,
+          details: `Total value: $${snapshot.dailyTotals.totalInventoryValue.toFixed(2)}`,
           employee: currentUser.name,
-          notes: `${isManual ? 'Manual' : 'Automatic'} Daily Snapshot Created. Total value: $${snapshot.dailyTotals.totalInventoryValue.toFixed(2)}. Captured at: ${snapshot.capturedAt}`
+          timestamp: new Date().toISOString(),
+          notes: `Captured at: ${snapshot.capturedAt}`
         });
         return snapshot;
       } else {
@@ -740,7 +740,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
       showToast('❌ Error creating daily snapshot');
       return null;
     }
-  }, [dailyItems, weeklyItems, monthlyItems, currentUser.name, addActivityEntry, dailySnapshotService]);
+  }, [dailyItems, weeklyItems, monthlyItems, currentUser.name, addActivityEntry]);
 
   const loadHistoricalSnapshot = useCallback(async (date: string): Promise<DailySnapshot | null> => {
     try {
@@ -749,7 +749,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
       console.error('Error loading historical snapshot:', error);
       return null;
     }
-  }, [dailySnapshotService]);
+  }, []);
 
   const getAvailableHistoricalDates = useCallback(async (): Promise<string[]> => {
     try {
@@ -758,17 +758,17 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
       console.error('Error loading historical dates:', error);
       return [];
     }
-  }, [dailySnapshotService]);
+  }, []);
 
   const initializeDailySnapshots = useCallback(() => {
     dailySnapshotService.startAutomaticScheduling();
     showToast('⏰ Daily snapshot scheduling enabled');
-  }, [dailySnapshotService]);
+  }, []);
 
   const stopDailySnapshots = useCallback(() => {
     dailySnapshotService.stopAutomaticScheduling();
     showToast('⏰ Daily snapshot scheduling disabled');
-  }, [dailySnapshotService]);
+  }, []);
   // === END: True Daily Snapshot Functions ===
 
   const value: InventoryContextType = {
