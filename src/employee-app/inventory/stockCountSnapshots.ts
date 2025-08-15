@@ -26,13 +26,22 @@ export const generateSnapshotId = (date: string, frequency: InventoryFrequency):
 export const createStockCountSnapshot = (
   items: InventoryItem[],
   frequency: InventoryFrequency,
-  date?: string
+  date?: string,
+  countedBy: string = 'System'
 ): StockCountSnapshot => {
   const snapshotDate = date || new Date().toISOString().split('T')[0]; // YYYY-MM-DD
   const timestamp = new Date().toISOString();
   
-  // Filter items by the specified frequency
-  const filteredItems = items.filter(item => item.frequency === frequency);
+  // Filter items by the specified frequency and ensure they are valid
+  const filteredItems = items.filter(item => 
+    item && 
+    typeof item === 'object' && 
+    item.frequency === frequency &&
+    item.id &&
+    item.name &&
+    typeof item.currentStock === 'number' &&
+    typeof item.cost === 'number'
+  );
   
   const itemCounts: StockCountSnapshot['itemCounts'] = {};
   let totalValue = 0;
@@ -58,9 +67,9 @@ export const createStockCountSnapshot = (
       currentStock: item.currentStock,
       unit: item.unit,
       unitCost: item.cost,
-      totalValue: itemTotalValue,
+      totalValue: itemTotalValue === 0 ? 0 : itemTotalValue, // Normalize -0 to 0
       lastCountDate: item.lastUsed,
-      countedBy: 'System', // TODO: Get from context when available
+      countedBy: countedBy, // Use the passed parameter instead of hardcoded 'System'
       minLevel: item.minLevel,
       optimalLevel: item.optimalLevel || item.minLevel * 2
     };
@@ -68,9 +77,9 @@ export const createStockCountSnapshot = (
   
   // Count items by frequency for summary
   const allItemsByFrequency = {
-    daily: items.filter(item => item.frequency === 'daily').length,
-    weekly: items.filter(item => item.frequency === 'weekly').length,
-    monthly: items.filter(item => item.frequency === 'monthly').length
+    daily: items.filter(item => item && item.frequency === 'daily').length,
+    weekly: items.filter(item => item && item.frequency === 'weekly').length,
+    monthly: items.filter(item => item && item.frequency === 'monthly').length
   };
   
   return {
@@ -99,7 +108,8 @@ export const createAllFrequencySnapshots = (
   dailyItems: InventoryItem[],
   weeklyItems: InventoryItem[],
   monthlyItems: InventoryItem[],
-  date?: string
+  date?: string,
+  countedBy: string = 'System'
 ): StockCountSnapshot[] => {
   const snapshotDate = date || new Date().toISOString().split('T')[0];
   
@@ -107,15 +117,15 @@ export const createAllFrequencySnapshots = (
   
   // Create snapshot for each frequency
   if (dailyItems.length > 0) {
-    snapshots.push(createStockCountSnapshot(dailyItems, 'daily', snapshotDate));
+    snapshots.push(createStockCountSnapshot(dailyItems, 'daily', snapshotDate, countedBy));
   }
   
   if (weeklyItems.length > 0) {
-    snapshots.push(createStockCountSnapshot(weeklyItems, 'weekly', snapshotDate));
+    snapshots.push(createStockCountSnapshot(weeklyItems, 'weekly', snapshotDate, countedBy));
   }
   
   if (monthlyItems.length > 0) {
-    snapshots.push(createStockCountSnapshot(monthlyItems, 'monthly', snapshotDate));
+    snapshots.push(createStockCountSnapshot(monthlyItems, 'monthly', snapshotDate, countedBy));
   }
   
   return snapshots;
@@ -214,7 +224,8 @@ export const createComprehensiveSnapshot = (
   dailyItems: InventoryItem[],
   weeklyItems: InventoryItem[],
   monthlyItems: InventoryItem[],
-  date?: string
+  date?: string,
+  countedBy: string = 'System'
 ): StockCountSnapshot => {
   const snapshotDate = date || new Date().toISOString().split('T')[0];
   const timestamp = new Date().toISOString();
@@ -252,7 +263,7 @@ export const createComprehensiveSnapshot = (
       unitCost: item.cost,
       totalValue: itemTotalValue,
       lastCountDate: item.lastUsed,
-      countedBy: 'System',
+      countedBy: countedBy,
       minLevel: item.minLevel,
       optimalLevel: item.optimalLevel || item.minLevel * 2
     };
