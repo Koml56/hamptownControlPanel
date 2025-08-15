@@ -197,12 +197,6 @@ describe('StockCountHistoryView', () => {
     updateCustomCategory: jest.fn(),
     deleteCustomCategory: jest.fn(),
     createStockSnapshot: jest.fn().mockResolvedValue([{ success: true }]),
-    // True Daily Snapshots (New System)
-    createTrueDailySnapshot: jest.fn().mockResolvedValue(null),
-    loadHistoricalSnapshot: jest.fn().mockResolvedValue(null),
-    getAvailableHistoricalDates: jest.fn().mockResolvedValue([]),
-    initializeDailySnapshots: jest.fn(),
-    stopDailySnapshots: jest.fn(),
     quickSave: jest.fn().mockResolvedValue(true)
   };
 
