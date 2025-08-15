@@ -7,7 +7,7 @@ import CountModal from './CountModal';
 import WasteModal from './WasteModal';
 
 const WeeklyView: React.FC = () => {
-  const { weeklyItems } = useInventory();
+  const { weeklyItems, customCategories } = useInventory();
   const [showCountModal, setShowCountModal] = useState(false);
   const [showWasteModal, setShowWasteModal] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<number | string | null>(null);
@@ -169,6 +169,7 @@ const WeeklyView: React.FC = () => {
                   item={item}
                   onUpdateCount={handleUpdateCount}
                   onReportWaste={handleReportWaste}
+                  customCategories={customCategories}
                 />
               ))}
             </div>
