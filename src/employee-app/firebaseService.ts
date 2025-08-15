@@ -270,6 +270,8 @@ export class FirebaseService {
         return allData.inventoryDatabaseItems;
       case 'inventoryActivityLog':
         return allData.inventoryActivityLog;
+      case 'inventoryCustomCategories':
+        return allData.inventoryCustomCategories;
       case 'stockCountSnapshots':
         return allData.stockCountSnapshots;
       default:
@@ -364,6 +366,11 @@ export class FirebaseService {
           totalEntries: data?.length || 0,
           latestEntry: data?.[0]?.timestamp || 'none'
         };
+      case 'inventoryCustomCategories':
+        return {
+          totalCategories: data?.length || 0,
+          sampleCategory: data?.[0]?.name || 'none'
+        };
       case 'stockCountSnapshots':
         return {
           totalSnapshots: data?.length || 0,
@@ -380,12 +387,12 @@ export class FirebaseService {
     try {
       // FIXED: Load ALL fields including prep and store data
       const [
-        employeesRes, 
-        tasksRes, 
-        dailyRes, 
-        completedRes, 
-        assignmentsRes, 
-        rolesRes, 
+        employeesRes,
+        tasksRes,
+        dailyRes,
+        completedRes,
+        assignmentsRes,
+        rolesRes,
         prepItemsRes,
         scheduledPrepsRes,
         prepSelectionsRes,
@@ -395,6 +402,7 @@ export class FirebaseService {
         inventoryMonthlyRes,
         inventoryDatabaseRes,
         inventoryActivityLogRes,
+        inventoryCustomCategoriesRes,
         stockCountSnapshotsRes
       ] = await Promise.all([
         fetch(`${this.baseUrl}/employees.json`),
@@ -412,6 +420,7 @@ export class FirebaseService {
         fetch(`${this.baseUrl}/inventoryMonthlyItems.json`),
         fetch(`${this.baseUrl}/inventoryDatabaseItems.json`),
         fetch(`${this.baseUrl}/inventoryActivityLog.json`),
+        fetch(`${this.baseUrl}/inventoryCustomCategories.json`),
         fetch(`${this.baseUrl}/stockCountSnapshots.json`)
       ]);
       
@@ -430,6 +439,7 @@ export class FirebaseService {
       const inventoryMonthlyData = await inventoryMonthlyRes.json();
       const inventoryDatabaseData = await inventoryDatabaseRes.json();
       const inventoryActivityLogData = await inventoryActivityLogRes.json();
+      const inventoryCustomCategoriesData = await inventoryCustomCategoriesRes.json();
       const stockCountSnapshotsData = await stockCountSnapshotsRes.json();
       
       // Migrate employees data to include points if missing
@@ -473,6 +483,7 @@ export class FirebaseService {
         inventoryMonthlyItems: inventoryMonthlyData || [],
         inventoryDatabaseItems: inventoryDatabaseData || [],
         inventoryActivityLog: inventoryActivityLogData || [],
+        inventoryCustomCategories: inventoryCustomCategoriesData || [],
         stockCountSnapshots: stockCountSnapshotsData || []
       };
       
@@ -550,6 +561,7 @@ export class FirebaseService {
       'inventoryMonthlyItems',
       'inventoryDatabaseItems',
       'inventoryActivityLog',
+      'inventoryCustomCategories',
       'stockCountSnapshots'
     ];
 
