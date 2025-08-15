@@ -275,11 +275,12 @@ const StockCountHistoryView: React.FC = () => {
     try {
       const results = await createStockSnapshot();
       if (results.length > 0) {
-        // Refresh the available dates
-        window.location.reload(); // Simple refresh to show new data
+        // No need to reload - the context will update stockCountSnapshots automatically
+        console.log(`✅ Created ${results.length} snapshot(s) successfully`);
       }
     } catch (error) {
       console.error('Error creating snapshot:', error);
+      // TODO: Show user-friendly error message instead of crashing
     }
   }, [createStockSnapshot]);
 
