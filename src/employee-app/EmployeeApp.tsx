@@ -311,11 +311,23 @@ const EmployeeApp: React.FC = () => {
   // Simple daily reset check on startup only
   useEffect(() => {
     if (!isLoading && connectionStatus === 'connected') {
-      const checkForNewDay = () => {
+      const checkForNewDay = async () => {
         const today = getFormattedDate(new Date());
-        const lastResetDate = localStorage.getItem('lastTaskResetDate');
         
-        // ONLY trigger if date changed
+        // Check Firebase shared state first to prevent unnecessary resets from new devices
+        let lastResetDate: string | null = null;
+        try {
+          lastResetDate = await firebaseMeta.current?.getLastTaskResetDate?.();
+        } catch (error) {
+          console.warn('⚠️ Failed to check Firebase reset date, falling back to localStorage:', error);
+        }
+        
+        // Fall back to localStorage if Firebase check failed
+        if (!lastResetDate) {
+          lastResetDate = localStorage.getItem('lastTaskResetDate');
+        }
+        
+        // ONLY trigger if date changed AND no reset was done today globally
         if (lastResetDate !== today) {
           console.log('🌅 NEW DAY DETECTED: Performing simple daily reset');
           
@@ -327,7 +339,8 @@ const EmployeeApp: React.FC = () => {
           // Save to Firebase
           Promise.all([
             quickSave('completedTasks', []),
-            quickSave('taskAssignments', {})
+            quickSave('taskAssignments', {}),
+            firebaseMeta.current?.setLastTaskResetDate?.(today)
           ]).then(() => {
             console.log('✅ SIMPLE RESET: Daily reset completed and saved');
           }).catch((error) => {
@@ -339,6 +352,10 @@ const EmployeeApp: React.FC = () => {
           setTimeout(() => {
             setShowDailyResetNotification(false);
           }, 8000);
+        } else if (lastResetDate === today) {
+          // Reset was already done today, just update localStorage to sync with global state
+          localStorage.setItem('lastTaskResetDate', today);
+          console.log('📅 Daily reset already completed today, device now synchronized');
         }
       };
 
