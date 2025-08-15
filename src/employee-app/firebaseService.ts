@@ -138,6 +138,16 @@ export class FirebaseService {
     return this.executeSave(field, data);
   }
 
+  // Helper function to safely stringify data for Firebase
+  private safeStringify(data: any): string | null {
+    try {
+      return JSON.stringify(data);
+    } catch (error) {
+      console.warn('⚠️ Unable to stringify data for Firebase save:', error instanceof Error ? error.message : String(error));
+      return null;
+    }
+  }
+
   // Execute the actual save operation
   private async executeSave(field: string, data: any): Promise<boolean> {
     console.log(`🔥 QuickSave: ${field}`);
@@ -154,12 +164,19 @@ export class FirebaseService {
     }
 
     try {
+      const stringifiedData = this.safeStringify(data);
+      if (stringifiedData === null) {
+        // Data cannot be serialized - this should not happen in normal operation
+        console.error(`❌ Cannot serialize data for ${field} - skipping save`);
+        return false;
+      }
+
       const response = await fetch(`${this.baseUrl}/${field}.json`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(data)
+        body: stringifiedData
       });
 
       if (!response.ok) {
@@ -169,7 +186,7 @@ export class FirebaseService {
           status: response.status,
           statusText: response.statusText,
           url: `${this.baseUrl}/${field}.json`,
-          dataSize: JSON.stringify(data).length,
+          dataSize: stringifiedData.length,
           dataType: Array.isArray(data) ? 'array' : typeof data,
           timestamp: new Date().toISOString()
         };
@@ -774,29 +791,44 @@ export class FirebaseService {
         sizeBytes: 4 // 'null' has 4 characters
       };
     }
+
+    // Helper function to safely get JSON size
+    const safeJsonSize = (value: any): number => {
+      try {
+        return JSON.stringify(value).length;
+      } catch (error) {
+        // Handle circular references, BigInt, functions, and other non-serializable values
+        return -1; // Indicate serialization failed
+      }
+    };
     
     if (Array.isArray(data)) {
+      const sizeBytes = safeJsonSize(data);
       return {
         type: 'array',
         length: data.length,
-        sizeBytes: JSON.stringify(data).length
+        sizeBytes: sizeBytes >= 0 ? sizeBytes : 'non-serializable'
       };
     } else if (data instanceof Set) {
+      const arrayData = Array.from(data);
+      const sizeBytes = safeJsonSize(arrayData);
       return {
         type: 'set',
         size: data.size,
-        sizeBytes: JSON.stringify(Array.from(data)).length
+        sizeBytes: sizeBytes >= 0 ? sizeBytes : 'non-serializable'
       };
     } else if (typeof data === 'object') {
+      const sizeBytes = safeJsonSize(data);
       return {
         type: 'object',
         keys: Object.keys(data).length,
-        sizeBytes: JSON.stringify(data).length
+        sizeBytes: sizeBytes >= 0 ? sizeBytes : 'non-serializable'
       };
     } else {
+      const sizeBytes = safeJsonSize(data);
       return {
         type: typeof data,
-        sizeBytes: JSON.stringify(data).length
+        sizeBytes: sizeBytes >= 0 ? sizeBytes : 'non-serializable'
       };
     }
   }
