@@ -1,7 +1,9 @@
 // src/employee-app/inventory/snapshotService.ts
 import { 
-  createAllFrequencySnapshots
+  createAllFrequencySnapshots,
+  createStockCountSnapshot
 } from './stockCountSnapshots';
+import { getStockStatus } from './stockUtils';
 import type { 
   InventoryItem, 
   StockCountHistoryEntry, 
@@ -158,16 +160,26 @@ export const createStockSnapshot = (
 ): Promise<StockCountHistoryEntry> => {
   return new Promise((resolve, reject) => {
     try {
+      const today = new Date().toISOString().split('T')[0];
       const snapshots = createAllFrequencySnapshots(
         frequency === 'daily' ? items : [],
         frequency === 'weekly' ? items : [],
         frequency === 'monthly' ? items : [],
-        currentUser
+        today,  // Use today's date
+        currentUser  // Pass the currentUser parameter correctly
       );
 
       const snapshot = snapshots.find(s => s.frequency === frequency);
       if (!snapshot) {
-        reject(new Error(`No snapshot generated for frequency: ${frequency}`));
+        // If no snapshot was created (empty items), create an empty snapshot
+        const emptySnapshot = createStockCountSnapshot([], frequency, today, currentUser);
+        const historyEntry: StockCountHistoryEntry = {
+          snapshotId: `${frequency}_${emptySnapshot.date.replace(/-/g, '')}`,
+          date: emptySnapshot.date,
+          frequency: emptySnapshot.frequency,
+          snapshot: emptySnapshot
+        };
+        resolve(historyEntry);
         return;
       }
 
@@ -208,13 +220,16 @@ export const generateSnapshotSummary = (snapshot: any) => {
   let lowStockItems = 0;
 
   items.forEach(item => {
+    if (!item) return; // Skip null/undefined items
+    
     if (item.frequency === 'daily') dailyItemsCount++;
     if (item.frequency === 'weekly') weeklyItemsCount++;
     if (item.frequency === 'monthly') monthlyItemsCount++;
 
-    if (item.currentStock === 0) outOfStockItems++;
-    else if (item.currentStock <= item.minLevel * 0.5) criticalStockItems++;
-    else if (item.currentStock <= item.minLevel) lowStockItems++;
+    const stockStatus = getStockStatus(item.currentStock, item.minLevel);
+    if (stockStatus === 'out') outOfStockItems++;
+    else if (stockStatus === 'critical') criticalStockItems++;
+    else if (stockStatus === 'low') lowStockItems++;
   });
 
   return {

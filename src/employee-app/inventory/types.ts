@@ -80,6 +80,12 @@ export interface InventoryContextType {
   deleteCustomCategory: (id: string) => void;
   // Stock Count Snapshots
   createStockSnapshot: (date?: string, frequencies?: ('daily' | 'weekly' | 'monthly')[]) => Promise<any[]>;
+  // True Daily Snapshots (New System)
+  createTrueDailySnapshot: (isManual?: boolean) => Promise<any | null>;
+  loadHistoricalSnapshot: (date: string) => Promise<any | null>;
+  getAvailableHistoricalDates: () => Promise<string[]>;
+  initializeDailySnapshots: () => void;
+  stopDailySnapshots: () => void;
   // Firebase integration
   quickSave: (field: string, data: any) => Promise<boolean>;
 }
