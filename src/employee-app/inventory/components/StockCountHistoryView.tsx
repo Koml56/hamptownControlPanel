@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { useInventory } from '../InventoryContext';
 import { getStockStatus } from '../stockUtils';
-import type { StockCountSnapshot, InventoryFrequency } from '../../types';
+import type { StockCountSnapshot, InventoryFrequency, InventoryItem } from '../../types';
 
 interface HistoricalItemData {
   itemId: string;
@@ -35,7 +35,13 @@ interface HistoricalItemData {
 }
 
 const StockCountHistoryView: React.FC = () => {
-  const { stockCountSnapshots, createStockSnapshot } = useInventory();
+  const { 
+    stockCountSnapshots, 
+    createStockSnapshot,
+    dailyItems,
+    weeklyItems, 
+    monthlyItems
+  } = useInventory();
   
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date();
@@ -64,6 +70,11 @@ const StockCountHistoryView: React.FC = () => {
     stockCountSnapshots.forEach(snapshot => {
       dates.add(snapshot.date);
     });
+    
+    // CRITICAL FIX: Always include today's date for analytics, even if no snapshot exists yet
+    const today = new Date().toISOString().split('T')[0];
+    dates.add(today);
+    
     return Array.from(dates).sort().reverse(); // Most recent first
   }, [stockCountSnapshots]);
 
@@ -122,9 +133,39 @@ const StockCountHistoryView: React.FC = () => {
 
   // Convert snapshot to historical item data
   const historicalData = useMemo((): HistoricalItemData[] => {
+    const today = new Date().toISOString().split('T')[0];
+    const isToday = selectedDate === today;
+    
     if (!selectedSnapshot) {
-      // FIXED: Instead of showing current data, show a message that no historical data exists
-      // This prevents historical data corruption where current prices affect past views
+      // CRITICAL FIX: If viewing today and no snapshot exists yet, show current live data
+      if (isToday) {
+        console.log(`📊 Showing live inventory data for today (${selectedDate}) - no snapshot created yet`);
+        
+        // Combine all current inventory items for today's view
+        const allCurrentItems: InventoryItem[] = [
+          ...dailyItems,
+          ...weeklyItems, 
+          ...monthlyItems
+        ];
+        
+        return allCurrentItems.map(item => ({
+          itemId: item.id.toString(),
+          itemName: item.name,
+          category: item.category,
+          frequency: item.frequency || 'daily', // Default to daily if undefined
+          stockLevel: item.currentStock,
+          unit: item.unit,
+          unitCost: item.cost, // Use cost property from InventoryItem
+          totalValue: item.currentStock * item.cost,
+          stockStatus: getStockStatus(item.currentStock, item.minLevel),
+          minLevel: item.minLevel,
+          optimalLevel: item.optimalLevel || item.minLevel * 2, // Default to 2x min level if undefined
+          lastCountDate: item.lastUsed || today,
+          countedBy: 'Live Data'
+        }));
+      }
+      
+      // For historical dates (not today), preserve data integrity
       console.warn(`⚠️ No historical snapshot found for ${selectedDate}. Historical data integrity preserved.`);
       return [];
     }
@@ -145,7 +186,7 @@ const StockCountHistoryView: React.FC = () => {
       lastCountDate: item.lastCountDate,
       countedBy: item.countedBy
     }));
-  }, [selectedSnapshot, selectedDate]);
+  }, [selectedSnapshot, selectedDate, dailyItems, weeklyItems, monthlyItems]);
 
   // Filter and search historical data
   const filteredData = useMemo(() => {
@@ -285,6 +326,9 @@ const StockCountHistoryView: React.FC = () => {
   }, [createStockSnapshot]);
 
   const hasHistoricalData = selectedSnapshot !== null;
+  const today = new Date().toISOString().split('T')[0];
+  const isViewingToday = selectedDate === today;
+  const isShowingLiveData = isViewingToday && !hasHistoricalData;
 
   return (
     <div className="space-y-6">
@@ -423,14 +467,27 @@ const StockCountHistoryView: React.FC = () => {
         )}
       </div>
 
-      {/* Historical Data Notice */}
-      {!hasHistoricalData && (
+      {/* Live Data Notice */}
+      {isShowingLiveData && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <Eye className="w-5 h-5 text-blue-600 mr-2" />
+            <div className="text-sm text-blue-800">
+              <strong>Live Data:</strong> Showing current inventory data for today ({formatDisplayDate(selectedDate)}). 
+              A snapshot will be created automatically at 11:59 PM to preserve this data for historical viewing.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* No Historical Data Notice */}
+      {!hasHistoricalData && !isShowingLiveData && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
           <div className="flex items-center">
             <AlertTriangle className="w-5 h-5 text-amber-600 mr-2" />
             <div className="text-sm text-amber-800">
-              <strong>No Historical Data:</strong> Showing current inventory data for {formatDisplayDate(selectedDate)}. 
-              Historical snapshots will be created automatically going forward.
+              <strong>No Historical Data:</strong> No inventory snapshot was created for {formatDisplayDate(selectedDate)}. 
+              Historical data integrity is preserved by not showing current prices for past dates.
             </div>
           </div>
         </div>
@@ -514,9 +571,14 @@ const StockCountHistoryView: React.FC = () => {
                 Historical Data
               </span>
             )}
-            {!hasHistoricalData && (
+            {isShowingLiveData && (
+              <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                Live Data
+              </span>
+            )}
+            {!hasHistoricalData && !isShowingLiveData && (
               <span className="ml-2 px-2 py-1 bg-amber-100 text-amber-800 text-xs rounded-full">
-                Current Data
+                No Data
               </span>
             )}
           </h3>
@@ -601,8 +663,8 @@ const StockCountHistoryView: React.FC = () => {
 
         {filteredData.length === 0 && (
           <div className="px-6 py-8 text-center">
-            {!selectedSnapshot ? (
-              // No historical snapshot available - show historical data preservation message
+            {!selectedSnapshot && !isShowingLiveData ? (
+              // No historical snapshot available for past dates - show historical data preservation message
               <div>
                 <AlertTriangle className="w-12 h-12 text-orange-400 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No Historical Data Available</h3>
@@ -629,10 +691,15 @@ const StockCountHistoryView: React.FC = () => {
                 </button>
               </div>
             ) : (
-              // Snapshot exists but no items match filter criteria
+              // Snapshot exists or showing live data, but no items match filter criteria
               <div>
                 <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-500">No items found matching your search criteria.</p>
+                <p className="text-gray-500">
+                  {isShowingLiveData 
+                    ? "No inventory items found matching your search criteria in the current live data."
+                    : "No items found matching your search criteria in the snapshot."
+                  }
+                </p>
               </div>
             )}
           </div>
