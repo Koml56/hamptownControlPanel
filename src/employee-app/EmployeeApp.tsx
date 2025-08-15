@@ -193,6 +193,30 @@ const EmployeeApp: React.FC = () => {
       if (mounted && employees.length === 0) {
         console.log('🚀 Initializing app...');
         await loadFromFirebase();
+        
+        // CRITICAL: Initialize daily snapshot automation to prevent historical data corruption
+        if (mounted) {
+          try {
+            const { initializeDailySnapshotAutomation } = await import('./inventory/dailySnapshotAutomation');
+            const { FirebaseService } = await import('./firebaseService');
+            
+            // Create a Firebase service instance for automation
+            const automationFirebaseService = new FirebaseService();
+            
+            // Initialize and start daily snapshot automation
+            const automation = initializeDailySnapshotAutomation(automationFirebaseService);
+            
+            console.log('📸 Daily snapshot automation initialized successfully');
+            console.log('🛡️ Historical data corruption prevention active');
+            
+            // Store automation instance for cleanup
+            (window as any).__snapshotAutomation = automation;
+            
+          } catch (error) {
+            console.error('❌ Failed to initialize daily snapshot automation:', error);
+            console.warn('⚠️ Historical data may not be automatically preserved');
+          }
+        }
       }
     };
     
@@ -200,6 +224,12 @@ const EmployeeApp: React.FC = () => {
     
     return () => {
       mounted = false;
+      
+      // Cleanup automation on unmount
+      if ((window as any).__snapshotAutomation) {
+        (window as any).__snapshotAutomation.stop();
+        delete (window as any).__snapshotAutomation;
+      }
     };
   }, [employees.length, loadFromFirebase]);
 

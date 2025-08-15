@@ -163,7 +163,28 @@ export class FirebaseService {
       });
 
       if (!response.ok) {
-        throw new Error(`Firebase save failed: ${response.status} ${response.statusText}`);
+        // ENHANCED: Provide detailed error information for Firebase save failures
+        const errorDetails = {
+          field,
+          status: response.status,
+          statusText: response.statusText,
+          url: `${this.baseUrl}/${field}.json`,
+          dataSize: JSON.stringify(data).length,
+          dataType: Array.isArray(data) ? 'array' : typeof data,
+          timestamp: new Date().toISOString()
+        };
+        
+        console.error('❌ Firebase save detailed error:', errorDetails);
+        
+        // Try to get response body for more details
+        try {
+          const responseText = await response.text();
+          console.error('❌ Firebase error response body:', responseText);
+        } catch (bodyError) {
+          console.error('❌ Could not read error response body:', bodyError);
+        }
+        
+        throw new Error(`Firebase save failed: ${response.status} ${response.statusText} for field ${field}`);
       }
 
       console.log(`🔒 Critical save - waiting for confirmation: ${field}`);
@@ -185,7 +206,22 @@ export class FirebaseService {
       
       return true;
     } catch (error) {
-      console.error(`❌ QuickSave failed for ${field}:`, error);
+      // ENHANCED: Detailed error logging for individual field saves
+      console.error(`❌ QuickSave failed for ${field} - detailed error:`, {
+        field,
+        error: error,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+        dataInfo: this.getDataSizeInfo(field, { [field]: data }),
+        attempt: this.saveAttempts.get(field) || 1,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Log data sample if it might be causing issues
+      if (data && (Array.isArray(data) || typeof data === 'object')) {
+        console.error(`🔍 Problematic data sample for ${field}:`, this.getDataSample(field, { [field]: data }));
+      }
+      
       return false;
     }
   }
@@ -224,12 +260,35 @@ export class FirebaseService {
           }, 100);
         }
       } else {
-        console.error('❌ Some batch saves failed');
+        // ENHANCED: Provide detailed information about which saves failed
+        console.error('❌ Some batch saves failed - detailed analysis:');
+        console.error('📊 Field save results:', fields.map((field, index) => ({
+          field,
+          success: results[index],
+          dataSize: this.getDataSizeInfo(field, allData)
+        })));
+        
+        // Log failing fields specifically
+        const failedFields = fields.filter((field, index) => results[index] !== true);
+        if (failedFields.length > 0) {
+          console.error('❌ Failed fields:', failedFields);
+          console.error('🔍 Failed field data samples:', failedFields.map(field => ({
+            field,
+            dataSample: this.getDataSample(field, allData)
+          })));
+        }
       }
 
       return allSuccessful;
     } catch (error) {
-      console.error('❌ Batch save failed:', error);
+      // ENHANCED: Detailed error logging for Firebase batch saves
+      console.error('❌ Batch save failed - detailed error info:', {
+        error: error,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+        fieldsBeingSaved: fields,
+        timestamp: new Date().toISOString()
+      });
       return false;
     } finally {
       this.isCurrentlySaving = false;
@@ -701,6 +760,64 @@ export class FirebaseService {
     } catch (error) {
       console.error('❌ Error fetching latest snapshot:', error);
       return null;
+    }
+  }
+
+  // ENHANCED: Helper method to get data size information for debugging
+  private getDataSizeInfo(field: string, allData: any): any {
+    const data = this.getFieldData(field, allData);
+    
+    if (Array.isArray(data)) {
+      return {
+        type: 'array',
+        length: data.length,
+        sizeBytes: JSON.stringify(data).length
+      };
+    } else if (data instanceof Set) {
+      return {
+        type: 'set',
+        size: data.size,
+        sizeBytes: JSON.stringify(Array.from(data)).length
+      };
+    } else if (typeof data === 'object') {
+      return {
+        type: 'object',
+        keys: Object.keys(data).length,
+        sizeBytes: JSON.stringify(data).length
+      };
+    } else {
+      return {
+        type: typeof data,
+        sizeBytes: JSON.stringify(data).length
+      };
+    }
+  }
+
+  // ENHANCED: Helper method to get data sample for debugging
+  private getDataSample(field: string, allData: any): any {
+    const data = this.getFieldData(field, allData);
+    
+    if (Array.isArray(data)) {
+      return {
+        totalLength: data.length,
+        sample: data.slice(0, 3), // First 3 items
+        hasInvalidItems: data.some(item => !item || typeof item !== 'object')
+      };
+    } else if (data instanceof Set) {
+      const array = Array.from(data);
+      return {
+        totalSize: data.size,
+        sample: array.slice(0, 3)
+      };
+    } else if (typeof data === 'object') {
+      const keys = Object.keys(data);
+      return {
+        totalKeys: keys.length,
+        sampleKeys: keys.slice(0, 5),
+        sample: Object.fromEntries(keys.slice(0, 3).map(key => [key, data[key]]))
+      };
+    } else {
+      return data;
     }
   }
 }

@@ -1,6 +1,6 @@
 // src/employee-app/inventory/snapshotService.ts
 import { 
-  createAllFrequencySnapshots
+  createStockCountSnapshot
 } from './stockCountSnapshots';
 import type { 
   InventoryItem, 
@@ -158,18 +158,8 @@ export const createStockSnapshot = (
 ): Promise<StockCountHistoryEntry> => {
   return new Promise((resolve, reject) => {
     try {
-      const snapshots = createAllFrequencySnapshots(
-        frequency === 'daily' ? items : [],
-        frequency === 'weekly' ? items : [],
-        frequency === 'monthly' ? items : [],
-        currentUser
-      );
-
-      const snapshot = snapshots.find(s => s.frequency === frequency);
-      if (!snapshot) {
-        reject(new Error(`No snapshot generated for frequency: ${frequency}`));
-        return;
-      }
+      // FIXED: Use the correct function for single frequency snapshots
+      const snapshot = createStockCountSnapshot(items, frequency, undefined, currentUser);
 
       // Convert StockCountSnapshot to StockCountHistoryEntry
       const historyEntry: StockCountHistoryEntry = {
@@ -181,6 +171,7 @@ export const createStockSnapshot = (
 
       resolve(historyEntry);
     } catch (error) {
+      console.error(`❌ Error creating ${frequency} snapshot:`, error);
       reject(error);
     }
   });
@@ -208,6 +199,9 @@ export const generateSnapshotSummary = (snapshot: any) => {
   let lowStockItems = 0;
 
   items.forEach(item => {
+    // FIXED: Add null check for item and item.frequency
+    if (!item) return;
+    
     if (item.frequency === 'daily') dailyItemsCount++;
     if (item.frequency === 'weekly') weeklyItemsCount++;
     if (item.frequency === 'monthly') monthlyItemsCount++;

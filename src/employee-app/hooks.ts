@@ -302,7 +302,40 @@ export const useFirebaseData = () => {
       setConnectionStatus('connected');
       
     } catch (error) {
-      console.error('❌ Save failed:', error);
+      // ENHANCED: Provide detailed error logging for debugging Firebase save failures
+      console.error('❌ Save failed - detailed error info:', {
+        error: error,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+        errorName: error instanceof Error ? error.name : typeof error,
+        dataFields: Object.keys({
+          employees, tasks, dailyData, completedTasks, taskAssignments, customRoles,
+          prepItems, scheduledPreps, prepSelections, storeItems,
+          inventoryDailyItems, inventoryWeeklyItems, inventoryMonthlyItems, 
+          inventoryDatabaseItems, inventoryActivityLog, stockCountSnapshots
+        }),
+        timestamp: new Date().toISOString()
+      });
+      
+      // Log specific data that might be causing issues
+      if (error instanceof Error && error.message.includes('Firebase')) {
+        console.error('🔍 Firebase-specific error detected:', {
+          inventoryItemsCount: {
+            daily: inventoryDailyItems.length,
+            weekly: inventoryWeeklyItems.length,
+            monthly: inventoryMonthlyItems.length,
+            database: inventoryDatabaseItems.length,
+            activityLog: inventoryActivityLog.length,
+            snapshots: stockCountSnapshots.length
+          },
+          sampleInventoryData: {
+            dailySample: inventoryDailyItems.slice(0, 2),
+            databaseSample: inventoryDatabaseItems.slice(0, 2),
+            snapshotSample: stockCountSnapshots.slice(0, 1)
+          }
+        });
+      }
+      
       setConnectionStatus('error');
     } finally {
       isSavingRef.current = false;

@@ -35,7 +35,7 @@ interface HistoricalItemData {
 }
 
 const StockCountHistoryView: React.FC = () => {
-  const { stockCountSnapshots, dailyItems, weeklyItems, monthlyItems, createStockSnapshot } = useInventory();
+  const { stockCountSnapshots, createStockSnapshot } = useInventory();
   
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date();
@@ -123,30 +123,13 @@ const StockCountHistoryView: React.FC = () => {
   // Convert snapshot to historical item data
   const historicalData = useMemo((): HistoricalItemData[] => {
     if (!selectedSnapshot) {
-      // If no snapshot available, show current data with note
-      const currentItems = [
-        ...dailyItems.map(item => ({ ...item, frequency: 'daily' as InventoryFrequency })),
-        ...weeklyItems.map(item => ({ ...item, frequency: 'weekly' as InventoryFrequency })),
-        ...monthlyItems.map(item => ({ ...item, frequency: 'monthly' as InventoryFrequency }))
-      ];
-      
-      return currentItems.map(item => ({
-        itemId: item.id.toString(),
-        itemName: item.name,
-        category: item.category.toString(),
-        frequency: item.frequency,
-        stockLevel: item.currentStock,
-        unit: item.unit,
-        unitCost: item.cost,
-        totalValue: item.currentStock * item.cost,
-        stockStatus: getStockStatus(item.currentStock, item.minLevel),
-        minLevel: item.minLevel,
-        optimalLevel: item.optimalLevel || item.minLevel * 2,
-        lastCountDate: item.lastUsed,
-        countedBy: 'Unknown'
-      }));
+      // FIXED: Instead of showing current data, show a message that no historical data exists
+      // This prevents historical data corruption where current prices affect past views
+      console.warn(`⚠️ No historical snapshot found for ${selectedDate}. Historical data integrity preserved.`);
+      return [];
     }
     
+    // Use ONLY snapshot data to ensure historical integrity
     return Object.entries(selectedSnapshot.itemCounts).map(([itemId, item]) => ({
       itemId,
       itemName: item.itemName,
@@ -154,15 +137,15 @@ const StockCountHistoryView: React.FC = () => {
       frequency: item.frequency,
       stockLevel: item.currentStock,
       unit: item.unit,
-      unitCost: item.unitCost,
-      totalValue: item.totalValue,
+      unitCost: item.unitCost, // This is the HISTORICAL price from when snapshot was created
+      totalValue: item.totalValue, // This is the HISTORICAL value
       stockStatus: getStockStatus(item.currentStock, item.minLevel),
       minLevel: item.minLevel,
       optimalLevel: item.optimalLevel,
       lastCountDate: item.lastCountDate,
       countedBy: item.countedBy
     }));
-  }, [selectedSnapshot, dailyItems, weeklyItems, monthlyItems]);
+  }, [selectedSnapshot, selectedDate]);
 
   // Filter and search historical data
   const filteredData = useMemo(() => {
@@ -267,6 +250,25 @@ const StockCountHistoryView: React.FC = () => {
       URL.revokeObjectURL(url);
     }
   }, [filteredData, selectedDate]);
+
+  // Create snapshot for a specific date
+  const createSnapshotForDate = useCallback(async (date: string) => {
+    try {
+      console.log(`Creating snapshot for date: ${date}`);
+      
+      // Create snapshots for all frequencies on the specified date
+      const results = await createStockSnapshot(date, ['daily', 'weekly', 'monthly']);
+      
+      if (results && results.length > 0) {
+        console.log(`✅ Created ${results.length} snapshots for ${date}`);
+        // The UI will automatically update since stockCountSnapshots will be updated
+      } else {
+        console.warn(`⚠️ No snapshots created for ${date}`);
+      }
+    } catch (error) {
+      console.error(`❌ Error creating snapshot for ${date}:`, error);
+    }
+  }, [createStockSnapshot]);
 
   // Handle snapshot creation
   const handleCreateSnapshot = useCallback(async () => {
@@ -598,8 +600,40 @@ const StockCountHistoryView: React.FC = () => {
 
         {filteredData.length === 0 && (
           <div className="px-6 py-8 text-center">
-            <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500">No items found matching your criteria.</p>
+            {!selectedSnapshot ? (
+              // No historical snapshot available - show historical data preservation message
+              <div>
+                <AlertTriangle className="w-12 h-12 text-orange-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No Historical Data Available</h3>
+                <p className="text-gray-500 mb-4">
+                  No inventory snapshot was created for {formatDisplayDate(selectedDate)}.
+                </p>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-left max-w-md mx-auto">
+                  <div className="flex items-start">
+                    <Eye className="w-5 h-5 text-blue-500 mt-0.5 mr-2 flex-shrink-0" />
+                    <div>
+                      <p className="text-sm text-blue-800 font-medium mb-1">Historical Data Integrity Protected</p>
+                      <p className="text-xs text-blue-600">
+                        To preserve data accuracy, we don't show current prices for historical dates. 
+                        Create daily snapshots to ensure historical data is captured.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => createSnapshotForDate(selectedDate)}
+                  className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Create Snapshot for This Date
+                </button>
+              </div>
+            ) : (
+              // Snapshot exists but no items match filter criteria
+              <div>
+                <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-500">No items found matching your search criteria.</p>
+              </div>
+            )}
           </div>
         )}
       </div>
