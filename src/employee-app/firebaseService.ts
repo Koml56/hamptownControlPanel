@@ -767,6 +767,14 @@ export class FirebaseService {
   private getDataSizeInfo(field: string, allData: any): any {
     const data = this.getFieldData(field, allData);
     
+    // Safety check for null/undefined data
+    if (data === null || data === undefined) {
+      return {
+        type: 'null',
+        sizeBytes: 4 // 'null' has 4 characters
+      };
+    }
+    
     if (Array.isArray(data)) {
       return {
         type: 'array',
@@ -796,6 +804,14 @@ export class FirebaseService {
   // ENHANCED: Helper method to get data sample for debugging
   private getDataSample(field: string, allData: any): any {
     const data = this.getFieldData(field, allData);
+    
+    // Safety check for null/undefined data
+    if (data === null || data === undefined) {
+      return {
+        type: 'null',
+        value: data
+      };
+    }
     
     if (Array.isArray(data)) {
       return {
