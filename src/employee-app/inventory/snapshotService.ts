@@ -1,6 +1,5 @@
 // src/employee-app/inventory/snapshotService.ts
 import { 
-  createAllFrequencySnapshots,
   createStockCountSnapshot
 } from './stockCountSnapshots';
 import type { 
