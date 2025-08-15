@@ -689,6 +689,127 @@ export class FirebaseService {
     }
   }
 
+  // === NEW: Daily Snapshot Methods for True Historical Tracking ===
+  
+  /**
+   * Save a daily snapshot to Firebase (immutable historical record)
+   */
+  async saveDailySnapshot(snapshot: any): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.baseUrl}/dailySnapshots/${snapshot.date}.json`, {
+        method: 'PUT', // Use PUT to ensure the date is the key
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(snapshot)
+      });
+      
+      if (response.ok) {
+        console.log('✅ Daily snapshot saved successfully:', snapshot.date);
+        return true;
+      } else {
+        throw new Error(`Failed to save daily snapshot: ${response.status}`);
+      }
+    } catch (error) {
+      console.error('❌ Error saving daily snapshot:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Load a historical daily snapshot for a specific date
+   */
+  async loadDailySnapshot(date: string): Promise<any | null> {
+    try {
+      const response = await fetch(`${this.baseUrl}/dailySnapshots/${date}.json`);
+      if (!response.ok) {
+        if (response.status === 404) {
+          return null; // No snapshot exists for this date
+        }
+        throw new Error('Failed to fetch daily snapshot');
+      }
+      
+      const snapshot = await response.json();
+      console.log('📖 Daily snapshot loaded:', date);
+      return snapshot;
+    } catch (error) {
+      console.error('❌ Error loading daily snapshot:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get list of available daily snapshot dates
+   */
+  async getAvailableDailySnapshotDates(): Promise<string[]> {
+    try {
+      const response = await fetch(`${this.baseUrl}/dailySnapshots.json`);
+      if (!response.ok) throw new Error('Failed to fetch daily snapshots index');
+      
+      const data = await response.json();
+      const dates = data ? Object.keys(data).sort() : [];
+      console.log('📅 Available daily snapshot dates:', dates.length);
+      return dates;
+    } catch (error) {
+      console.error('❌ Error loading daily snapshot dates:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get daily snapshots within a date range
+   */
+  async getDailySnapshotsInRange(startDate: string, endDate: string): Promise<any[]> {
+    try {
+      const availableDates = await this.getAvailableDailySnapshotDates();
+      const filteredDates = availableDates.filter(date => {
+        return date >= startDate && date <= endDate;
+      });
+
+      const snapshots = [];
+      for (const date of filteredDates) {
+        const snapshot = await this.loadDailySnapshot(date);
+        if (snapshot) {
+          snapshots.push(snapshot);
+        }
+      }
+
+      return snapshots.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    } catch (error) {
+      console.error('❌ Error loading daily snapshots in range:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Check if a daily snapshot exists for a specific date
+   */
+  async dailySnapshotExists(date: string): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.baseUrl}/dailySnapshots/${date}.json`);
+      return response.ok;
+    } catch (error) {
+      console.error('❌ Error checking daily snapshot existence:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get the latest daily snapshot
+   */
+  async getLatestDailySnapshot(): Promise<any | null> {
+    try {
+      const dates = await this.getAvailableDailySnapshotDates();
+      if (dates.length === 0) return null;
+      
+      const latestDate = dates[dates.length - 1];
+      return await this.loadDailySnapshot(latestDate);
+    } catch (error) {
+      console.error('❌ Error loading latest daily snapshot:', error);
+      return null;
+    }
+  }
+
+  // === END: Daily Snapshot Methods ===
+
   // Method to get the latest snapshot for a specific frequency
   async getLatestSnapshot(frequency?: 'daily' | 'weekly' | 'monthly'): Promise<StockCountHistoryEntry | null> {
     try {
