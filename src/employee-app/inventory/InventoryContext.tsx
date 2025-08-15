@@ -1,5 +1,5 @@
 // src/employee-app/inventory/InventoryContext.tsx
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { 
   InventoryItem, 
   DatabaseItem, 
@@ -16,6 +16,7 @@ import { InventoryContextType } from './types'; // Local context type
 import { generateId, showToast } from './utils';
 import { sendInventoryNotification } from './notificationService';
 import { createStockSnapshot as createInventorySnapshot } from './snapshotService';
+import { DailySnapshotAutomation, DEFAULT_SNAPSHOT_CONFIG } from './dailySnapshotAutomation';
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
 
@@ -83,6 +84,37 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
   // UI-only state (not synced to Firebase)
   const [selectedItems, setSelectedItems] = useState<Set<number | string>>(new Set());
   const [currentTab, setCurrentTab] = useState<InventoryFrequency | 'reports' | 'stock-history' | 'outofstock'>('daily');
+
+  // Initialize daily snapshot automation
+  useEffect(() => {
+    try {
+      // Create a Firebase service mock using the existing quickSave function
+      const firebaseServiceMock = {
+        quickSave: quickSave
+      };
+
+      // Create and start the automation service
+      const automation = new DailySnapshotAutomation(firebaseServiceMock, {
+        ...DEFAULT_SNAPSHOT_CONFIG,
+        enableAutomation: true, // Ensure automation is enabled
+        snapshotTime: "23:59", // Take snapshots at 11:59 PM
+        retentionDays: 365 // Keep snapshots for 1 year
+      });
+
+      // Start the automation
+      automation.start();
+
+      console.log('✅ Daily snapshot automation initialized and started');
+
+      // Cleanup on unmount
+      return () => {
+        automation.stop();
+        console.log('📸 Daily snapshot automation stopped on cleanup');
+      };
+    } catch (error) {
+      console.error('❌ Failed to initialize daily snapshot automation:', error);
+    }
+  }, [quickSave]); // Re-initialize if quickSave changes
 
   // Helper function to get items by frequency
   const getItemsByFrequency = useCallback((frequency: InventoryFrequency): InventoryItem[] => {
