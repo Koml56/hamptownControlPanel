@@ -26,25 +26,42 @@ export const generateSnapshotId = (date: string, frequency: InventoryFrequency):
 export const createStockCountSnapshot = (
   items: InventoryItem[],
   frequency: InventoryFrequency,
-  date?: string
+  date?: string,
+  countedBy?: string
 ): StockCountSnapshot => {
   const snapshotDate = date || new Date().toISOString().split('T')[0]; // YYYY-MM-DD
   const timestamp = new Date().toISOString();
+  const defaultCountedBy = countedBy || 'System';
   
-  // Filter items by the specified frequency
-  const filteredItems = items.filter(item => item.frequency === frequency);
+  // FIXED: Don't filter items by frequency here - assume all passed items are for this frequency
+  // This allows the function to work correctly when called with items that should all be snapshot
+  const filteredItems = items.filter(item => item && typeof item === 'object'); // Just filter out null/undefined
   
   const itemCounts: StockCountSnapshot['itemCounts'] = {};
   let totalValue = 0;
   let outOfStockItems = 0;
   let criticalStockItems = 0;
   let lowStockItems = 0;
+  let validItemCount = 0; // Track valid items separately
   
   filteredItems.forEach(item => {
-    const itemTotalValue = item.currentStock * item.cost;
+    // FIXED: Normalize invalid data instead of skipping it completely
+    if (!item || !item.id || !item.name) {
+      console.warn('⚠️ Skipping item with missing critical fields:', item);
+      return;
+    }
+
+    validItemCount++; // Increment only for items with at least ID and name
+    
+    // Normalize invalid values
+    const normalizedStock = Math.max(0, Number(item.currentStock) || 0);
+    const normalizedCost = Math.max(0, Number(item.cost) || 0);
+    const normalizedMinLevel = Math.max(0, Number(item.minLevel) || 0);
+    
+    const itemTotalValue = normalizedStock * normalizedCost;
     totalValue += itemTotalValue;
     
-    const stockStatus = getStockStatus(item.currentStock, item.minLevel);
+    const stockStatus = getStockStatus(normalizedStock, normalizedMinLevel);
     
     // Count stock status items
     if (stockStatus === 'out') outOfStockItems++;
@@ -52,32 +69,32 @@ export const createStockCountSnapshot = (
     else if (stockStatus === 'low') lowStockItems++;
     
     itemCounts[item.id.toString()] = {
-      itemName: item.name,
-      category: item.category.toString(),
-      frequency: item.frequency || frequency,
-      currentStock: item.currentStock,
-      unit: item.unit,
-      unitCost: item.cost,
+      itemName: item.name || 'Unknown Item',
+      category: (item.category || 'uncategorized').toString(),
+      frequency: item.frequency || frequency, // Use item frequency if available, otherwise use snapshot frequency
+      currentStock: normalizedStock,
+      unit: item.unit || 'pieces',
+      unitCost: normalizedCost,
       totalValue: itemTotalValue,
-      lastCountDate: item.lastUsed,
-      countedBy: 'System', // TODO: Get from context when available
-      minLevel: item.minLevel,
-      optimalLevel: item.optimalLevel || item.minLevel * 2
+      lastCountDate: item.lastUsed || new Date().toISOString().split('T')[0],
+      countedBy: defaultCountedBy,
+      minLevel: normalizedMinLevel,
+      optimalLevel: item.optimalLevel || normalizedMinLevel * 2
     };
   });
   
-  // Count items by frequency for summary
+  // Count items by frequency for summary - use the snapshot frequency for all items
   const allItemsByFrequency = {
-    daily: items.filter(item => item.frequency === 'daily').length,
-    weekly: items.filter(item => item.frequency === 'weekly').length,
-    monthly: items.filter(item => item.frequency === 'monthly').length
+    daily: frequency === 'daily' ? validItemCount : 0,
+    weekly: frequency === 'weekly' ? validItemCount : 0,
+    monthly: frequency === 'monthly' ? validItemCount : 0
   };
   
   return {
     date: snapshotDate,
     frequency,
     timestamp,
-    totalItems: filteredItems.length,
+    totalItems: validItemCount, // Use valid item count
     totalValue,
     itemCounts,
     summary: {
