@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Button Click Test - Drag Fix Validation</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            margin: 0;
+            background: #f0f0f0;
+        }
+        
+        .test-instructions {
+            background: #e3f2fd;
+            border: 2px solid #2196f3;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .test-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            touch-action: pan-y;
+            position: relative;
+        }
+        
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .card-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .status-badge {
+            background: #4caf50;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+        }
+        
+        .card-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .test-button {
+            flex: 1;
+            padding: 12px 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .update-button {
+            background: #2196f3;
+            color: white;
+        }
+        
+        .update-button:hover {
+            background: #1976d2;
+        }
+        
+        .waste-button {
+            background: #ff9800;
+            color: white;
+        }
+        
+        .waste-button:hover {
+            background: #f57c00;
+        }
+        
+        .test-log {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+            font-family: monospace;
+            font-size: 14px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .log-entry {
+            margin: 5px 0;
+            padding: 2px 0;
+        }
+        
+        .log-success {
+            color: #4caf50;
+        }
+        
+        .log-info {
+            color: #2196f3;
+        }
+        
+        .drag-active {
+            opacity: 0.8;
+            transform: scale(1.02);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+        
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+            
+            .card-buttons {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="test-instructions">
+        <h2>🎯 Button Click Test - After Drag Fix</h2>
+        <p><strong>Test Instructions:</strong></p>
+        <ul>
+            <li>✅ <strong>Button Clicks:</strong> Tap/click the buttons - they should respond immediately</li>
+            <li>✅ <strong>Touch on Buttons:</strong> Touch events on buttons should not start drag operations</li>
+            <li>✅ <strong>Drag from Card:</strong> Touch and hold empty areas of cards to test dragging</li>
+            <li>✅ <strong>Vertical Scroll:</strong> Swipe vertically to scroll the page naturally</li>
+            <li>⚡ <strong>Mobile Test:</strong> Use on mobile devices to ensure touch-to-click conversion works</li>
+        </ul>
+        <p><em>The log below will show button interactions and touch behavior.</em></p>
+    </div>
+
+    <div class="test-card" data-card="1">
+        <div class="card-header">
+            <div class="card-title">📦 Inventory Item #1</div>
+            <div class="status-badge">✅ In Stock</div>
+        </div>
+        <div>Current: 25 units | Min Level: 10 units</div>
+        <div class="card-buttons">
+            <button class="test-button update-button" onclick="handleButtonClick('update', 1)">
+                🔄 Update Count
+            </button>
+            <button class="test-button waste-button" onclick="handleButtonClick('waste', 1)">
+                🗑️ Report Waste
+            </button>
+        </div>
+    </div>
+
+    <div class="test-card" data-card="2">
+        <div class="card-header">
+            <div class="card-title">📦 Inventory Item #2</div>
+            <div class="status-badge">⚠️ Low Stock</div>
+        </div>
+        <div>Current: 8 units | Min Level: 15 units</div>
+        <div class="card-buttons">
+            <button class="test-button update-button" onclick="handleButtonClick('update', 2)">
+                🔄 Update Count
+            </button>
+            <button class="test-button waste-button" onclick="handleButtonClick('waste', 2)">
+                🗑️ Report Waste
+            </button>
+        </div>
+    </div>
+
+    <div class="test-card" data-card="3">
+        <div class="card-header">
+            <div class="card-title">📦 Inventory Item #3</div>
+            <div class="status-badge">🚨 Critical</div>
+        </div>
+        <div>Current: 2 units | Min Level: 20 units</div>
+        <div class="card-buttons">
+            <button class="test-button update-button" onclick="handleButtonClick('update', 3)">
+                🔄 Update Count
+            </button>
+            <button class="test-button waste-button" onclick="handleButtonClick('waste', 3)">
+                🗑️ Report Waste
+            </button>
+        </div>
+    </div>
+
+    <div class="test-log" id="testLog">
+        <div class="log-entry log-info">📋 Test log initialized - interact with buttons and cards above...</div>
+    </div>
+
+    <script>
+        class TouchDragHandler {
+            constructor(element) {
+                this.element = element;
+                this.touchStartPos = null;
+                this.touchHoldActive = false;
+                this.touchTimeout = null;
+                
+                // Constants matching the React component
+                this.TOUCH_HOLD_DELAY = 400;
+                this.TOUCH_MOVE_THRESHOLD = 10;
+                this.VERTICAL_SCROLL_THRESHOLD = 15;
+                this.VERTICAL_SCROLL_RATIO = 2.0;
+                
+                this.bindEvents();
+            }
+            
+            isInteractiveElement(target) {
+                if (!target) return false;
+                return !!(
+                    target.closest('button') || 
+                    target.closest('[role="button"]') || 
+                    target.closest('input') || 
+                    target.closest('select') ||
+                    target.closest('a') ||
+                    target.closest('[tabindex]')
+                );
+            }
+            
+            bindEvents() {
+                this.element.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
+                this.element.addEventListener('touchmove', this.handleTouchMove.bind(this), { passive: false });
+                this.element.addEventListener('touchend', this.handleTouchEnd.bind(this), { passive: false });
+            }
+            
+            handleTouchStart(e) {
+                if (e.touches.length !== 1) return;
+                
+                // Don't start drag if touching a button or interactive element
+                if (this.isInteractiveElement(e.target)) {
+                    logEntry(`🔘 Touch on interactive element detected - allowing normal behavior`, 'info');
+                    return;
+                }
+                
+                const touch = e.touches[0];
+                this.touchStartPos = { x: touch.clientX, y: touch.clientY };
+                
+                this.touchTimeout = setTimeout(() => {
+                    this.touchHoldActive = true;
+                    this.element.style.touchAction = 'none';
+                    this.element.classList.add('drag-active');
+                    logEntry(`🎯 Drag activated for ${this.element.querySelector('.card-title').textContent}`, 'info');
+                }, this.TOUCH_HOLD_DELAY);
+            }
+            
+            handleTouchMove(e) {
+                if (e.touches.length !== 1) {
+                    this.cancelDrag();
+                    return;
+                }
+                
+                // Don't handle if touching interactive elements
+                if (this.isInteractiveElement(e.target)) {
+                    return;
+                }
+                
+                const touch = e.touches[0];
+                if (!this.touchStartPos) return;
+                
+                const deltaX = Math.abs(touch.clientX - this.touchStartPos.x);
+                const deltaY = Math.abs(touch.clientY - this.touchStartPos.y);
+                
+                // Check for movement before hold completes
+                if (!this.touchHoldActive && (deltaX > this.TOUCH_MOVE_THRESHOLD || deltaY > this.TOUCH_MOVE_THRESHOLD)) {
+                    if (this.touchTimeout) {
+                        clearTimeout(this.touchTimeout);
+                        this.touchTimeout = null;
+                    }
+                    
+                    if (deltaY > deltaX * this.VERTICAL_SCROLL_RATIO) {
+                        logEntry('📜 Vertical scroll detected - allowing scroll', 'info');
+                        return; // Allow scrolling
+                    }
+                }
+                
+                // Check for strong vertical movement during active drag
+                if (this.touchHoldActive && deltaY > this.VERTICAL_SCROLL_THRESHOLD && deltaY > deltaX * this.VERTICAL_SCROLL_RATIO) {
+                    logEntry('📜 Strong vertical movement during drag - canceling drag, allowing scroll', 'info');
+                    this.cancelDrag();
+                    return; // Allow scrolling
+                }
+                
+                // Prevent scrolling during active drag
+                if (this.touchHoldActive) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            }
+            
+            handleTouchEnd(e) {
+                // Don't handle if touching interactive elements
+                if (this.isInteractiveElement(e.target)) {
+                    return;
+                }
+                
+                this.cleanup();
+            }
+            
+            cancelDrag() {
+                this.touchHoldActive = false;
+                this.element.style.touchAction = 'pan-y';
+                this.element.classList.remove('drag-active');
+                this.cleanup();
+            }
+            
+            cleanup() {
+                if (this.touchTimeout) {
+                    clearTimeout(this.touchTimeout);
+                    this.touchTimeout = null;
+                }
+                this.touchHoldActive = false;
+                this.touchStartPos = null;
+                this.element.style.touchAction = 'pan-y';
+                this.element.classList.remove('drag-active');
+            }
+        }
+        
+        function handleButtonClick(action, itemId) {
+            const actionText = action === 'update' ? 'Update Count' : 'Report Waste';
+            logEntry(`✅ Button clicked: ${actionText} for Item #${itemId}`, 'success');
+        }
+        
+        function logEntry(message, type = 'info') {
+            const log = document.getElementById('testLog');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `${new Date().toLocaleTimeString()} - ${message}`;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+        
+        // Initialize drag handlers for all test cards
+        document.addEventListener('DOMContentLoaded', () => {
+            const testCards = document.querySelectorAll('.test-card');
+            testCards.forEach(card => {
+                new TouchDragHandler(card);
+            });
+            
+            logEntry('🚀 Drag handlers initialized - test button clicks and card dragging!', 'success');
+        });
+        
+        // Add button touch event logging
+        document.addEventListener('touchstart', (e) => {
+            if (e.target.closest('button')) {
+                logEntry(`👆 Touch start on button: ${e.target.textContent.trim()}`, 'info');
+            }
+        }, { passive: true });
+        
+        document.addEventListener('touchend', (e) => {
+            if (e.target.closest('button')) {
+                logEntry(`👆 Touch end on button: ${e.target.textContent.trim()}`, 'info');
+            }
+        }, { passive: true });
+    </script>
+</body>
+</html>
