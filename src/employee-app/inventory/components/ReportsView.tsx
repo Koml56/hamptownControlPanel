@@ -29,13 +29,17 @@ const ReportsView: React.FC = () => {
     const dates = new Set<string>();
     
     // Add dates from daily snapshots
-    dailyInventorySnapshots.forEach(snapshot => {
-      dates.add(snapshot.date);
+    (dailyInventorySnapshots || []).forEach(snapshot => {
+      if (snapshot && snapshot.date) {
+        dates.add(snapshot.date);
+      }
     });
     
     // Add dates from stock count snapshots for backward compatibility
-    stockCountSnapshots.forEach(snapshot => {
-      dates.add(snapshot.date);
+    (stockCountSnapshots || []).forEach(snapshot => {
+      if (snapshot && snapshot.date) {
+        dates.add(snapshot.date);
+      }
     });
     
     // Always include today
@@ -47,7 +51,7 @@ const ReportsView: React.FC = () => {
 
   // Get daily snapshot for selected date
   const selectedSnapshot = useMemo(() => {
-    return dailyInventorySnapshots.find(snapshot => snapshot.date === selectedDate);
+    return (dailyInventorySnapshots || []).find(snapshot => snapshot && snapshot.date === selectedDate);
   }, [dailyInventorySnapshots, selectedDate]);
 
   // Calculate comprehensive analytics for selected date
@@ -57,35 +61,40 @@ const ReportsView: React.FC = () => {
     if (selectedSnapshot) {
       // Use historical snapshot data
       const snapshot = selectedSnapshot;
-      const items = Object.values(snapshot.items);
+      const items = Object.values(snapshot.items || {});
       
       return {
         date: selectedDate,
         source: 'snapshot',
-        inventoryValue: snapshot.inventoryValue,
+        inventoryValue: snapshot.inventoryValue || 0,
         totalItems: items.length,
         
         stockStatus: {
           outOfStock: items.filter(item => item.currentStock === 0).length,
-          critical: items.filter(item => 
-            item.currentStock > 0 && item.currentStock <= item.minimumLevel * 0.5
-          ).length,
-          low: items.filter(item => 
-            item.currentStock > item.minimumLevel * 0.5 && item.currentStock <= item.minimumLevel
-          ).length,
-          ok: items.filter(item => item.currentStock > item.minimumLevel).length
+          critical: items.filter(item => {
+            const minLevel = item.minimumLevel || 0;
+            return item.currentStock > 0 && item.currentStock <= minLevel * 0.5;
+          }).length,
+          low: items.filter(item => {
+            const minLevel = item.minimumLevel || 0;
+            return item.currentStock > minLevel * 0.5 && item.currentStock <= minLevel;
+          }).length,
+          ok: items.filter(item => {
+            const minLevel = item.minimumLevel || 0;
+            return item.currentStock > minLevel;
+          }).length
         },
         
         dailyActivity: {
-          itemsReceived: Object.keys(snapshot.dailyActivity.itemsReceived).length,
-          itemsUsed: Object.keys(snapshot.dailyActivity.itemsUsed).length,
-          itemsWasted: Object.keys(snapshot.dailyActivity.itemsWasted).length,
-          totalWasteValue: Object.values(snapshot.dailyActivity.itemsWasted)
-            .reduce((sum, item) => sum + item.cost, 0)
+          itemsReceived: Object.keys(snapshot.dailyActivity?.itemsReceived || {}).length,
+          itemsUsed: Object.keys(snapshot.dailyActivity?.itemsUsed || {}).length,
+          itemsWasted: Object.keys(snapshot.dailyActivity?.itemsWasted || {}).length,
+          totalWasteValue: Object.values(snapshot.dailyActivity?.itemsWasted || {})
+            .reduce((sum, item) => sum + (item?.cost || 0), 0)
         },
         
-        employeeActivity: snapshot.employeeActivity,
-        compliance: snapshot.compliance,
+        employeeActivity: snapshot.employeeActivity || {},
+        compliance: snapshot.compliance || {},
         
         categories: {
           daily: items.filter(item => item.frequency === 'daily').length,
@@ -95,10 +104,10 @@ const ReportsView: React.FC = () => {
       };
     } else if (isToday) {
       // Use current data for today
-      const allItems = [...dailyItems, ...weeklyItems, ...monthlyItems];
+      const allItems = [...(dailyItems || []), ...(weeklyItems || []), ...(monthlyItems || [])];
       const { startOfDay, endOfDay } = getDateRange(selectedDate);
       
-      const dayActivity = activityLog.filter(entry => {
+      const dayActivity = (activityLog || []).filter(entry => {
         const entryDate = new Date(entry.timestamp);
         return entryDate >= startOfDay && entryDate <= endOfDay;
       });
@@ -110,9 +119,9 @@ const ReportsView: React.FC = () => {
         source: 'current',
         inventoryValue: {
           total: totalValue,
-          dailyItems: dailyItems.reduce((sum, item) => sum + (item.currentStock * item.cost), 0),
-          weeklyItems: weeklyItems.reduce((sum, item) => sum + (item.currentStock * item.cost), 0),
-          monthlyItems: monthlyItems.reduce((sum, item) => sum + (item.currentStock * item.cost), 0)
+          dailyItems: (dailyItems || []).reduce((sum, item) => sum + (item.currentStock * item.cost), 0),
+          weeklyItems: (weeklyItems || []).reduce((sum, item) => sum + (item.currentStock * item.cost), 0),
+          monthlyItems: (monthlyItems || []).reduce((sum, item) => sum + (item.currentStock * item.cost), 0)
         },
         totalItems: allItems.length,
         
@@ -136,9 +145,9 @@ const ReportsView: React.FC = () => {
         },
         
         categories: {
-          daily: dailyItems.length,
-          weekly: weeklyItems.length,
-          monthly: monthlyItems.length
+          daily: (dailyItems || []).length,
+          weekly: (weeklyItems || []).length,
+          monthly: (monthlyItems || []).length
         }
       };
     } else {
@@ -151,24 +160,31 @@ const ReportsView: React.FC = () => {
   const comparisonAnalytics = useMemo(() => {
     if (!comparisonDate) return null;
     
-    const comparisonSnapshot = dailyInventorySnapshots.find(snapshot => snapshot.date === comparisonDate);
+    const comparisonSnapshot = (dailyInventorySnapshots || []).find(snapshot => 
+      snapshot && snapshot.date === comparisonDate
+    );
     if (!comparisonSnapshot) return null;
     
-    const items = Object.values(comparisonSnapshot.items);
+    const items = Object.values(comparisonSnapshot.items || {});
     
     return {
       date: comparisonDate,
-      inventoryValue: comparisonSnapshot.inventoryValue,
+      inventoryValue: comparisonSnapshot.inventoryValue || 0,
       totalItems: items.length,
       stockStatus: {
         outOfStock: items.filter(item => item.currentStock === 0).length,
-        critical: items.filter(item => 
-          item.currentStock > 0 && item.currentStock <= item.minimumLevel * 0.5
-        ).length,
-        low: items.filter(item => 
-          item.currentStock > item.minimumLevel * 0.5 && item.currentStock <= item.minimumLevel
-        ).length,
-        ok: items.filter(item => item.currentStock > item.minimumLevel).length
+        critical: items.filter(item => {
+          const minLevel = item.minimumLevel || 0;
+          return item.currentStock > 0 && item.currentStock <= minLevel * 0.5;
+        }).length,
+        low: items.filter(item => {
+          const minLevel = item.minimumLevel || 0;
+          return item.currentStock > minLevel * 0.5 && item.currentStock <= minLevel;
+        }).length,
+        ok: items.filter(item => {
+          const minLevel = item.minimumLevel || 0;
+          return item.currentStock > minLevel;
+        }).length
       }
     };
   }, [comparisonDate, dailyInventorySnapshots]);
