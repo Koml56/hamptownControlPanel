@@ -1,5 +1,5 @@
 // src/employee-app/inventory/components/DraggableItemCard.tsx
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import ItemCard from './ItemCard';
@@ -61,6 +61,32 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
     }, TOUCH_HOLD_DELAY);
   }, []);
 
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    
+    // Don't start drag if clicking a button or interactive element
+    if (target.closest('button') || target.closest('[role="button"]') || target.closest('input') || target.closest('select')) {
+      return; // Let the button handle the click normally
+    }
+
+    // For non-button areas, allow DndKit to handle the mouse event
+    if (listeners?.onMouseDown) {
+      listeners.onMouseDown(e as any);
+    }
+  }, [listeners]);
+
+  // Cleanup effect to ensure body styles are restored
+  useEffect(() => {
+    return () => {
+      // Cleanup on unmount
+      if (touchTimeoutRef.current) {
+        clearTimeout(touchTimeoutRef.current);
+      }
+      document.body.style.overflow = '';
+      document.body.style.touchAction = '';
+    };
+  }, []);
+
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (e.touches.length !== 1) {
       // Multi-touch detected - allow scrolling and cancel hold
@@ -96,6 +122,9 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
     if (touchHoldActive) {
       e.preventDefault();
       e.stopPropagation();
+      // Also prevent body scrolling during drag
+      document.body.style.overflow = 'hidden';
+      document.body.style.touchAction = 'none';
     }
   }, [touchHoldActive]);
 
@@ -109,18 +138,27 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
     setTouchHoldActive(false);
     touchStartRef.current = null;
     
-    // Restore touch action
+    // Restore touch action and scrolling
     if (e.currentTarget) {
       (e.currentTarget as HTMLElement).style.touchAction = '';
     }
+    
+    // Restore body scrolling
+    document.body.style.overflow = '';
+    document.body.style.touchAction = '';
   }, []);
 
-  // Create custom listeners that include our touch handling
+  // Create custom listeners that properly handle button interactions
   const customListeners = {
-    ...listeners,
+    // Exclude the original DndKit mouse events to prevent interference
     onTouchStart: handleTouchStart,
     onTouchMove: handleTouchMove,
     onTouchEnd: handleTouchEnd,
+    onMouseDown: handleMouseDown,
+    // Keep other listeners that don't interfere with button clicks
+    ...(listeners && listeners.onKeyDown && {
+      onKeyDown: listeners.onKeyDown as React.KeyboardEventHandler<HTMLDivElement>,
+    }),
   };
 
   const style = {
@@ -128,12 +166,18 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
     transition,
     opacity: isDragging ? 0.5 : 1,
     touchAction: touchHoldActive ? 'none' : 'pan-y', // Allow vertical scrolling by default
-  };
+    userSelect: touchHoldActive ? 'none' : 'auto', // Prevent text selection during drag
+    // Additional CSS properties for better mobile interaction
+    WebkitTouchCallout: touchHoldActive ? 'none' : 'default',
+    WebkitUserSelect: touchHoldActive ? 'none' : 'auto',
+    MozUserSelect: touchHoldActive ? 'none' : 'auto',
+  } as React.CSSProperties;
 
   return (
     <div
       ref={setNodeRef}
       style={style}
+      className={`${touchHoldActive ? 'select-none' : ''} ${isDragging ? 'dragging' : ''}`}
       {...attributes}
       {...customListeners}
     >
