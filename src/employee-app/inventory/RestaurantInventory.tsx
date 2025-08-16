@@ -8,7 +8,7 @@ import DatabaseView from './components/DatabaseView';
 import DailyView from './components/DailyView';
 import WeeklyView from './components/WeeklyView';
 import MonthlyView from './components/MonthlyView';
-import ReportsView from './components/ReportsView';
+import ReportsViewEnhanced from './components/ReportsViewEnhanced';
 import OutOfStockView from './components/OutOfStockView';
 import TabNavigation from './components/TabNavigation';
 import ToastContainer from './components/ToastContainer';
@@ -121,7 +121,7 @@ const InventoryContent: React.FC = () => {
       case 'database':
         return <DatabaseView />;
       case 'reports':
-        return <ReportsView />;
+        return <ReportsViewEnhanced />;
       case 'stock-history':
         return <StockCountHistoryView />;
       default:

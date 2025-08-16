@@ -13,7 +13,7 @@ export interface DailySnapshotConfig {
 export const DEFAULT_SNAPSHOT_CONFIG: DailySnapshotConfig = {
   enableAutomation: true,
   snapshotTime: "23:59", // Just before midnight
-  retentionDays: 365, // Keep for 1 year
+  retentionDays: 730, // Keep for 2 years (business requirement)
   frequencies: ['daily', 'weekly', 'monthly']
 };
 

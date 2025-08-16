@@ -64,38 +64,70 @@ const StockCountHistoryView: React.FC = () => {
     });
   };
 
-  // Get available dates from snapshots
+  // Get available dates from both snapshot types
   const availableDates = useMemo(() => {
     const dates = new Set<string>();
+    
+    // Add dates from daily snapshots (priority)
+    dailyInventorySnapshots.forEach(snapshot => {
+      dates.add(snapshot.date);
+    });
+    
+    // Add dates from stock count snapshots
     stockCountSnapshots.forEach(snapshot => {
       dates.add(snapshot.date);
     });
     
-    // CRITICAL FIX: Always include today's date for analytics, even if no snapshot exists yet
+    // Always include today for live data
     const today = new Date().toISOString().split('T')[0];
     dates.add(today);
     
     return Array.from(dates).sort().reverse(); // Most recent first
-  }, [stockCountSnapshots]);
+  }, [stockCountSnapshots, dailyInventorySnapshots]);
 
-  // Get snapshot for selected date
+  // Get snapshot for selected date (prefer daily snapshots)
   const selectedSnapshot = useMemo(() => {
-    const snapshots = stockCountSnapshots.filter(s => s.date === selectedDate);
+    // First try to get daily snapshot
+    const dailySnapshot = dailyInventorySnapshots.find(s => s.date === selectedDate);
+    if (dailySnapshot) {
+      return {
+        type: 'daily' as const,
+        data: dailySnapshot,
+        items: Object.values(dailySnapshot.items)
+      };
+    }
     
-    // If we have multiple snapshots for the same date (different frequencies),
-    // create a combined snapshot
+    // Fallback to stock count snapshots
+    const snapshots = stockCountSnapshots.filter(s => s.date === selectedDate);
     if (snapshots.length === 0) {
       return null;
     }
     
     if (snapshots.length === 1) {
-      return snapshots[0].snapshot;
+      return {
+        type: 'stock' as const,
+        data: snapshots[0].snapshot,
+        items: Object.values(snapshots[0].snapshot.itemCounts).map((item: any) => ({
+          id: item.itemId || Math.random(),
+          name: item.itemName,
+          category: item.category,
+          frequency: item.frequency,
+          currentStock: item.currentStock,
+          unit: item.unit,
+          minimumLevel: item.minLevel,
+          unitCost: item.unitCost,
+          totalValue: item.totalValue,
+          lastCountDate: item.lastCountDate,
+          countedBy: item.countedBy,
+          optimalLevel: item.optimalLevel
+        }))
+      };
     }
     
-    // Combine multiple snapshots for the same date
+    // Combine multiple stock count snapshots
     const combinedSnapshot: StockCountSnapshot = {
       date: selectedDate,
-      frequency: 'daily', // Use daily as default for combined
+      frequency: 'daily',
       timestamp: snapshots[0].snapshot.timestamp,
       totalItems: 0,
       totalValue: 0,
@@ -117,7 +149,25 @@ const StockCountHistoryView: React.FC = () => {
       combinedSnapshot.totalItems += s.snapshot.totalItems;
     });
     
-    // Recalculate summary
+    return {
+      type: 'stock' as const,
+      data: combinedSnapshot,
+      items: Object.values(combinedSnapshot.itemCounts).map((item: any) => ({
+        id: item.itemId || Math.random(),
+        name: item.itemName,
+        category: item.category,
+        frequency: item.frequency,
+        currentStock: item.currentStock,
+        unit: item.unit,
+        minimumLevel: item.minLevel,
+        unitCost: item.unitCost,
+        totalValue: item.totalValue,
+        lastCountDate: item.lastCountDate,
+        countedBy: item.countedBy,
+        optimalLevel: item.optimalLevel
+      }))
+    };
+  }, [selectedDate, stockCountSnapshots, dailyInventorySnapshots]);
     const summary = combinedSnapshot.summary;
     summary.totalInventoryValue = combinedSnapshot.totalValue;
     

@@ -1,9 +1,8 @@
 // src/employee-app/inventory/components/ReportsViewEnhanced.tsx
 import React, { useState, useMemo } from 'react';
-import { BarChart3, TrendingUp, AlertTriangle, DollarSign, Calendar, GitCompare, Download, FileText, Eye, Filter } from 'lucide-react';
+import { BarChart3, TrendingUp, AlertTriangle, DollarSign, Calendar, GitCompare, Download, FileText, Eye } from 'lucide-react';
 import { useInventory } from '../InventoryContext';
 import { getStockStatus } from '../stockUtils';
-import type { DailyInventorySnapshot } from '../../types';
 
 const ReportsViewEnhanced: React.FC = () => {
   const { 
@@ -21,7 +20,6 @@ const ReportsViewEnhanced: React.FC = () => {
   });
   const [comparisonDate, setComparisonDate] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'overview' | 'trends' | 'compliance' | 'export'>('overview');
-  const [dateRange, setDateRange] = useState<'7days' | '30days' | '90days'>('7days');
   const [showComparison, setShowComparison] = useState(false);
 
   // Get available dates from daily snapshots for date picker
@@ -339,9 +337,9 @@ const ReportsViewEnhanced: React.FC = () => {
                       <div>
                         <p className="text-sm font-medium text-blue-600">Total Value</p>
                         <p className="text-2xl font-bold text-blue-900">
-                          ${typeof analytics.inventoryValue === 'number' 
-                            ? analytics.inventoryValue.toFixed(2)
-                            : analytics.inventoryValue.total.toFixed(2)
+                          ${(analytics.inventoryValue as any).total 
+                            ? (analytics.inventoryValue as any).total.toFixed(2)
+                            : (analytics.inventoryValue as any).toFixed(2)
                           }
                         </p>
                       </div>
@@ -392,12 +390,12 @@ const ReportsViewEnhanced: React.FC = () => {
                       <div>
                         <span className="text-gray-600">Value Change:</span>
                         <span className={`ml-2 font-semibold ${
-                          (typeof analytics.inventoryValue === 'number' ? analytics.inventoryValue : analytics.inventoryValue.total) > 
-                          (typeof comparisonAnalytics.inventoryValue === 'number' ? comparisonAnalytics.inventoryValue : comparisonAnalytics.inventoryValue.total)
+                          ((analytics.inventoryValue as any).total || (analytics.inventoryValue as any)) > 
+                          ((comparisonAnalytics.inventoryValue as any).total || (comparisonAnalytics.inventoryValue as any))
                             ? 'text-green-600' : 'text-red-600'
                         }`}>
-                          ${((typeof analytics.inventoryValue === 'number' ? analytics.inventoryValue : analytics.inventoryValue.total) - 
-                           (typeof comparisonAnalytics.inventoryValue === 'number' ? comparisonAnalytics.inventoryValue : comparisonAnalytics.inventoryValue.total)).toFixed(2)}
+                          ${(((analytics.inventoryValue as any).total || (analytics.inventoryValue as any)) - 
+                           ((comparisonAnalytics.inventoryValue as any).total || (comparisonAnalytics.inventoryValue as any))).toFixed(2)}
                         </span>
                       </div>
                       <div>

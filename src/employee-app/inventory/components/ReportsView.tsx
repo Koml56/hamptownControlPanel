@@ -339,9 +339,9 @@ const ReportsView: React.FC = () => {
                       <div>
                         <p className="text-sm font-medium text-blue-600">Total Value</p>
                         <p className="text-2xl font-bold text-blue-900">
-                          ${typeof analytics.inventoryValue === 'number' 
-                            ? analytics.inventoryValue.toFixed(2)
-                            : analytics.inventoryValue.total.toFixed(2)
+                          ${(analytics.inventoryValue as any).total 
+                            ? (analytics.inventoryValue as any).total.toFixed(2)
+                            : ((analytics.inventoryValue as any) || 0).toFixed(2)
                           }
                         </p>
                       </div>
