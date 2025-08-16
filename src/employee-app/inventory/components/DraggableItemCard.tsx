@@ -41,6 +41,13 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
     // Only handle single touch
     if (e.touches.length !== 1) return;
 
+    const target = e.target as HTMLElement;
+    
+    // Don't start drag if touching a button or interactive element
+    if (target.closest('button') || target.closest('[role="button"]') || target.closest('input') || target.closest('select')) {
+      return;
+    }
+
     const touch = e.touches[0];
     touchStartRef.current = { x: touch.clientX, y: touch.clientY };
     
@@ -48,8 +55,8 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
     touchTimeoutRef.current = setTimeout(() => {
       setTouchHoldActive(true);
       // Prevent scrolling once hold is activated
-      if (e.target) {
-        (e.target as HTMLElement).style.touchAction = 'none';
+      if (e.currentTarget) {
+        (e.currentTarget as HTMLElement).style.touchAction = 'none';
       }
     }, TOUCH_HOLD_DELAY);
   }, []);
@@ -78,6 +85,10 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
           clearTimeout(touchTimeoutRef.current);
           touchTimeoutRef.current = null;
         }
+        // If mostly vertical movement, allow scrolling
+        if (deltaY > deltaX * 1.5) {
+          return;
+        }
       }
     }
 
@@ -99,8 +110,8 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
     touchStartRef.current = null;
     
     // Restore touch action
-    if (e.target) {
-      (e.target as HTMLElement).style.touchAction = '';
+    if (e.currentTarget) {
+      (e.currentTarget as HTMLElement).style.touchAction = '';
     }
   }, []);
 
@@ -116,6 +127,7 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
+    touchAction: touchHoldActive ? 'none' : 'pan-y', // Allow vertical scrolling by default
   };
 
   return (
