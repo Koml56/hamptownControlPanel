@@ -135,9 +135,9 @@
         <ul>
             <li>✅ <strong>Button Clicks:</strong> Tap/click the buttons - they should respond immediately</li>
             <li>✅ <strong>Touch on Buttons:</strong> Touch events on buttons should not start drag operations</li>
-            <li>✅ <strong>Drag from Card:</strong> Touch and hold empty areas of cards to test dragging</li>
+            <li>✅ <strong>Drag from Card:</strong> Touch and hold empty areas of cards for 0.8 seconds to test dragging</li>
             <li>✅ <strong>Vertical Scroll:</strong> Swipe vertically to scroll the page naturally</li>
-            <li>⚡ <strong>Mobile Test:</strong> Use on mobile devices to ensure touch-to-click conversion works</li>
+            <li>⚡ <strong>Mobile Test:</strong> Use on mobile devices to ensure touch-to-click conversion works with 800ms delay</li>
         </ul>
         <p><em>The log below will show button interactions and touch behavior.</em></p>
     </div>
@@ -203,7 +203,7 @@
                 this.touchTimeout = null;
                 
                 // Constants matching the React component
-                this.TOUCH_HOLD_DELAY = 400;
+                this.TOUCH_HOLD_DELAY = 800;
                 this.TOUCH_MOVE_THRESHOLD = 10;
                 this.VERTICAL_SCROLL_THRESHOLD = 15;
                 this.VERTICAL_SCROLL_RATIO = 2.0;
