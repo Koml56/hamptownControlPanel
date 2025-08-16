@@ -414,10 +414,12 @@ const ReportsViewEnhanced: React.FC = () => {
                       <div>
                         <span className="text-gray-600">Value Change:</span>
                         <span className={`ml-2 font-semibold ${
-                          analytics.inventoryValue.total > comparisonAnalytics.inventoryValue.total
+                          ((analytics.inventoryValue as any).total || analytics.inventoryValue) > 
+                          ((comparisonAnalytics.inventoryValue as any).total || comparisonAnalytics.inventoryValue)
                             ? 'text-green-600' : 'text-red-600'
                         }`}>
-                          ${(analytics.inventoryValue.total - comparisonAnalytics.inventoryValue.total).toFixed(2)}
+                          ${((analytics.inventoryValue as any).total || analytics.inventoryValue) - 
+                           ((comparisonAnalytics.inventoryValue as any).total || comparisonAnalytics.inventoryValue)}
                         </span>
                       </div>
                       <div>
