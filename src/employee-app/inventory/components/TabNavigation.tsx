@@ -5,13 +5,27 @@ import { useInventory } from '../InventoryContext';
 import { getOutOfStockItems } from '../consumptionAnalytics';
 
 const TabNavigation: React.FC = () => {
-  const { currentTab, switchTab, dailyItems, weeklyItems, monthlyItems, databaseItems, stockCountSnapshots, isAdmin } = useInventory();
+  const { currentTab, switchTab, dailyItems, weeklyItems, monthlyItems, databaseItems, stockCountSnapshots, dailyInventorySnapshots, activityLog, isAdmin } = useInventory();
 
   // Calculate out of stock count
   const outOfStockCount = React.useMemo(() => {
     const outOfStockItems = getOutOfStockItems(dailyItems, weeklyItems, monthlyItems);
     return outOfStockItems.length;
   }, [dailyItems, weeklyItems, monthlyItems]);
+
+  // Calculate analytics count - number of today's activity log entries or daily snapshots available
+  const analyticsCount = React.useMemo(() => {
+    // Try to count today's activity log entries first
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+    const todayEntries = (activityLog || []).filter(entry => {
+      if (!entry?.timestamp) return false;
+      const entryDate = new Date(entry.timestamp).toISOString().split('T')[0];
+      return entryDate === today;
+    });
+    
+    // If we have today's entries, return that count, otherwise return snapshot count
+    return todayEntries.length > 0 ? todayEntries.length : (dailyInventorySnapshots || []).length;
+  }, [activityLog, dailyInventorySnapshots]);
 
   // Check if tab requires admin access
   const isAdminTab = (tabId: string) => {
@@ -63,7 +77,7 @@ const TabNavigation: React.FC = () => {
       id: 'reports' as const,
       label: 'Analytics',
       icon: BarChart3,
-      count: 0,
+      count: analyticsCount,
       color: 'purple'
     },
     {
