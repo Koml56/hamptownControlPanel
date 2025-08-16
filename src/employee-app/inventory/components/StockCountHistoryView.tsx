@@ -36,7 +36,8 @@ interface HistoricalItemData {
 
 const StockCountHistoryView: React.FC = () => {
   const { 
-    stockCountSnapshots, 
+    stockCountSnapshots,
+    dailyInventorySnapshots,
     createStockSnapshot,
     dailyItems,
     weeklyItems, 
@@ -149,6 +150,17 @@ const StockCountHistoryView: React.FC = () => {
       combinedSnapshot.totalItems += s.snapshot.totalItems;
     });
     
+    // Update summary statistics
+    const summary = combinedSnapshot.summary;
+    summary.totalInventoryValue = combinedSnapshot.totalValue;
+    
+    Object.values(combinedSnapshot.itemCounts).forEach(item => {
+      const status = getStockStatus(item.currentStock, item.minLevel);
+      if (status === 'out') summary.outOfStockItems++;
+      else if (status === 'critical') summary.criticalStockItems++;
+      else if (status === 'low') summary.lowStockItems++;
+    });
+    
     return {
       type: 'stock' as const,
       data: combinedSnapshot,
@@ -168,18 +180,6 @@ const StockCountHistoryView: React.FC = () => {
       }))
     };
   }, [selectedDate, stockCountSnapshots, dailyInventorySnapshots]);
-    const summary = combinedSnapshot.summary;
-    summary.totalInventoryValue = combinedSnapshot.totalValue;
-    
-    Object.values(combinedSnapshot.itemCounts).forEach(item => {
-      const status = getStockStatus(item.currentStock, item.minLevel);
-      if (status === 'out') summary.outOfStockItems++;
-      else if (status === 'critical') summary.criticalStockItems++;
-      else if (status === 'low') summary.lowStockItems++;
-    });
-    
-    return combinedSnapshot;
-  }, [selectedDate, stockCountSnapshots]);
 
   // Convert snapshot to historical item data
   const historicalData = useMemo((): HistoricalItemData[] => {
@@ -221,21 +221,41 @@ const StockCountHistoryView: React.FC = () => {
     }
     
     // Use ONLY snapshot data to ensure historical integrity
-    return Object.entries(selectedSnapshot.itemCounts).map(([itemId, item]) => ({
-      itemId,
-      itemName: item.itemName,
-      category: item.category,
-      frequency: item.frequency,
-      stockLevel: item.currentStock,
-      unit: item.unit,
-      unitCost: item.unitCost, // This is the HISTORICAL price from when snapshot was created
-      totalValue: item.totalValue, // This is the HISTORICAL value
-      stockStatus: getStockStatus(item.currentStock, item.minLevel),
-      minLevel: item.minLevel,
-      optimalLevel: item.optimalLevel,
-      lastCountDate: item.lastCountDate,
-      countedBy: item.countedBy
-    }));
+    if (selectedSnapshot.type === 'daily') {
+      // Handle daily inventory snapshot structure
+      return Object.entries(selectedSnapshot.data.items).map(([itemId, item]) => ({
+        itemId,
+        itemName: item.name,
+        category: item.category,
+        frequency: item.frequency,
+        stockLevel: item.currentStock,
+        unit: item.unit,
+        unitCost: item.unitCost, // This is the HISTORICAL price from when snapshot was created
+        totalValue: item.totalValue, // This is the HISTORICAL value
+        stockStatus: getStockStatus(item.currentStock, item.minimumLevel),
+        minLevel: item.minimumLevel,
+        optimalLevel: item.optimalLevel || item.minimumLevel * 2, // Fallback calculation
+        lastCountDate: item.lastCountDate,
+        countedBy: item.countedBy
+      }));
+    } else {
+      // Handle stock count snapshot structure
+      return Object.entries(selectedSnapshot.data.itemCounts).map(([itemId, item]) => ({
+        itemId,
+        itemName: item.itemName,
+        category: item.category,
+        frequency: item.frequency,
+        stockLevel: item.currentStock,
+        unit: item.unit,
+        unitCost: item.unitCost, // This is the HISTORICAL price from when snapshot was created
+        totalValue: item.totalValue, // This is the HISTORICAL value
+        stockStatus: getStockStatus(item.currentStock, item.minLevel),
+        minLevel: item.minLevel,
+        optimalLevel: item.optimalLevel,
+        lastCountDate: item.lastCountDate,
+        countedBy: item.countedBy
+      }));
+    }
   }, [selectedSnapshot, selectedDate, dailyItems, weeklyItems, monthlyItems]);
 
   // Filter and search historical data
