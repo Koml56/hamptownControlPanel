@@ -54,6 +54,16 @@ const ReportsView: React.FC = () => {
     return (dailyInventorySnapshots || []).find(snapshot => snapshot && snapshot.date === selectedDate);
   }, [dailyInventorySnapshots, selectedDate]);
 
+  // Helper function to get date range for analysis
+  const getDateRange = (targetDate: string) => {
+    const date = new Date(targetDate);
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+    return { startOfDay, endOfDay };
+  };
+
   // Calculate comprehensive analytics for selected date
   const analytics = useMemo(() => {
     const isToday = selectedDate === new Date().toISOString().split('T')[0];
@@ -66,7 +76,12 @@ const ReportsView: React.FC = () => {
       return {
         date: selectedDate,
         source: 'snapshot',
-        inventoryValue: snapshot.inventoryValue || 0,
+        inventoryValue: {
+          total: snapshot.inventoryValue || 0,
+          dailyItems: items.filter(item => item.frequency === 'daily').reduce((sum, item) => sum + (item.currentStock * (item.unitCost || 0)), 0),
+          weeklyItems: items.filter(item => item.frequency === 'weekly').reduce((sum, item) => sum + (item.currentStock * (item.unitCost || 0)), 0),
+          monthlyItems: items.filter(item => item.frequency === 'monthly').reduce((sum, item) => sum + (item.currentStock * (item.unitCost || 0)), 0)
+        },
         totalItems: items.length,
         
         stockStatus: {
@@ -169,7 +184,9 @@ const ReportsView: React.FC = () => {
     
     return {
       date: comparisonDate,
-      inventoryValue: comparisonSnapshot.inventoryValue || 0,
+      inventoryValue: {
+        total: comparisonSnapshot.inventoryValue || 0
+      },
       totalItems: items.length,
       stockStatus: {
         outOfStock: items.filter(item => item.currentStock === 0).length,
@@ -198,16 +215,6 @@ const ReportsView: React.FC = () => {
       month: 'long', 
       day: 'numeric' 
     });
-  };
-
-  // Helper function to get date range for analysis
-  const getDateRange = (targetDate: string) => {
-    const date = new Date(targetDate);
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(date);
-    endOfDay.setHours(23, 59, 59, 999);
-    return { startOfDay, endOfDay };
   };
 
   // Export functionality
@@ -355,10 +362,7 @@ const ReportsView: React.FC = () => {
                       <div>
                         <p className="text-sm font-medium text-blue-600">Total Value</p>
                         <p className="text-2xl font-bold text-blue-900">
-                          ${(analytics.inventoryValue as any).total 
-                            ? (analytics.inventoryValue as any).total.toFixed(2)
-                            : ((analytics.inventoryValue as any) || 0).toFixed(2)
-                          }
+                          ${((analytics.inventoryValue as any).total || analytics.inventoryValue || 0).toFixed(2)}
                         </p>
                       </div>
                       <DollarSign className="w-8 h-8 text-blue-600" />
@@ -408,12 +412,12 @@ const ReportsView: React.FC = () => {
                       <div>
                         <span className="text-gray-600">Value Change:</span>
                         <span className={`ml-2 font-semibold ${
-                          (typeof analytics.inventoryValue === 'number' ? analytics.inventoryValue : analytics.inventoryValue.total) > 
-                          (typeof comparisonAnalytics.inventoryValue === 'number' ? comparisonAnalytics.inventoryValue : comparisonAnalytics.inventoryValue.total)
+                          ((analytics.inventoryValue as any).total || analytics.inventoryValue) > 
+                          ((comparisonAnalytics.inventoryValue as any).total || comparisonAnalytics.inventoryValue)
                             ? 'text-green-600' : 'text-red-600'
                         }`}>
-                          {((typeof analytics.inventoryValue === 'number' ? analytics.inventoryValue : analytics.inventoryValue.total) - 
-                           (typeof comparisonAnalytics.inventoryValue === 'number' ? comparisonAnalytics.inventoryValue : comparisonAnalytics.inventoryValue.total)).toFixed(2)}
+                          ${(((analytics.inventoryValue as any).total || analytics.inventoryValue) - 
+                           ((comparisonAnalytics.inventoryValue as any).total || comparisonAnalytics.inventoryValue)).toFixed(2)}
                         </span>
                       </div>
                       <div>
@@ -488,6 +492,30 @@ const ReportsView: React.FC = () => {
                     </div>
                   ))}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Trends Mode */}
+          {viewMode === 'trends' && (
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Trend Analysis</h3>
+              <div className="text-center py-8 text-gray-500">
+                <TrendingUp className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                <p>Trend analysis with historical inventory level charts.</p>
+                <p className="text-sm">Shows peak inventory periods and patterns over time.</p>
+              </div>
+            </div>
+          )}
+
+          {/* Compliance Mode */}
+          {viewMode === 'compliance' && (
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Compliance Dashboard</h3>
+              <div className="text-center py-8 text-gray-500">
+                <AlertTriangle className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                <p>Compliance monitoring and audit trail.</p>
+                <p className="text-sm">Temperature logs, health dept visits, and audit flags.</p>
               </div>
             </div>
           )}

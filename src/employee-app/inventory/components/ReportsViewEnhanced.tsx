@@ -74,7 +74,12 @@ const ReportsViewEnhanced: React.FC = () => {
       return {
         date: selectedDate,
         source: 'snapshot',
-        inventoryValue: snapshot.inventoryValue || 0,
+        inventoryValue: {
+          total: snapshot.inventoryValue || 0,
+          dailyItems: items.filter(item => item.frequency === 'daily').reduce((sum, item) => sum + (item.currentStock * (item.unitCost || 0)), 0),
+          weeklyItems: items.filter(item => item.frequency === 'weekly').reduce((sum, item) => sum + (item.currentStock * (item.unitCost || 0)), 0),
+          monthlyItems: items.filter(item => item.frequency === 'monthly').reduce((sum, item) => sum + (item.currentStock * (item.unitCost || 0)), 0)
+        },
         totalItems: items.length,
         
         stockStatus: {
@@ -175,7 +180,12 @@ const ReportsViewEnhanced: React.FC = () => {
     
     return {
       date: comparisonDate,
-      inventoryValue: comparisonSnapshot.inventoryValue,
+      inventoryValue: {
+        total: comparisonSnapshot.inventoryValue || 0,
+        dailyItems: items.filter(item => item.frequency === 'daily').reduce((sum, item) => sum + (item.currentStock * (item.unitCost || 0)), 0),
+        weeklyItems: items.filter(item => item.frequency === 'weekly').reduce((sum, item) => sum + (item.currentStock * (item.unitCost || 0)), 0),
+        monthlyItems: items.filter(item => item.frequency === 'monthly').reduce((sum, item) => sum + (item.currentStock * (item.unitCost || 0)), 0)
+      },
       totalItems: items.length,
       stockStatus: {
         outOfStock: items.filter(item => item.currentStock === 0).length,
@@ -404,12 +414,12 @@ const ReportsViewEnhanced: React.FC = () => {
                       <div>
                         <span className="text-gray-600">Value Change:</span>
                         <span className={`ml-2 font-semibold ${
-                          ((analytics.inventoryValue as any).total || (analytics.inventoryValue as any)) > 
-                          ((comparisonAnalytics.inventoryValue as any).total || (comparisonAnalytics.inventoryValue as any))
+                          ((analytics.inventoryValue as any).total || analytics.inventoryValue) > 
+                          ((comparisonAnalytics.inventoryValue as any).total || comparisonAnalytics.inventoryValue)
                             ? 'text-green-600' : 'text-red-600'
                         }`}>
-                          ${(((analytics.inventoryValue as any).total || (analytics.inventoryValue as any)) - 
-                           ((comparisonAnalytics.inventoryValue as any).total || (comparisonAnalytics.inventoryValue as any))).toFixed(2)}
+                          ${((analytics.inventoryValue as any).total || analytics.inventoryValue) - 
+                           ((comparisonAnalytics.inventoryValue as any).total || comparisonAnalytics.inventoryValue)}
                         </span>
                       </div>
                       <div>
