@@ -66,7 +66,12 @@ const ReportsView: React.FC = () => {
       return {
         date: selectedDate,
         source: 'snapshot',
-        inventoryValue: snapshot.inventoryValue || 0,
+        inventoryValue: {
+          total: snapshot.inventoryValue || 0,
+          dailyItems: items.filter(item => item.frequency === 'daily').reduce((sum, item) => sum + (item.currentStock * (item.unitCost || 0)), 0),
+          weeklyItems: items.filter(item => item.frequency === 'weekly').reduce((sum, item) => sum + (item.currentStock * (item.unitCost || 0)), 0),
+          monthlyItems: items.filter(item => item.frequency === 'monthly').reduce((sum, item) => sum + (item.currentStock * (item.unitCost || 0)), 0)
+        },
         totalItems: items.length,
         
         stockStatus: {
@@ -163,31 +168,60 @@ const ReportsView: React.FC = () => {
     const comparisonSnapshot = (dailyInventorySnapshots || []).find(snapshot => 
       snapshot && snapshot.date === comparisonDate
     );
-    if (!comparisonSnapshot) return null;
     
-    const items = Object.values(comparisonSnapshot.items || {});
+    if (comparisonSnapshot) {
+      const items = Object.values(comparisonSnapshot.items || {});
+      
+      return {
+        date: comparisonDate,
+        inventoryValue: {
+          total: comparisonSnapshot.inventoryValue || 0,
+          dailyItems: items.filter(item => item.frequency === 'daily').reduce((sum, item) => sum + (item.currentStock * (item.unitCost || 0)), 0),
+          weeklyItems: items.filter(item => item.frequency === 'weekly').reduce((sum, item) => sum + (item.currentStock * (item.unitCost || 0)), 0),
+          monthlyItems: items.filter(item => item.frequency === 'monthly').reduce((sum, item) => sum + (item.currentStock * (item.unitCost || 0)), 0)
+        },
+        totalItems: items.length,
+        stockStatus: {
+          outOfStock: items.filter(item => item.currentStock === 0).length,
+          critical: items.filter(item => {
+            const minLevel = item.minimumLevel || 0;
+            return item.currentStock > 0 && item.currentStock <= minLevel * 0.5;
+          }).length,
+          low: items.filter(item => {
+            const minLevel = item.minimumLevel || 0;
+            return item.currentStock > minLevel * 0.5 && item.currentStock <= minLevel;
+          }).length,
+          ok: items.filter(item => {
+            const minLevel = item.minimumLevel || 0;
+            return item.currentStock > minLevel;
+          }).length
+        }
+      };
+    } else if (comparisonDate === new Date().toISOString().split('T')[0]) {
+      // Handle comparison with today's live data
+      const allItems = [...(dailyItems || []), ...(weeklyItems || []), ...(monthlyItems || [])];
+      const totalValue = allItems.reduce((sum, item) => sum + (item.currentStock * item.cost), 0);
+      
+      return {
+        date: comparisonDate,
+        inventoryValue: {
+          total: totalValue,
+          dailyItems: (dailyItems || []).reduce((sum, item) => sum + (item.currentStock * item.cost), 0),
+          weeklyItems: (weeklyItems || []).reduce((sum, item) => sum + (item.currentStock * item.cost), 0),
+          monthlyItems: (monthlyItems || []).reduce((sum, item) => sum + (item.currentStock * item.cost), 0)
+        },
+        totalItems: allItems.length,
+        stockStatus: {
+          outOfStock: allItems.filter(item => getStockStatus(item.currentStock, item.minLevel) === 'out').length,
+          critical: allItems.filter(item => getStockStatus(item.currentStock, item.minLevel) === 'critical').length,
+          low: allItems.filter(item => getStockStatus(item.currentStock, item.minLevel) === 'low').length,
+          ok: allItems.filter(item => getStockStatus(item.currentStock, item.minLevel) === 'ok').length
+        }
+      };
+    }
     
-    return {
-      date: comparisonDate,
-      inventoryValue: comparisonSnapshot.inventoryValue || 0,
-      totalItems: items.length,
-      stockStatus: {
-        outOfStock: items.filter(item => item.currentStock === 0).length,
-        critical: items.filter(item => {
-          const minLevel = item.minimumLevel || 0;
-          return item.currentStock > 0 && item.currentStock <= minLevel * 0.5;
-        }).length,
-        low: items.filter(item => {
-          const minLevel = item.minimumLevel || 0;
-          return item.currentStock > minLevel * 0.5 && item.currentStock <= minLevel;
-        }).length,
-        ok: items.filter(item => {
-          const minLevel = item.minimumLevel || 0;
-          return item.currentStock > minLevel;
-        }).length
-      }
-    };
-  }, [comparisonDate, dailyInventorySnapshots]);
+    return null;
+  }, [comparisonDate, dailyInventorySnapshots, dailyItems, weeklyItems, monthlyItems]);
 
   // Helper function to format date for display
   const formatDisplayDate = (dateStr: string) => {
@@ -210,6 +244,17 @@ const ReportsView: React.FC = () => {
     return { startOfDay, endOfDay };
   };
 
+  // Calculate trend data for the trends view - TEMPORARILY DISABLED
+  const trendData = useMemo(() => {
+    return {
+      points: [],
+      peakItemsDay: { totalItems: 0, date: '', totalValue: 0 },
+      peakValueDay: { totalItems: 0, date: '', totalValue: 0 },
+      averageItems: 0,
+      averageValue: 0
+    };
+  }, [selectedDate, dateRange, dailyInventorySnapshots, dailyItems, weeklyItems, monthlyItems]);
+
   // Export functionality
   const exportReport = (format: 'pdf' | 'csv') => {
     if (!analytics) return;
@@ -217,7 +262,7 @@ const ReportsView: React.FC = () => {
     if (format === 'csv') {
       // Create CSV content
       const csvContent = `Date,Total Value,Total Items,Out of Stock,Critical,Low Stock,OK Stock,Waste Value\n` +
-        `${analytics.date},${analytics.inventoryValue.total || 'N/A'},${analytics.totalItems},` +
+        `${analytics.date},${analytics.inventoryValue.total},${analytics.totalItems},` +
         `${analytics.stockStatus.outOfStock},${analytics.stockStatus.critical},` +
         `${analytics.stockStatus.low},${analytics.stockStatus.ok},${analytics.dailyActivity.totalWasteValue}`;
       
@@ -355,10 +400,7 @@ const ReportsView: React.FC = () => {
                       <div>
                         <p className="text-sm font-medium text-blue-600">Total Value</p>
                         <p className="text-2xl font-bold text-blue-900">
-                          ${(analytics.inventoryValue as any).total 
-                            ? (analytics.inventoryValue as any).total.toFixed(2)
-                            : ((analytics.inventoryValue as any) || 0).toFixed(2)
-                          }
+                          ${analytics.inventoryValue.total.toFixed(2)}
                         </p>
                       </div>
                       <DollarSign className="w-8 h-8 text-blue-600" />
@@ -408,12 +450,10 @@ const ReportsView: React.FC = () => {
                       <div>
                         <span className="text-gray-600">Value Change:</span>
                         <span className={`ml-2 font-semibold ${
-                          (typeof analytics.inventoryValue === 'number' ? analytics.inventoryValue : analytics.inventoryValue.total) > 
-                          (typeof comparisonAnalytics.inventoryValue === 'number' ? comparisonAnalytics.inventoryValue : comparisonAnalytics.inventoryValue.total)
+                          analytics.inventoryValue.total > comparisonAnalytics.inventoryValue.total
                             ? 'text-green-600' : 'text-red-600'
                         }`}>
-                          {((typeof analytics.inventoryValue === 'number' ? analytics.inventoryValue : analytics.inventoryValue.total) - 
-                           (typeof comparisonAnalytics.inventoryValue === 'number' ? comparisonAnalytics.inventoryValue : comparisonAnalytics.inventoryValue.total)).toFixed(2)}
+                          ${(analytics.inventoryValue.total - comparisonAnalytics.inventoryValue.total).toFixed(2)}
                         </span>
                       </div>
                       <div>
@@ -492,7 +532,17 @@ const ReportsView: React.FC = () => {
             </div>
           )}
 
-          {/* Export Mode */}
+          {/* Trends Mode - TEMPORARILY DISABLED */}
+          {false && viewMode === 'trends' && (
+            <div>Trends placeholder</div>
+          )}
+
+          {/* Compliance Mode - TEMPORARILY DISABLED */}
+          {false && viewMode === 'compliance' && (
+            <div>Compliance placeholder</div>
+          )}
+
+          {/* Export Mode */
           {viewMode === 'export' && (
             <div className="bg-white rounded-xl shadow-sm p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Export Reports</h3>
