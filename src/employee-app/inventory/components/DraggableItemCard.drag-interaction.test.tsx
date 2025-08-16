@@ -166,7 +166,7 @@ describe('DraggableItemCard - Drag Interaction Improvements', () => {
     });
 
     // Wait for hold timer to activate (simulate async behavior)
-    jest.advanceTimersByTime(900);
+    jest.advanceTimersByTime(500);
 
     // Now move strongly vertically (should cancel drag and allow scrolling)
     fireEvent.touchMove(cardElement!, {
@@ -198,7 +198,7 @@ describe('DraggableItemCard - Drag Interaction Improvements', () => {
     });
 
     // Wait for hold timer
-    jest.advanceTimersByTime(900);
+    jest.advanceTimersByTime(500);
 
     // Move with significant horizontal component (should maintain drag)
     fireEvent.touchMove(cardElement!, {
