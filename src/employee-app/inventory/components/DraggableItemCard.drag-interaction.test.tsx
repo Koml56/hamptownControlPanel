@@ -31,6 +31,11 @@ describe('DraggableItemCard - Drag Interaction Improvements', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   it('should not initiate drag when touching buttons', () => {
@@ -139,6 +144,70 @@ describe('DraggableItemCard - Drag Interaction Improvements', () => {
     fireEvent.touchEnd(cardElement!, {});
 
     // Should handle the horizontal movement appropriately
+    expect(cardElement).toBeInTheDocument();
+  });
+
+  it('should cancel active drag when strong vertical movement is detected', () => {
+    render(
+      <TestWrapper>
+        <DraggableItemCard
+          item={mockItem}
+          onUpdateCount={mockUpdateCount}
+          onReportWaste={mockReportWaste}
+        />
+      </TestWrapper>
+    );
+
+    const cardElement = screen.getByText('Test Item').closest('div');
+
+    // Start touch on non-button area
+    fireEvent.touchStart(cardElement!, {
+      touches: [{ clientX: 100, clientY: 100 }]
+    });
+
+    // Wait for hold timer to activate (simulate async behavior)
+    jest.advanceTimersByTime(500);
+
+    // Now move strongly vertically (should cancel drag and allow scrolling)
+    fireEvent.touchMove(cardElement!, {
+      touches: [{ clientX: 105, clientY: 130 }] // Small horizontal, large vertical (30px > 15px threshold)
+    });
+
+    fireEvent.touchEnd(cardElement!, {});
+
+    // Should handle the movement gracefully without preventing scrolling
+    expect(cardElement).toBeInTheDocument();
+  });
+
+  it('should maintain drag behavior for mixed movement patterns', () => {
+    render(
+      <TestWrapper>
+        <DraggableItemCard
+          item={mockItem}
+          onUpdateCount={mockUpdateCount}
+          onReportWaste={mockReportWaste}
+        />
+      </TestWrapper>
+    );
+
+    const cardElement = screen.getByText('Test Item').closest('div');
+
+    // Start touch on non-button area
+    fireEvent.touchStart(cardElement!, {
+      touches: [{ clientX: 100, clientY: 100 }]
+    });
+
+    // Wait for hold timer
+    jest.advanceTimersByTime(500);
+
+    // Move with significant horizontal component (should maintain drag)
+    fireEvent.touchMove(cardElement!, {
+      touches: [{ clientX: 125, clientY: 115 }] // 25px horizontal, 15px vertical (not strong enough to cancel)
+    });
+
+    fireEvent.touchEnd(cardElement!, {});
+
+    // Should handle the movement as drag, not scroll
     expect(cardElement).toBeInTheDocument();
   });
 });

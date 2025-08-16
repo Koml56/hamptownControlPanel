@@ -34,8 +34,10 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   // Touch hold delay in milliseconds
-  const TOUCH_HOLD_DELAY = 500;
+  const TOUCH_HOLD_DELAY = 400; // Reduced for better responsiveness
   const TOUCH_MOVE_THRESHOLD = 10; // pixels
+  const VERTICAL_SCROLL_THRESHOLD = 15; // pixels - threshold for detecting vertical scroll intent
+  const VERTICAL_SCROLL_RATIO = 2.0; // ratio for vertical vs horizontal movement to detect scroll
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     // Only handle single touch
@@ -86,9 +88,19 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
           touchTimeoutRef.current = null;
         }
         // If mostly vertical movement, allow scrolling
-        if (deltaY > deltaX * 1.5) {
+        if (deltaY > deltaX * VERTICAL_SCROLL_RATIO) {
           return;
         }
+      }
+      
+      // Even if touch hold is active, check for strong vertical scroll intent
+      if (touchHoldActive && deltaY > VERTICAL_SCROLL_THRESHOLD && deltaY > deltaX * VERTICAL_SCROLL_RATIO) {
+        // User is trying to scroll vertically - cancel drag and allow scrolling
+        setTouchHoldActive(false);
+        if (e.currentTarget) {
+          (e.currentTarget as HTMLElement).style.touchAction = 'pan-y';
+        }
+        return; // Don't prevent default - allow scrolling
       }
     }
 
@@ -109,9 +121,9 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
     setTouchHoldActive(false);
     touchStartRef.current = null;
     
-    // Restore touch action
+    // Restore touch action to allow vertical scrolling
     if (e.currentTarget) {
-      (e.currentTarget as HTMLElement).style.touchAction = '';
+      (e.currentTarget as HTMLElement).style.touchAction = 'pan-y';
     }
   }, []);
 
@@ -127,7 +139,7 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
-    touchAction: touchHoldActive ? 'none' : 'pan-y', // Allow vertical scrolling by default
+    touchAction: touchHoldActive ? 'none' : 'pan-y', // Allow vertical scrolling by default, disable only during active drag
   };
 
   return (
