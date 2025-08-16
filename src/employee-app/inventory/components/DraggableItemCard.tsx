@@ -1,5 +1,5 @@
 // src/employee-app/inventory/components/DraggableItemCard.tsx
-import React from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import ItemCard from './ItemCard';
@@ -29,6 +29,89 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
     isDragging,
   } = useSortable({ id: item.id.toString() });
 
+  const [touchHoldActive, setTouchHoldActive] = useState(false);
+  const touchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  // Touch hold delay in milliseconds
+  const TOUCH_HOLD_DELAY = 500;
+  const TOUCH_MOVE_THRESHOLD = 10; // pixels
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    // Only handle single touch
+    if (e.touches.length !== 1) return;
+
+    const touch = e.touches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+    
+    // Start the hold timer
+    touchTimeoutRef.current = setTimeout(() => {
+      setTouchHoldActive(true);
+      // Prevent scrolling once hold is activated
+      if (e.target) {
+        (e.target as HTMLElement).style.touchAction = 'none';
+      }
+    }, TOUCH_HOLD_DELAY);
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length !== 1) {
+      // Multi-touch detected - allow scrolling and cancel hold
+      if (touchTimeoutRef.current) {
+        clearTimeout(touchTimeoutRef.current);
+        touchTimeoutRef.current = null;
+      }
+      setTouchHoldActive(false);
+      return;
+    }
+
+    const touch = e.touches[0];
+    const startPos = touchStartRef.current;
+    
+    if (startPos) {
+      const deltaX = Math.abs(touch.clientX - startPos.x);
+      const deltaY = Math.abs(touch.clientY - startPos.y);
+      
+      // If user moves finger before hold completes, cancel the hold
+      if (!touchHoldActive && (deltaX > TOUCH_MOVE_THRESHOLD || deltaY > TOUCH_MOVE_THRESHOLD)) {
+        if (touchTimeoutRef.current) {
+          clearTimeout(touchTimeoutRef.current);
+          touchTimeoutRef.current = null;
+        }
+      }
+    }
+
+    // If touch hold is active, prevent default to block scrolling
+    if (touchHoldActive) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }, [touchHoldActive]);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    // Clean up
+    if (touchTimeoutRef.current) {
+      clearTimeout(touchTimeoutRef.current);
+      touchTimeoutRef.current = null;
+    }
+    
+    setTouchHoldActive(false);
+    touchStartRef.current = null;
+    
+    // Restore touch action
+    if (e.target) {
+      (e.target as HTMLElement).style.touchAction = '';
+    }
+  }, []);
+
+  // Create custom listeners that include our touch handling
+  const customListeners = {
+    ...listeners,
+    onTouchStart: handleTouchStart,
+    onTouchMove: handleTouchMove,
+    onTouchEnd: handleTouchEnd,
+  };
+
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -40,7 +123,7 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
       ref={setNodeRef}
       style={style}
       {...attributes}
-      {...listeners}
+      {...customListeners}
     >
       <ItemCard
         item={item}
