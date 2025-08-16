@@ -3,7 +3,10 @@ import type {
   InventoryItem, 
   StockCountSnapshot,
   InventoryFrequency,
-  StockCountHistoryEntry 
+  StockCountHistoryEntry,
+  DailyInventorySnapshot,
+  ActivityLogEntry,
+  Employee
 } from '../types';
 import { getStockStatus } from './stockUtils';
 
@@ -291,5 +294,159 @@ export const createComprehensiveSnapshot = (
       criticalStockItems,
       lowStockItems
     }
+  };
+};
+
+/**
+ * Create a comprehensive daily inventory snapshot for compliance and business requirements
+ * This snapshot includes all data needed for audits, compliance, and business analytics
+ */
+export const createComprehensiveDailySnapshot = (
+  dailyItems: InventoryItem[],
+  weeklyItems: InventoryItem[],
+  monthlyItems: InventoryItem[],
+  activityLog: ActivityLogEntry[],
+  employees: Employee[],
+  createdBy: string = 'system_automatic',
+  date?: string
+): DailyInventorySnapshot => {
+  const snapshotDate = date || new Date().toISOString().split('T')[0];
+  const timestamp = new Date().toISOString();
+  const snapshotId = `daily_${snapshotDate.replace(/-/g, '')}_${Date.now()}`;
+  
+  // Combine all items
+  const allItems = [
+    ...dailyItems.map(item => ({ ...item, frequency: 'daily' as InventoryFrequency })),
+    ...weeklyItems.map(item => ({ ...item, frequency: 'weekly' as InventoryFrequency })),
+    ...monthlyItems.map(item => ({ ...item, frequency: 'monthly' as InventoryFrequency }))
+  ];
+  
+  // Calculate inventory values by frequency
+  const dailyValue = dailyItems.reduce((sum, item) => sum + (item.currentStock * item.cost), 0);
+  const weeklyValue = weeklyItems.reduce((sum, item) => sum + (item.currentStock * item.cost), 0);
+  const monthlyValue = monthlyItems.reduce((sum, item) => sum + (item.currentStock * item.cost), 0);
+  const totalValue = dailyValue + weeklyValue + monthlyValue;
+  
+  // Process items into snapshot format
+  const snapshotItems: DailyInventorySnapshot['items'] = {};
+  allItems.forEach(item => {
+    if (item && item.id && item.name) {
+      snapshotItems[item.id.toString()] = {
+        id: item.id.toString(),
+        name: item.name,
+        category: item.category || 'uncategorized',
+        frequency: item.frequency,
+        currentStock: Math.max(0, Number(item.currentStock) || 0),
+        unit: item.unit || 'pieces',
+        minimumLevel: Math.max(0, Number(item.minLevel) || 0),
+        unitCost: Math.max(0, Number(item.cost) || 0),
+        totalValue: Math.max(0, Number(item.currentStock) || 0) * Math.max(0, Number(item.cost) || 0),
+        lastCountDate: item.lastUsed || snapshotDate,
+        countedBy: 'System',
+        location: 'Main Storage', // Default location
+        notes: '',
+        optimalLevel: item.optimalLevel || Math.max(0, Number(item.minLevel) || 0) * 2
+      };
+    }
+  });
+  
+  // Filter activity log for today
+  const todayStart = new Date(snapshotDate);
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date(snapshotDate);
+  todayEnd.setHours(23, 59, 59, 999);
+  
+  const todayActivity = activityLog.filter(entry => {
+    const entryDate = new Date(entry.timestamp);
+    return entryDate >= todayStart && entryDate <= todayEnd;
+  });
+  
+  // Process daily activity
+  const itemsReceived: DailyInventorySnapshot['dailyActivity']['itemsReceived'] = {};
+  const itemsUsed: DailyInventorySnapshot['dailyActivity']['itemsUsed'] = {};
+  const itemsWasted: DailyInventorySnapshot['dailyActivity']['itemsWasted'] = {};
+  
+  todayActivity.forEach(entry => {
+    if (entry.type === 'manual_add') {
+      if (!itemsReceived[entry.item]) {
+        itemsReceived[entry.item] = {
+          quantity: 0,
+          cost: 0,
+          supplier: 'Unknown',
+          timestamp: entry.timestamp
+        };
+      }
+      itemsReceived[entry.item].quantity += entry.quantity;
+      
+      // Calculate cost from inventory items
+      const inventoryItem = allItems.find(item => item.name === entry.item);
+      const itemCost = inventoryItem ? inventoryItem.cost : 0;
+      itemsReceived[entry.item].cost += entry.quantity * itemCost;
+    } else if (entry.type === 'count_update') {
+      if (!itemsUsed[entry.item]) {
+        itemsUsed[entry.item] = {
+          quantity: 0,
+          purpose: 'Stock Update',
+          timestamp: entry.timestamp
+        };
+      }
+      itemsUsed[entry.item].quantity += Math.abs(entry.quantity);
+    } else if (entry.type === 'waste') {
+      if (!itemsWasted[entry.item]) {
+        itemsWasted[entry.item] = {
+          quantity: 0,
+          reason: entry.reason || 'Unknown',
+          cost: 0,
+          timestamp: entry.timestamp
+        };
+      }
+      itemsWasted[entry.item].quantity += entry.quantity;
+      
+      // Calculate cost from inventory items
+      const inventoryItem = allItems.find(item => item.name === entry.item);
+      const itemCost = inventoryItem ? inventoryItem.cost : 0;
+      itemsWasted[entry.item].cost += entry.quantity * itemCost;
+    }
+  });
+  
+  // Process employee activity
+  const employeeActivity: DailyInventorySnapshot['employeeActivity'] = {};
+  employees.forEach(employee => {
+    const employeeActions = todayActivity.filter(entry => entry.employee === employee.name);
+    const countsPerformed = employeeActions.filter(entry => entry.type === 'count_update').length;
+    const itemsUpdated = [...new Set(employeeActions.map(entry => entry.item))];
+    
+    employeeActivity[employee.id.toString()] = {
+      countsPerformed,
+      itemsUpdated,
+      hoursWorked: 8, // Default value - would need to be tracked separately
+      notes: ''
+    };
+  });
+  
+  return {
+    date: snapshotDate,
+    timestamp,
+    snapshotId,
+    createdBy,
+    inventoryValue: {
+      total: totalValue,
+      dailyItems: dailyValue,
+      weeklyItems: weeklyValue,
+      monthlyItems: monthlyValue
+    },
+    items: snapshotItems,
+    dailyActivity: {
+      itemsReceived,
+      itemsUsed,
+      itemsWasted
+    },
+    compliance: {
+      temperatureLog: [], // Would be populated with actual temperature readings
+      inspectionNotes: '',
+      healthDeptVisit: false,
+      auditFlags: []
+    },
+    employeeActivity
   };
 };

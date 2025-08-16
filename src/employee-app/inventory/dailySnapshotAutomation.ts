@@ -1,6 +1,6 @@
 // src/employee-app/inventory/dailySnapshotAutomation.ts
 import type { StockCountHistoryEntry, InventoryFrequency } from '../types';
-import { createComprehensiveSnapshot } from './stockCountSnapshots';
+import { createComprehensiveSnapshot, createComprehensiveDailySnapshot } from './stockCountSnapshots';
 import { SnapshotErrorHandler } from './snapshotService';
 
 export interface DailySnapshotConfig {
@@ -13,7 +13,7 @@ export interface DailySnapshotConfig {
 export const DEFAULT_SNAPSHOT_CONFIG: DailySnapshotConfig = {
   enableAutomation: true,
   snapshotTime: "23:59", // Just before midnight
-  retentionDays: 365, // Keep for 1 year
+  retentionDays: 730, // Keep for 2 years (business requirement)
   frequencies: ['daily', 'weekly', 'monthly']
 };
 
@@ -105,7 +105,7 @@ export class DailySnapshotAutomation {
         return;
       }
 
-      // Create comprehensive snapshot
+      // Create comprehensive snapshot (existing format for compatibility)
       const snapshot = createComprehensiveSnapshot(
         inventoryData.inventoryDailyItems || [],
         inventoryData.inventoryWeeklyItems || [],
@@ -113,7 +113,18 @@ export class DailySnapshotAutomation {
         today
       );
 
-      // Format for storage
+      // Create enhanced daily snapshot (new comprehensive format)
+      const dailySnapshot = createComprehensiveDailySnapshot(
+        inventoryData.inventoryDailyItems || [],
+        inventoryData.inventoryWeeklyItems || [],
+        inventoryData.inventoryMonthlyItems || [],
+        inventoryData.inventoryActivityLog || [],
+        inventoryData.employees || [],
+        'system_automatic',
+        today
+      );
+
+      // Format for storage (existing format)
       const historyEntry: StockCountHistoryEntry = {
         snapshotId: `auto_daily_${today.replace(/-/g, '')}`,
         date: today,
@@ -121,16 +132,22 @@ export class DailySnapshotAutomation {
         snapshot
       };
 
-      // Save snapshot to Firebase
+      // Save both snapshots to Firebase
       const existingSnapshots = inventoryData.stockCountSnapshots || [];
+      const existingDailySnapshots = inventoryData.dailyInventorySnapshots || [];
+      
       const updatedSnapshots = [...existingSnapshots, historyEntry];
+      const updatedDailySnapshots = [...existingDailySnapshots, dailySnapshot];
 
+      // Save snapshots and daily snapshots
       await this.firebaseService.quickSave('stockCountSnapshots', updatedSnapshots);
+      await this.firebaseService.quickSave('dailyInventorySnapshots', updatedDailySnapshots);
 
       this.lastSnapshotDate = today;
       
       console.log(`✅ Automated daily snapshot created successfully for ${today}`);
       console.log(`📊 Snapshot contains ${snapshot.totalItems} items with total value $${snapshot.totalValue.toFixed(2)}`);
+      console.log(`📈 Enhanced daily snapshot saved with ${Object.keys(dailySnapshot.items).length} items and compliance data`);
 
       // Clean up old snapshots if needed
       await this.cleanupOldSnapshots(updatedSnapshots);

@@ -10,7 +10,8 @@ import type {
   CustomCategory,
   Employee,
   CurrentUser,
-  StockCountHistoryEntry
+  StockCountHistoryEntry,
+  DailyInventorySnapshot
 } from '../types';
 
 export interface InventoryTabProps {
@@ -26,6 +27,7 @@ export interface InventoryTabProps {
   inventoryActivityLog: ActivityLogEntry[];
   inventoryCustomCategories: CustomCategory[];
   stockCountSnapshots: StockCountHistoryEntry[];
+  dailyInventorySnapshots: DailyInventorySnapshot[];
   setInventoryDailyItems: (items: InventoryItem[]) => void;
   setInventoryWeeklyItems: (items: InventoryItem[]) => void;
   setInventoryMonthlyItems: (items: InventoryItem[]) => void;
@@ -33,6 +35,7 @@ export interface InventoryTabProps {
   setInventoryActivityLog: (log: ActivityLogEntry[]) => void;
   setInventoryCustomCategories: (categories: CustomCategory[]) => void;
   setStockCountSnapshots: (snapshots: StockCountHistoryEntry[]) => void;
+  setDailyInventorySnapshots: (snapshots: DailyInventorySnapshot[]) => void;
   quickSave: (field: string, data: any) => Promise<boolean>;
 }
 
@@ -45,6 +48,7 @@ export interface InventoryContextType {
   activityLog: ActivityLogEntry[];
   customCategories: CustomCategory[];
   stockCountSnapshots: StockCountHistoryEntry[];
+  dailyInventorySnapshots: DailyInventorySnapshot[];
   employees: Employee[];
   currentUser: CurrentUser;
   selectedItems: Set<number | string>;
@@ -61,6 +65,7 @@ export interface InventoryContextType {
   setActivityLog: (log: ActivityLogEntry[]) => void;
   setCustomCategories: (categories: CustomCategory[]) => void;
   setStockCountSnapshots: (snapshots: StockCountHistoryEntry[]) => void;
+  setDailyInventorySnapshots: (snapshots: DailyInventorySnapshot[]) => void;
   addActivityEntry: (entry: Omit<ActivityLogEntry, 'id' | 'timestamp'>) => void;
   updateItemStock: (itemId: number | string, newStock: number, frequency: InventoryFrequency, employee: string, notes?: string, deliveries?: number) => void;
   reportWaste: (itemId: number | string, amount: number, reason: WasteReason, frequency: InventoryFrequency, employee: string, notes?: string) => void;
