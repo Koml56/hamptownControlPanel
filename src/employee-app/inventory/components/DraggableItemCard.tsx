@@ -39,6 +39,19 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
   const VERTICAL_SCROLL_THRESHOLD = 15; // pixels - threshold for detecting vertical scroll intent
   const VERTICAL_SCROLL_RATIO = 2.0; // ratio for vertical vs horizontal movement to detect scroll
 
+  // Helper function to check if target is a button or interactive element
+  const isInteractiveElement = useCallback((target: EventTarget | null): boolean => {
+    if (!target || !(target instanceof HTMLElement)) return false;
+    return !!(
+      target.closest('button') || 
+      target.closest('[role="button"]') || 
+      target.closest('input') || 
+      target.closest('select') ||
+      target.closest('a') ||
+      target.closest('[tabindex]')
+    );
+  }, []);
+
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     // Only handle single touch
     if (e.touches.length !== 1) return;
@@ -46,8 +59,13 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
     const target = e.target as HTMLElement;
     
     // Don't start drag if touching a button or interactive element
-    if (target.closest('button') || target.closest('[role="button"]') || target.closest('input') || target.closest('select')) {
+    if (isInteractiveElement(target)) {
       return;
+    }
+
+    // Call dnd-kit handler first if it exists
+    if (listeners?.onTouchStart) {
+      listeners.onTouchStart(e);
     }
 
     const touch = e.touches[0];
@@ -61,7 +79,7 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
         (e.currentTarget as HTMLElement).style.touchAction = 'none';
       }
     }, TOUCH_HOLD_DELAY);
-  }, []);
+  }, [isInteractiveElement, listeners]);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (e.touches.length !== 1) {
@@ -72,6 +90,16 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
       }
       setTouchHoldActive(false);
       return;
+    }
+
+    // Don't handle if touching interactive elements
+    if (isInteractiveElement(e.target)) {
+      return;
+    }
+
+    // Call dnd-kit handler
+    if (listeners?.onTouchMove) {
+      listeners.onTouchMove(e);
     }
 
     const touch = e.touches[0];
@@ -109,9 +137,19 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
       e.preventDefault();
       e.stopPropagation();
     }
-  }, [touchHoldActive]);
+  }, [touchHoldActive, isInteractiveElement, listeners]);
 
   const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    // Don't handle if touching interactive elements
+    if (isInteractiveElement(e.target)) {
+      return;
+    }
+
+    // Call dnd-kit handler
+    if (listeners?.onTouchEnd) {
+      listeners.onTouchEnd(e);
+    }
+
     // Clean up
     if (touchTimeoutRef.current) {
       clearTimeout(touchTimeoutRef.current);
@@ -125,9 +163,9 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
     if (e.currentTarget) {
       (e.currentTarget as HTMLElement).style.touchAction = 'pan-y';
     }
-  }, []);
+  }, [isInteractiveElement, listeners]);
 
-  // Create custom listeners that include our touch handling
+  // Create custom listeners with conditional touch handling to prevent button interference
   const customListeners = {
     ...listeners,
     onTouchStart: handleTouchStart,
