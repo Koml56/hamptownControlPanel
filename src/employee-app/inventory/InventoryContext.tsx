@@ -774,6 +774,23 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     };
   }, [quickSave, dailyItems, weeklyItems, monthlyItems, activityLog, snapshots, dailyInventorySnapshots, employees]);
 
+  // Reorder items function for drag-and-drop
+  const reorderItems = useCallback((
+    frequency: InventoryFrequency,
+    oldIndex: number,
+    newIndex: number
+  ) => {
+    const items = getItemsByFrequency(frequency);
+    const reorderedItems = [...items];
+    const [movedItem] = reorderedItems.splice(oldIndex, 1);
+    reorderedItems.splice(newIndex, 0, movedItem);
+    
+    setItemsByFrequency(frequency, reorderedItems);
+    
+    // Save the new order to Firebase
+    quickSave(`inventory${frequency.charAt(0).toUpperCase() + frequency.slice(1)}Items`, reorderedItems);
+  }, [getItemsByFrequency, setItemsByFrequency, quickSave]);
+
   const value: InventoryContextType = {
     // Data
     dailyItems,
@@ -820,6 +837,8 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     deleteCustomCategory,
     // Stock Count Snapshots
     createStockSnapshot,
+    // Drag and Drop
+    reorderItems,
     // Firebase integration
     quickSave
   };
