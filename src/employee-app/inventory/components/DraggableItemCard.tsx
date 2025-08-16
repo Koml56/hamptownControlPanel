@@ -34,7 +34,7 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   // Touch hold delay in milliseconds
-  const TOUCH_HOLD_DELAY = 400; // Reduced for better responsiveness
+  const TOUCH_HOLD_DELAY = 800; // Increased for better mobile button interaction
   const TOUCH_MOVE_THRESHOLD = 10; // pixels
   const VERTICAL_SCROLL_THRESHOLD = 15; // pixels - threshold for detecting vertical scroll intent
   const VERTICAL_SCROLL_RATIO = 2.0; // ratio for vertical vs horizontal movement to detect scroll
