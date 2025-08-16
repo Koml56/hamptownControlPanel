@@ -1,18 +1,40 @@
 // src/employee-app/inventory/components/WeeklyView.tsx
 import React, { useState } from 'react';
 import { Edit3, Trash2, Search, Calendar, TrendingUp, Clock } from 'lucide-react';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
 import { useInventory } from '../InventoryContext';
-import ItemCard from './ItemCard';
+import DraggableItemCard from './DraggableItemCard';
 import CountModal from './CountModal';
 import WasteModal from './WasteModal';
 
 const WeeklyView: React.FC = () => {
-  const { weeklyItems, customCategories } = useInventory();
+  const { weeklyItems, customCategories, reorderItems } = useInventory();
   const [showCountModal, setShowCountModal] = useState(false);
   const [showWasteModal, setShowWasteModal] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<number | string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   // Filter items
   const filteredItems = weeklyItems.filter(item => {
@@ -23,6 +45,31 @@ const WeeklyView: React.FC = () => {
 
   // Get unique categories for filter
   const categories = [...new Set(weeklyItems.map(item => item.category))];
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (active.id !== over?.id) {
+      const oldIndex = filteredItems.findIndex(item => item.id.toString() === active.id);
+      const newIndex = filteredItems.findIndex(item => item.id.toString() === over?.id);
+      
+      // If we're filtering, we need to map back to the original array indices
+      if (filteredItems.length === weeklyItems.length) {
+        // No filtering - direct reorder
+        reorderItems('weekly', oldIndex, newIndex);
+      } else {
+        // Items are filtered - we need to find original indices
+        const activeItem = weeklyItems.find(item => item.id.toString() === active.id);
+        const overItem = weeklyItems.find(item => item.id.toString() === over?.id);
+        
+        if (activeItem && overItem) {
+          const originalOldIndex = weeklyItems.findIndex(item => item.id === activeItem.id);
+          const originalNewIndex = weeklyItems.findIndex(item => item.id === overItem.id);
+          reorderItems('weekly', originalOldIndex, originalNewIndex);
+        }
+      }
+    }
+  };
 
   const handleUpdateCount = (itemId: number | string) => {
     setSelectedItemId(itemId);
@@ -162,17 +209,28 @@ const WeeklyView: React.FC = () => {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredItems.map(item => (
-                <ItemCard
-                  key={item.id}
-                  item={item}
-                  onUpdateCount={handleUpdateCount}
-                  onReportWaste={handleReportWaste}
-                  customCategories={customCategories}
-                />
-              ))}
-            </div>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={filteredItems.map(item => item.id.toString())}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredItems.map(item => (
+                    <DraggableItemCard
+                      key={item.id}
+                      item={item}
+                      onUpdateCount={handleUpdateCount}
+                      onReportWaste={handleReportWaste}
+                      customCategories={customCategories}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
           )}
         </div>
       </div>

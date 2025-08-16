@@ -85,6 +85,8 @@ export interface InventoryContextType {
   deleteCustomCategory: (id: string) => void;
   // Stock Count Snapshots
   createStockSnapshot: (date?: string, frequencies?: ('daily' | 'weekly' | 'monthly')[]) => Promise<any[]>;
+  // Drag and Drop
+  reorderItems: (frequency: InventoryFrequency, oldIndex: number, newIndex: number) => void;
   // Firebase integration
   quickSave: (field: string, data: any) => Promise<boolean>;
 }

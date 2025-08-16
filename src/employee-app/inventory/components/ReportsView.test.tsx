@@ -171,6 +171,7 @@ describe('ReportsView', () => {
     updateCustomCategory: jest.fn(),
     deleteCustomCategory: jest.fn(),
     createStockSnapshot: jest.fn().mockResolvedValue([{ success: true }]),
+    reorderItems: jest.fn(),
     quickSave: jest.fn().mockResolvedValue(true)
   };
 

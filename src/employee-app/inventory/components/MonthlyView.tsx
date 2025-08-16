@@ -1,19 +1,41 @@
 // src/employee-app/inventory/components/MonthlyView.tsx
 import React, { useState } from 'react';
 import { Edit3, Trash2, Search, Package, Calendar } from 'lucide-react';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
 import { useInventory } from '../InventoryContext';
-import ItemCard from './ItemCard';
+import DraggableItemCard from './DraggableItemCard';
 import CountModal from './CountModal';
 import WasteModal from './WasteModal';
 import { getAllCategoryOptions } from '../utils';
 
 const MonthlyView: React.FC = () => {
-  const { monthlyItems, customCategories } = useInventory();
+  const { monthlyItems, customCategories, reorderItems } = useInventory();
   const [showCountModal, setShowCountModal] = useState(false);
   const [showWasteModal, setShowWasteModal] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<number | string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   // Get all available categories
   const allCategoryOptions = getAllCategoryOptions(customCategories);
@@ -24,6 +46,31 @@ const MonthlyView: React.FC = () => {
     const matchesCategory = categoryFilter === 'all' || item.category === categoryFilter;
     return matchesSearch && matchesCategory;
   });
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (active.id !== over?.id) {
+      const oldIndex = filteredItems.findIndex(item => item.id.toString() === active.id);
+      const newIndex = filteredItems.findIndex(item => item.id.toString() === over?.id);
+      
+      // If we're filtering, we need to map back to the original array indices
+      if (filteredItems.length === monthlyItems.length) {
+        // No filtering - direct reorder
+        reorderItems('monthly', oldIndex, newIndex);
+      } else {
+        // Items are filtered - we need to find original indices
+        const activeItem = monthlyItems.find(item => item.id.toString() === active.id);
+        const overItem = monthlyItems.find(item => item.id.toString() === over?.id);
+        
+        if (activeItem && overItem) {
+          const originalOldIndex = monthlyItems.findIndex(item => item.id === activeItem.id);
+          const originalNewIndex = monthlyItems.findIndex(item => item.id === overItem.id);
+          reorderItems('monthly', originalOldIndex, originalNewIndex);
+        }
+      }
+    }
+  };
 
   const handleUpdateCount = (itemId: number | string) => {
     setSelectedItemId(itemId);
@@ -157,17 +204,28 @@ const MonthlyView: React.FC = () => {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredItems.map(item => (
-                <ItemCard
-                  key={item.id}
-                  item={item}
-                  onUpdateCount={handleUpdateCount}
-                  onReportWaste={handleReportWaste}
-                  customCategories={customCategories}
-                />
-              ))}
-            </div>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={filteredItems.map(item => item.id.toString())}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredItems.map(item => (
+                    <DraggableItemCard
+                      key={item.id}
+                      item={item}
+                      onUpdateCount={handleUpdateCount}
+                      onReportWaste={handleReportWaste}
+                      customCategories={customCategories}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
           )}
         </div>
       </div>
