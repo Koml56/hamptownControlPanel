@@ -1,11 +1,11 @@
-// src/employee-app/inventory/components/ReportsView.tsx
+// src/employee-app/inventory/components/ReportsViewEnhanced.tsx
 import React, { useState, useMemo } from 'react';
 import { BarChart3, TrendingUp, AlertTriangle, DollarSign, Calendar, GitCompare, Download, FileText, Eye, Filter } from 'lucide-react';
 import { useInventory } from '../InventoryContext';
 import { getStockStatus } from '../stockUtils';
 import type { DailyInventorySnapshot } from '../../types';
 
-const ReportsView: React.FC = () => {
+const ReportsViewEnhanced: React.FC = () => {
   const { 
     dailyItems, 
     weeklyItems, 
@@ -396,7 +396,7 @@ const ReportsView: React.FC = () => {
                           (typeof comparisonAnalytics.inventoryValue === 'number' ? comparisonAnalytics.inventoryValue : comparisonAnalytics.inventoryValue.total)
                             ? 'text-green-600' : 'text-red-600'
                         }`}>
-                          {((typeof analytics.inventoryValue === 'number' ? analytics.inventoryValue : analytics.inventoryValue.total) - 
+                          ${((typeof analytics.inventoryValue === 'number' ? analytics.inventoryValue : analytics.inventoryValue.total) - 
                            (typeof comparisonAnalytics.inventoryValue === 'number' ? comparisonAnalytics.inventoryValue : comparisonAnalytics.inventoryValue.total)).toFixed(2)}
                         </span>
                       </div>
@@ -531,4 +531,5 @@ const ReportsView: React.FC = () => {
     </div>
   );
 };
-export default ReportsView;
+
+export default ReportsViewEnhanced;
