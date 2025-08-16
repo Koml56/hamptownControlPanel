@@ -261,43 +261,108 @@ export interface EnhancedInventoryItem extends InventoryItem {
   recommendedOrder?: number;
 }
 
-// Daily Inventory Snapshot for Daily Reports
+// Enhanced Daily Inventory Snapshot for Compliance & Business Requirements
 export interface DailyInventorySnapshot {
-  date: string; // YYYY-MM-DD format
+  // Basic metadata
+  date: string; // "YYYY-MM-DD" format
   timestamp: string; // ISO string when snapshot was created
-  inventoryValue: number; // Total value of all inventory
-  itemSnapshots: {
+  snapshotId: string; // Unique identifier
+  createdBy: string; // Employee who triggered snapshot
+  
+  // Complete inventory state (IMMUTABLE - never changes after creation)
+  inventoryValue: {
+    total: number;
+    dailyItems: number;
+    weeklyItems: number;
+    monthlyItems: number;
+  };
+  
+  // Every single item with exact state (PRESERVED from snapshot date)
+  items: {
     [itemId: string]: {
-      itemName: string;
+      // Item identification
+      id: string;
+      name: string;
       category: string;
       frequency: InventoryFrequency;
-      beginningCount: number;
-      endingCount: number;
-      received: number; // Deliveries/additions
-      used: number; // Consumed/sold
-      wasted: number; // Waste reported
-      wasteReason?: string;
-      unitCost: number;
-      totalValue: number;
+      
+      // Stock information (IMMUTABLE - never changes after creation)
+      currentStock: number;
+      unit: string;
+      minimumLevel: number;
+      
+      // Financial data (PRESERVED from snapshot date)
+      unitCost: number; // ⚠️ Price at time of snapshot
+      totalValue: number; // currentStock × unitCost
+      
+      // Operational data
+      lastCountDate: string;
+      countedBy: string;
+      location: string;
+      notes: string;
+      
+      // Quality tracking
+      expirationDate?: string;
+      lotNumber?: string;
+      supplier?: string;
+      optimalLevel: number;
     };
   };
-  dailyMetrics: {
-    totalPurchases: number; // Value of new inventory added
-    totalWaste: number; // Value of wasted inventory
-    totalUsage: number; // Value of inventory consumed
-    deliveriesReceived: number; // Count of delivery transactions
-    lowStockAlerts: number; // Items below minimum
-    outOfStockEvents: string[]; // Item IDs that went out of stock
-    countUpdates: number; // Number of stock count updates
-    wasteReports: number; // Number of waste reports
+  
+  // Daily activity summary
+  dailyActivity: {
+    itemsReceived: {
+      [itemId: string]: {
+        quantity: number;
+        cost: number;
+        supplier: string;
+        timestamp: string;
+      };
+    };
+    itemsUsed: {
+      [itemId: string]: {
+        quantity: number;
+        purpose: string;
+        timestamp: string;
+      };
+    };
+    itemsWasted: {
+      [itemId: string]: {
+        quantity: number;
+        reason: string;
+        cost: number;
+        timestamp: string;
+      };
+    };
   };
+  
+  // Compliance data
+  compliance: {
+    temperatureLog?: TemperatureReading[];
+    inspectionNotes?: string;
+    healthDeptVisit?: boolean;
+    auditFlags?: string[];
+  };
+  
+  // Employee activity
   employeeActivity: {
     [employeeId: string]: {
       countsPerformed: number;
-      wasteReported: number;
-      lastActivity: string; // timestamp
+      itemsUpdated: string[];
+      hoursWorked: number;
+      notes: string;
     };
   };
+}
+
+// Temperature reading for compliance tracking
+export interface TemperatureReading {
+  timestamp: string;
+  location: string; // e.g., "walk-in cooler", "freezer", "prep area"
+  temperature: number; // in Fahrenheit
+  recordedBy: string;
+  withinRange: boolean;
+  notes?: string;
 }
 
 // Stock Count History Types - NEW Feature

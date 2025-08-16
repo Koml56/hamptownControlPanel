@@ -10,7 +10,8 @@ import {
   CustomCategory,
   Employee,
   CurrentUser,
-  StockCountHistoryEntry
+  StockCountHistoryEntry,
+  DailyInventorySnapshot
 } from '../types'; // Import from main types.ts
 import { InventoryContextType } from './types'; // Local context type
 import { generateId, showToast } from './utils';
@@ -41,6 +42,7 @@ interface InventoryProviderProps {
   inventoryActivityLog: ActivityLogEntry[];
   inventoryCustomCategories: CustomCategory[];
   stockCountSnapshots: StockCountHistoryEntry[];
+  dailyInventorySnapshots: DailyInventorySnapshot[];
   setInventoryDailyItems: (items: InventoryItem[]) => void;
   setInventoryWeeklyItems: (items: InventoryItem[]) => void;
   setInventoryMonthlyItems: (items: InventoryItem[]) => void;
@@ -48,6 +50,7 @@ interface InventoryProviderProps {
   setInventoryActivityLog: (log: ActivityLogEntry[]) => void;
   setInventoryCustomCategories: (categories: CustomCategory[]) => void;
   setStockCountSnapshots: (snapshots: StockCountHistoryEntry[]) => void;
+  setDailyInventorySnapshots: (snapshots: DailyInventorySnapshot[]) => void;
   quickSave: (field: string, data: any) => Promise<boolean>;
 }
 
@@ -63,6 +66,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
   inventoryActivityLog,
   inventoryCustomCategories,
   stockCountSnapshots,
+  dailyInventorySnapshots,
   setInventoryDailyItems,
   setInventoryWeeklyItems,
   setInventoryMonthlyItems,
@@ -70,6 +74,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
   setInventoryActivityLog,
   setInventoryCustomCategories,
   setStockCountSnapshots,
+  setDailyInventorySnapshots,
   quickSave
 }) => {
   // Use Firebase state instead of local state
@@ -746,6 +751,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     activityLog,
     customCategories,
     stockCountSnapshots: snapshots,
+    dailyInventorySnapshots,
     employees,
     currentUser,
     selectedItems,
@@ -762,6 +768,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     setActivityLog: setInventoryActivityLog,
     setCustomCategories: setInventoryCustomCategories,
     setStockCountSnapshots,
+    setDailyInventorySnapshots,
     addActivityEntry,
     updateItemStock,
     reportWaste,

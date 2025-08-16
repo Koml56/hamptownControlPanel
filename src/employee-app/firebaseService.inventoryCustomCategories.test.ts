@@ -50,7 +50,8 @@ describe('FirebaseService inventoryCustomCategories', () => {
       inventoryDatabaseItems: [],
       inventoryActivityLog: [],
       inventoryCustomCategories: mockCustomCategories,
-      stockCountSnapshots: []
+      stockCountSnapshots: [],
+      dailyInventorySnapshots: []
     };
 
     // This should not throw an error
@@ -92,7 +93,8 @@ describe('FirebaseService inventoryCustomCategories', () => {
       inventoryDatabaseItems: [],
       inventoryActivityLog: [],
       inventoryCustomCategories: [], // Empty array
-      stockCountSnapshots: []
+      stockCountSnapshots: [],
+      dailyInventorySnapshots: []
     };
 
     // This should not throw an error even with empty array
