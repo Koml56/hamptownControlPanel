@@ -48,7 +48,10 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
       target.closest('input') || 
       target.closest('select') ||
       target.closest('a') ||
-      target.closest('[tabindex]')
+      target.closest('[tabindex]') ||
+      // Additional protection for elements inside buttons
+      target.closest('.card-buttons') ||
+      target.hasAttribute('onclick')
     );
   }, []);
 
@@ -60,6 +63,8 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
     
     // Don't start drag if touching a button or interactive element
     if (isInteractiveElement(target)) {
+      // Stop propagation to ensure button clicks work properly
+      e.stopPropagation();
       return;
     }
 
@@ -94,6 +99,7 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
 
     // Don't handle if touching interactive elements
     if (isInteractiveElement(e.target)) {
+      e.stopPropagation();
       return;
     }
 
@@ -142,6 +148,7 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
   const handleTouchEnd = useCallback((e: React.TouchEvent) => {
     // Don't handle if touching interactive elements
     if (isInteractiveElement(e.target)) {
+      e.stopPropagation();
       return;
     }
 
