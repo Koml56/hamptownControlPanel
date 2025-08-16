@@ -744,36 +744,34 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
 
   // Initialize snapshot automation on mount
   useEffect(() => {
-    if (quickSave) {
-      console.log('🔄 Initializing daily snapshot automation...');
-      const automation = new DailySnapshotAutomation(
-        { 
-          quickSave,
-          loadData: async () => ({
-            inventoryDailyItems: dailyItems,
-            inventoryWeeklyItems: weeklyItems,
-            inventoryMonthlyItems: monthlyItems,
-            inventoryActivityLog: activityLog,
-            stockCountSnapshots: snapshots,
-            dailyInventorySnapshots,
-            employees
-          })
-        },
-        {
-          enableAutomation: true,
-          snapshotTime: "23:59",
-          retentionDays: 730, // 2 years retention for compliance
-          frequencies: ['daily', 'weekly', 'monthly']
-        }
-      );
-      
-      automation.start();
-      
-      // Cleanup on unmount
-      return () => {
-        automation.stop();
-      };
-    }
+    console.log('🔄 Initializing daily snapshot automation...');
+    const automation = new DailySnapshotAutomation(
+      { 
+        quickSave,
+        loadData: async () => ({
+          inventoryDailyItems: dailyItems,
+          inventoryWeeklyItems: weeklyItems,
+          inventoryMonthlyItems: monthlyItems,
+          inventoryActivityLog: activityLog,
+          stockCountSnapshots: snapshots,
+          dailyInventorySnapshots,
+          employees
+        })
+      },
+      {
+        enableAutomation: true,
+        snapshotTime: "23:59",
+        retentionDays: 730, // 2 years retention for compliance
+        frequencies: ['daily', 'weekly', 'monthly']
+      }
+    );
+    
+    automation.start();
+    
+    // Cleanup on unmount
+    return () => {
+      automation.stop();
+    };
   }, [quickSave, dailyItems, weeklyItems, monthlyItems, activityLog, snapshots, dailyInventorySnapshots, employees]);
 
   const value: InventoryContextType = {
