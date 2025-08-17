@@ -48,6 +48,9 @@ const EmployeeApp: React.FC = () => {
     firebaseMeta.current = new (require('./firebaseService').FirebaseService)();
   }
 
+  // Track initialization to prevent race conditions with real-time listeners
+  const isInitializedRef = React.useRef<boolean>(false);
+
   // Firebase and Auth hooks with multi-device sync
   const {
     isLoading,
@@ -188,12 +191,18 @@ const EmployeeApp: React.FC = () => {
   // State for task operations history
   const [taskOperations, setTaskOperations] = useState<SyncOperation[]>([]);
 
-  // Initialize on mount - with better control
+  // Initialize on mount - FIXED: Prevent race condition with real-time listeners
   useEffect(() => {
     let mounted = true;
+    
     const initializeApp = async () => {
-      if (mounted && employees.length === 0) {
+      // FIXED: Don't depend on employees.length which can be populated by real-time listeners
+      // Instead, use a ref to track if we've already initialized
+      if (mounted && !isInitializedRef.current) {
         console.log('🚀 Initializing app...');
+        isInitializedRef.current = true;
+        
+        // Always call loadFromFirebase to ensure proper initialization
         await loadFromFirebase();
         
         // CRITICAL: Initialize daily snapshot automation to prevent historical data corruption
@@ -233,7 +242,7 @@ const EmployeeApp: React.FC = () => {
         delete (window as any).__snapshotAutomation;
       }
     };
-  }, [employees.length, loadFromFirebase]);
+  }, [loadFromFirebase]); // FIXED: Remove employees.length dependency to prevent race condition
 
   // Initialize Multi-Device Sync Service
   useEffect(() => {
