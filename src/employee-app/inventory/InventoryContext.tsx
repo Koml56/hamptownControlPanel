@@ -88,7 +88,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
   
   // UI-only state (not synced to Firebase)
   const [selectedItems, setSelectedItems] = useState<Set<number | string>>(new Set());
-  const [currentTab, setCurrentTab] = useState<InventoryFrequency | 'reports' | 'stock-history' | 'outofstock'>('daily');
+  const [currentTab, setCurrentTab] = useState<InventoryFrequency | 'analytics' | 'outofstock'>('daily');
 
   // Initialize daily snapshot automation
   useEffect(() => {
@@ -632,7 +632,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
   }, [databaseItems, setInventoryDatabaseItems, quickSave, getItemsByFrequency, setItemsByFrequency]);
 
   // Switch tab
-  const switchTab = useCallback((tab: InventoryFrequency | 'reports' | 'stock-history' | 'outofstock') => {
+  const switchTab = useCallback((tab: InventoryFrequency | 'analytics' | 'outofstock') => {
     setCurrentTab(tab);
     setSelectedItems(new Set()); // Clear selections when switching tabs
   }, []);

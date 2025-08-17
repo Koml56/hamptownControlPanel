@@ -170,7 +170,7 @@ describe('StockCountHistoryView', () => {
     employees: [{ id: 1, name: 'John Doe', role: 'Manager', mood: 5, lastUpdated: '2024-01-15', lastMoodDate: '2024-01-15', points: 100 }],
     currentUser: { id: 1, name: 'John Doe' },
     selectedItems: new Set(),
-    currentTab: 'stock-history' as const,
+    currentTab: 'analytics' as const,
     isAdmin: true, // NEW: Mock admin state
     
     // Mock functions

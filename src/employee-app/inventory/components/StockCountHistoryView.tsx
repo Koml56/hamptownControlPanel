@@ -12,7 +12,10 @@ import {
   AlertTriangle,
   Search,
   FileText,
-  Eye
+  Eye,
+  ArrowUp,
+  ArrowDown,
+  Minus
 } from 'lucide-react';
 import { useInventory } from '../InventoryContext';
 import { getStockStatus } from '../stockUtils';
@@ -52,7 +55,7 @@ const StockCountHistoryView: React.FC = () => {
   const [frequencyFilter, setFrequencyFilter] = useState<InventoryFrequency | 'all'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [comparisonDate, setComparisonDate] = useState<string | null>(null);
-  const [showComparison, setShowComparison] = useState(false);
+  const [showComparison, setShowComparison] = useState(true); // Default to expanded
 
   // Helper function to format date for display
   const formatDisplayDate = (dateStr: string) => {
@@ -63,6 +66,30 @@ const StockCountHistoryView: React.FC = () => {
       month: 'long', 
       day: 'numeric' 
     });
+  };
+
+  // Helper functions to get comparison dates
+  const getLastWeekDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    date.setDate(date.getDate() - 7);
+    return date.toISOString().split('T')[0];
+  };
+
+  const getLastMonthDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    date.setMonth(date.getMonth() - 1);
+    return date.toISOString().split('T')[0];
+  };
+
+  // Check if comparison dates exist in available data
+  const getAvailableComparisonDates = () => {
+    const lastWeek = getLastWeekDate(selectedDate);
+    const lastMonth = getLastMonthDate(selectedDate);
+    
+    return {
+      lastWeek: availableDates.includes(lastWeek) ? lastWeek : null,
+      lastMonth: availableDates.includes(lastMonth) ? lastMonth : null
+    };
   };
 
   // Get available dates from both snapshot types
@@ -291,30 +318,99 @@ const StockCountHistoryView: React.FC = () => {
     return { total, outOfStock, critical, low, ok, totalValue };
   }, [filteredData]);
 
+  // Calculate comparison data
+  const comparisonData = useMemo(() => {
+    if (!comparisonDate || !showComparison) return null;
+    
+    // Get comparison snapshot (prefer daily snapshots)
+    const comparisonDailySnapshot = dailyInventorySnapshots.find(s => s.date === comparisonDate);
+    let comparisonItems: HistoricalItemData[] = [];
+    
+    if (comparisonDailySnapshot) {
+      comparisonItems = Object.entries(comparisonDailySnapshot.items).map(([itemId, item]) => ({
+        itemId,
+        itemName: item.name,
+        category: item.category,
+        frequency: item.frequency,
+        stockLevel: item.currentStock,
+        unit: item.unit,
+        unitCost: item.unitCost,
+        totalValue: item.totalValue,
+        stockStatus: getStockStatus(item.currentStock, item.minimumLevel),
+        minLevel: item.minimumLevel,
+        optimalLevel: item.optimalLevel || item.minimumLevel * 2,
+        lastCountDate: item.lastCountDate,
+        countedBy: item.countedBy
+      }));
+    }
+    
+    // Calculate differences and analytics
+    const comparisons = filteredData.map(currentItem => {
+      const comparisonItem = comparisonItems.find(comp => comp.itemName === currentItem.itemName);
+      
+      if (!comparisonItem) {
+        return {
+          ...currentItem,
+          comparison: null,
+          stockChange: 0,
+          valueChange: 0,
+          statusChange: 'same' as const
+        };
+      }
+      
+      const stockChange = currentItem.stockLevel - comparisonItem.stockLevel;
+      const valueChange = currentItem.totalValue - comparisonItem.totalValue;
+      const statusChange = currentItem.stockStatus !== comparisonItem.stockStatus ? 'changed' : 'same';
+      
+      return {
+        ...currentItem,
+        comparison: comparisonItem,
+        stockChange,
+        valueChange,
+        statusChange
+      };
+    });
+    
+    const summaryChanges = {
+      totalValueChange: summaryStats.totalValue - comparisonItems.reduce((sum, item) => sum + item.totalValue, 0),
+      stockChanges: {
+        increased: comparisons.filter(c => c.stockChange > 0).length,
+        decreased: comparisons.filter(c => c.stockChange < 0).length,
+        unchanged: comparisons.filter(c => c.stockChange === 0).length
+      }
+    };
+    
+    return { comparisons, summaryChanges, comparisonDate };
+  }, [filteredData, comparisonDate, showComparison, dailyInventorySnapshots, summaryStats.totalValue]);
+
   // Handle date change
   const handleDateChange = useCallback((date: string) => {
     setSelectedDate(date);
-    // Reset comparison when changing main date
+    // Keep comparison enabled but reset comparison date
     if (showComparison) {
       setComparisonDate(null);
-      setShowComparison(false);
     }
   }, [showComparison]);
 
   // Handle comparison toggle
   const handleComparisonToggle = useCallback(() => {
-    if (showComparison) {
-      setComparisonDate(null);
-      setShowComparison(false);
-    } else {
-      setShowComparison(true);
-      // Set comparison to previous day by default
-      const prevDate = new Date(selectedDate);
-      prevDate.setDate(prevDate.getDate() - 1);
-      const prevDateStr = prevDate.toISOString().split('T')[0];
-      if (availableDates.includes(prevDateStr)) {
-        setComparisonDate(prevDateStr);
+    setShowComparison(!showComparison);
+    if (!showComparison) {
+      // When enabling comparison, try to set to last week if available
+      const lastWeek = getLastWeekDate(selectedDate);
+      if (availableDates.includes(lastWeek)) {
+        setComparisonDate(lastWeek);
+      } else {
+        // Fallback to previous day
+        const prevDate = new Date(selectedDate);
+        prevDate.setDate(prevDate.getDate() - 1);
+        const prevDateStr = prevDate.toISOString().split('T')[0];
+        if (availableDates.includes(prevDateStr)) {
+          setComparisonDate(prevDateStr);
+        }
       }
+    } else {
+      setComparisonDate(null);
     }
   }, [showComparison, selectedDate, availableDates]);
 
@@ -518,15 +614,62 @@ const StockCountHistoryView: React.FC = () => {
         {/* Comparison Date Selection */}
         {showComparison && (
           <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-            <label className="block text-sm font-medium text-blue-800 mb-2">
+            <label className="block text-sm font-medium text-blue-800 mb-3">
               Compare with Date:
             </label>
+            
+            {/* Quick Comparison Buttons */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
+              {(() => {
+                const comparisonDates = getAvailableComparisonDates();
+                return (
+                  <>
+                    {comparisonDates.lastWeek && (
+                      <button
+                        onClick={() => setComparisonDate(comparisonDates.lastWeek)}
+                        className={`px-3 py-2 rounded-lg border text-sm transition-colors ${
+                          comparisonDate === comparisonDates.lastWeek
+                            ? 'bg-blue-600 text-white border-blue-600' 
+                            : 'bg-white text-blue-700 border-blue-300 hover:bg-blue-50'
+                        }`}
+                      >
+                        Last Week
+                      </button>
+                    )}
+                    {comparisonDates.lastMonth && (
+                      <button
+                        onClick={() => setComparisonDate(comparisonDates.lastMonth)}
+                        className={`px-3 py-2 rounded-lg border text-sm transition-colors ${
+                          comparisonDate === comparisonDates.lastMonth
+                            ? 'bg-blue-600 text-white border-blue-600' 
+                            : 'bg-white text-blue-700 border-blue-300 hover:bg-blue-50'
+                        }`}
+                      >
+                        Last Month
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setComparisonDate(null)}
+                      className={`px-3 py-2 rounded-lg border text-sm transition-colors ${
+                        comparisonDate === null
+                          ? 'bg-gray-600 text-white border-gray-600' 
+                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      Clear
+                    </button>
+                  </>
+                );
+              })()}
+            </div>
+            
+            {/* Custom Date Selection */}
             <select
               value={comparisonDate || ''}
               onChange={(e) => setComparisonDate(e.target.value || null)}
-              className="px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              <option value="">Select comparison date...</option>
+              <option value="">Select custom comparison date...</option>
               {availableDates.filter(date => date !== selectedDate).map(date => (
                 <option key={date} value={date}>
                   {formatDisplayDate(date)}
@@ -630,6 +773,148 @@ const StockCountHistoryView: React.FC = () => {
         </div>
       </div>
 
+      {/* Comparison Analytics */}
+      {comparisonData && (
+        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+              <BarChart3 className="w-5 h-5 mr-2 text-purple-600" />
+              Comparison with {formatDisplayDate(comparisonData.comparisonDate)}
+            </h3>
+          </div>
+          
+          <div className="p-6">
+            {/* Summary Comparison */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+              <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-blue-700">Total Value Change</p>
+                    <p className={`text-2xl font-bold flex items-center ${
+                      comparisonData.summaryChanges.totalValueChange >= 0 ? 'text-green-600' : 'text-red-600'
+                    }`}>
+                      {comparisonData.summaryChanges.totalValueChange >= 0 ? (
+                        <ArrowUp className="w-5 h-5 mr-1" />
+                      ) : (
+                        <ArrowDown className="w-5 h-5 mr-1" />
+                      )}
+                      ${Math.abs(comparisonData.summaryChanges.totalValueChange).toFixed(2)}
+                    </p>
+                  </div>
+                  <TrendingUp className={`w-8 h-8 ${
+                    comparisonData.summaryChanges.totalValueChange >= 0 ? 'text-green-500' : 'text-red-500'
+                  }`} />
+                </div>
+              </div>
+              
+              <div className="bg-gradient-to-r from-green-50 to-green-100 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-green-700">Items Increased</p>
+                    <p className="text-2xl font-bold text-green-600">
+                      {comparisonData.summaryChanges.stockChanges.increased}
+                    </p>
+                  </div>
+                  <ArrowUp className="w-8 h-8 text-green-500" />
+                </div>
+              </div>
+              
+              <div className="bg-gradient-to-r from-red-50 to-red-100 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-red-700">Items Decreased</p>
+                    <p className="text-2xl font-bold text-red-600">
+                      {comparisonData.summaryChanges.stockChanges.decreased}
+                    </p>
+                  </div>
+                  <ArrowDown className="w-8 h-8 text-red-500" />
+                </div>
+              </div>
+            </div>
+            
+            {/* Usage Pattern Analysis */}
+            <div className="bg-gray-50 rounded-lg p-4 mb-6">
+              <h4 className="text-md font-semibold text-gray-800 mb-3">Usage Patterns & Order Recommendations</h4>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div>
+                  <h5 className="text-sm font-medium text-red-700 mb-2">High Usage Items (Order More)</h5>
+                  <div className="space-y-2 max-h-32 overflow-y-auto">
+                    {comparisonData.comparisons
+                      .filter(item => item.stockChange < -item.minLevel * 0.5)
+                      .slice(0, 5)
+                      .map(item => (
+                        <div key={item.itemId} className="flex justify-between text-sm bg-white p-2 rounded">
+                          <span className="font-medium">{item.itemName}</span>
+                          <span className="text-red-600 flex items-center">
+                            <ArrowDown className="w-3 h-3 mr-1" />
+                            {Math.abs(item.stockChange)} {item.unit}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+                
+                <div>
+                  <h5 className="text-sm font-medium text-green-700 mb-2">Low Usage Items (Order Less)</h5>
+                  <div className="space-y-2 max-h-32 overflow-y-auto">
+                    {comparisonData.comparisons
+                      .filter(item => item.stockChange > 0 && item.stockLevel > item.optimalLevel)
+                      .slice(0, 5)
+                      .map(item => (
+                        <div key={item.itemId} className="flex justify-between text-sm bg-white p-2 rounded">
+                          <span className="font-medium">{item.itemName}</span>
+                          <span className="text-green-600 flex items-center">
+                            <ArrowUp className="w-3 h-3 mr-1" />
+                            {item.stockChange} {item.unit}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Cost Analysis Graph */}
+            <div className="bg-gray-50 rounded-lg p-4">
+              <h4 className="text-md font-semibold text-gray-800 mb-3">Cost Breakdown by Category</h4>
+              <div className="space-y-3">
+                {['daily', 'weekly', 'monthly'].map(frequency => {
+                  const categoryItems = comparisonData.comparisons.filter(item => item.frequency === frequency);
+                  const totalValue = categoryItems.reduce((sum, item) => sum + item.totalValue, 0);
+                  const maxValue = Math.max(...['daily', 'weekly', 'monthly'].map(f => 
+                    comparisonData.comparisons.filter(i => i.frequency === f).reduce((s, i) => s + i.totalValue, 0)
+                  ));
+                  const widthPercent = maxValue > 0 ? (totalValue / maxValue) * 100 : 0;
+                  
+                  return (
+                    <div key={frequency} className="flex items-center space-x-3">
+                      <div className="w-16 text-sm font-medium text-gray-700 capitalize">
+                        {frequency}
+                      </div>
+                      <div className="flex-1 bg-gray-200 rounded-full h-6 relative">
+                        <div 
+                          className={`h-6 rounded-full ${
+                            frequency === 'daily' ? 'bg-blue-500' :
+                            frequency === 'weekly' ? 'bg-green-500' : 'bg-purple-500'
+                          }`}
+                          style={{ width: `${widthPercent}%` }}
+                        />
+                        <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-white">
+                          ${totalValue.toFixed(0)}
+                        </span>
+                      </div>
+                      <div className="w-12 text-sm text-gray-600">
+                        {categoryItems.length}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Historical Data Table */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200">
@@ -638,12 +923,12 @@ const StockCountHistoryView: React.FC = () => {
             Inventory Snapshot for {formatDisplayDate(selectedDate)}
             {hasHistoricalData && (
               <span className="ml-2 px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
-                Historical Data
+                Historical Data (Expanded)
               </span>
             )}
             {isShowingLiveData && (
               <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                Live Data
+                Live Data (Expanded)
               </span>
             )}
             {!hasHistoricalData && !isShowingLiveData && (
@@ -652,6 +937,9 @@ const StockCountHistoryView: React.FC = () => {
               </span>
             )}
           </h3>
+          <p className="text-sm text-gray-600 mt-1">
+            Historical data sections are expanded by default for comprehensive analytics
+          </p>
         </div>
 
         <div className="overflow-x-auto">
@@ -670,6 +958,11 @@ const StockCountHistoryView: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Stock Level
                 </th>
+                {comparisonData && (
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Change
+                  </th>
+                )}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
@@ -682,56 +975,76 @@ const StockCountHistoryView: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredData.map((item) => (
-                <tr key={item.itemId} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">{item.itemName}</div>
-                      <div className="text-sm text-gray-500">Min: {item.minLevel} {item.unit}</div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {item.category}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      item.frequency === 'daily' ? 'bg-blue-100 text-blue-800' :
-                      item.frequency === 'weekly' ? 'bg-green-100 text-green-800' :
-                      'bg-purple-100 text-purple-800'
-                    }`}>
-                      {item.frequency}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {item.stockLevel} {item.unit}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      item.stockStatus === 'out' ? 'bg-red-100 text-red-800' :
-                      item.stockStatus === 'critical' ? 'bg-orange-100 text-orange-800' :
-                      item.stockStatus === 'low' ? 'bg-yellow-100 text-yellow-800' :
-                      item.stockStatus === 'ok' ? 'bg-green-100 text-green-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
-                      {item.stockStatus === 'out' ? 'Out of Stock' :
-                       item.stockStatus === 'critical' ? 'Critical' :
-                       item.stockStatus === 'low' ? 'Low' : 
-                       item.stockStatus === 'ok' ? 'Good' : 'Unknown'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    ${item.totalValue.toFixed(2)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(item.lastCountDate).toLocaleDateString()}
-                  </td>
-                </tr>
-              ))}
+              {(comparisonData ? comparisonData.comparisons : filteredData).map((item) => {
+                const comparisonItem = comparisonData ? item as any : null; // Type assertion for comparison data
+                return (
+                  <tr key={item.itemId} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">{item.itemName}</div>
+                        <div className="text-sm text-gray-500">Min: {item.minLevel} {item.unit}</div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {item.category}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        item.frequency === 'daily' ? 'bg-blue-100 text-blue-800' :
+                        item.frequency === 'weekly' ? 'bg-green-100 text-green-800' :
+                        'bg-purple-100 text-purple-800'
+                      }`}>
+                        {item.frequency}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {item.stockLevel} {item.unit}
+                    </td>
+                    {comparisonData && comparisonItem && typeof comparisonItem.stockChange === 'number' && (
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <div className={`flex items-center ${
+                          comparisonItem.stockChange > 0 ? 'text-green-600' :
+                          comparisonItem.stockChange < 0 ? 'text-red-600' : 'text-gray-500'
+                        }`}>
+                          {comparisonItem.stockChange > 0 ? (
+                            <ArrowUp className="w-4 h-4 mr-1" />
+                          ) : comparisonItem.stockChange < 0 ? (
+                            <ArrowDown className="w-4 h-4 mr-1" />
+                          ) : (
+                            <Minus className="w-4 h-4 mr-1" />
+                          )}
+                          {Math.abs(comparisonItem.stockChange)} {item.unit}
+                        </div>
+                      </td>
+                    )}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        item.stockStatus === 'out' ? 'bg-red-100 text-red-800' :
+                        item.stockStatus === 'critical' ? 'bg-orange-100 text-orange-800' :
+                        item.stockStatus === 'low' ? 'bg-yellow-100 text-yellow-800' :
+                        item.stockStatus === 'ok' ? 'bg-green-100 text-green-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {item.stockStatus === 'out' ? 'Out of Stock' :
+                         item.stockStatus === 'critical' ? 'Critical' :
+                         item.stockStatus === 'low' ? 'Low' : 
+                         item.stockStatus === 'ok' ? 'Good' : 'Unknown'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      ${item.totalValue.toFixed(2)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {new Date(item.lastCountDate).toLocaleDateString()}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
 
-        {filteredData.length === 0 && (
+        {(comparisonData ? comparisonData.comparisons : filteredData).length === 0 && (
           <div className="px-6 py-8 text-center">
             {!selectedSnapshot && !isShowingLiveData ? (
               // No historical snapshot available for past dates - show historical data preservation message

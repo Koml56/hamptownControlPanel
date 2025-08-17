@@ -1,11 +1,11 @@
 // src/employee-app/inventory/components/TabNavigation.tsx
 import React from 'react';
-import { Flame, Calendar, Package, Database, BarChart3, AlertTriangle, Clock, Lock } from 'lucide-react';
+import { Flame, Calendar, Package, Database, BarChart3, AlertTriangle, Lock } from 'lucide-react';
 import { useInventory } from '../InventoryContext';
 import { getOutOfStockItems } from '../consumptionAnalytics';
 
 const TabNavigation: React.FC = () => {
-  const { currentTab, switchTab, dailyItems, weeklyItems, monthlyItems, databaseItems, stockCountSnapshots, dailyInventorySnapshots, activityLog, isAdmin } = useInventory();
+  const { currentTab, switchTab, dailyItems, weeklyItems, monthlyItems, databaseItems, stockCountSnapshots, isAdmin } = useInventory();
 
   // Calculate out of stock count
   const outOfStockCount = React.useMemo(() => {
@@ -13,23 +13,9 @@ const TabNavigation: React.FC = () => {
     return outOfStockItems.length;
   }, [dailyItems, weeklyItems, monthlyItems]);
 
-  // Calculate analytics count - number of today's activity log entries or daily snapshots available
-  const analyticsCount = React.useMemo(() => {
-    // Try to count today's activity log entries first
-    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
-    const todayEntries = (activityLog || []).filter(entry => {
-      if (!entry?.timestamp) return false;
-      const entryDate = new Date(entry.timestamp).toISOString().split('T')[0];
-      return entryDate === today;
-    });
-    
-    // If we have today's entries, return that count, otherwise return snapshot count
-    return todayEntries.length > 0 ? todayEntries.length : (dailyInventorySnapshots || []).length;
-  }, [activityLog, dailyInventorySnapshots]);
-
   // Check if tab requires admin access
   const isAdminTab = (tabId: string) => {
-    return ['database', 'reports', 'stock-history'].includes(tabId);
+    return ['database', 'analytics'].includes(tabId);
   };
 
   // Handle tab click - now simply switches tabs since admin state comes from main app
@@ -74,18 +60,11 @@ const TabNavigation: React.FC = () => {
       color: 'blue'
     },
     {
-      id: 'reports' as const,
+      id: 'analytics' as const,
       label: 'Analytics',
       icon: BarChart3,
-      count: analyticsCount,
-      color: 'purple'
-    },
-    {
-      id: 'stock-history' as const,
-      label: 'Stock History',
-      icon: Clock,
       count: stockCountSnapshots.length,
-      color: 'indigo'
+      color: 'purple'
     }
   ];
 
