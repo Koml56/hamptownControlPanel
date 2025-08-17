@@ -109,7 +109,10 @@ const ItemCard: React.FC<ItemCardProps> = ({
       {showQuickActions && (
         <div className="flex gap-2 card-buttons">
           <button
-            onClick={() => onUpdateCount(item.id)}
+            onClick={() => {
+              console.log('Button clicked!', item.id, 'Update Count');
+              onUpdateCount(item.id);
+            }}
             className="flex-1 flex items-center justify-center px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm"
             style={{ touchAction: 'manipulation' }}
           >
@@ -117,7 +120,10 @@ const ItemCard: React.FC<ItemCardProps> = ({
             Update Count
           </button>
           <button
-            onClick={() => onReportWaste(item.id)}
+            onClick={() => {
+              console.log('Button clicked!', item.id, 'Report Waste');
+              onReportWaste(item.id);
+            }}
             className="flex-1 flex items-center justify-center px-3 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors text-sm"
             style={{ touchAction: 'manipulation' }}
           >

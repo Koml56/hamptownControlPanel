@@ -63,8 +63,7 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
     
     // Don't start drag if touching a button or interactive element
     if (isInteractiveElement(target)) {
-      // Stop propagation to ensure button clicks work properly
-      e.stopPropagation();
+      // Don't call stopPropagation() - let button handle this normally
       return;
     }
 
@@ -76,7 +75,7 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
     const touch = e.touches[0];
     touchStartRef.current = { x: touch.clientX, y: touch.clientY };
     
-    // Start the hold timer
+    // Start the hold timer - don't call preventDefault() immediately
     touchTimeoutRef.current = setTimeout(() => {
       setTouchHoldActive(true);
       // Prevent scrolling once hold is activated
@@ -97,9 +96,8 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
       return;
     }
 
-    // Don't handle if touching interactive elements
+    // Don't handle if touching interactive elements - let them handle it normally
     if (isInteractiveElement(e.target)) {
-      e.stopPropagation();
       return;
     }
 
@@ -138,7 +136,7 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
       }
     }
 
-    // If touch hold is active, prevent default to block scrolling
+    // Only prevent default during actual drag movement, not on initial touch
     if (touchHoldActive) {
       e.preventDefault();
       e.stopPropagation();
@@ -146,9 +144,8 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
   }, [touchHoldActive, isInteractiveElement, listeners]);
 
   const handleTouchEnd = useCallback((e: React.TouchEvent) => {
-    // Don't handle if touching interactive elements
+    // Don't handle if touching interactive elements - let them handle it normally
     if (isInteractiveElement(e.target)) {
-      e.stopPropagation();
       return;
     }
 
