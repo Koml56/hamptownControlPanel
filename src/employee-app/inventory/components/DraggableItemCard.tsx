@@ -41,13 +41,7 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
     // Only handle single touch
     if (e.touches.length !== 1) return;
 
-    const target = e.target as HTMLElement;
-    
-    // Don't start drag if touching a button or interactive element
-    if (target.closest('button') || target.closest('[role="button"]') || target.closest('input') || target.closest('select')) {
-      return;
-    }
-
+    // Only allow drag from the title element (no need to check for buttons anymore since listeners are only on title)
     const touch = e.touches[0];
     touchStartRef.current = { x: touch.clientX, y: touch.clientY };
     
@@ -135,7 +129,6 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
       ref={setNodeRef}
       style={style}
       {...attributes}
-      {...customListeners}
     >
       <ItemCard
         item={item}
@@ -143,6 +136,7 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
         onReportWaste={onReportWaste}
         showQuickActions={showQuickActions}
         customCategories={customCategories}
+        dragListeners={customListeners}
       />
     </div>
   );
