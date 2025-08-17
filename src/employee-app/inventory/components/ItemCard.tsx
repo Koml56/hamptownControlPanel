@@ -11,6 +11,7 @@ interface ItemCardProps {
   onReportWaste: (itemId: number | string) => void;
   showQuickActions?: boolean;
   customCategories?: CustomCategory[];
+  dragListeners?: Record<string, any>;
 }
 
 const ItemCard: React.FC<ItemCardProps> = ({ 
@@ -18,7 +19,8 @@ const ItemCard: React.FC<ItemCardProps> = ({
   onUpdateCount, 
   onReportWaste, 
   showQuickActions = true,
-  customCategories = []
+  customCategories = [],
+  dragListeners
 }) => {
   const stockStatus = getStockStatus(item.currentStock, item.minLevel);
   const status = stockStatus; // This is now a string directly
@@ -65,7 +67,12 @@ const ItemCard: React.FC<ItemCardProps> = ({
         <div className="flex items-center">
           <span className="text-2xl mr-3">{getCategoryIcon(item.category, customCategories)}</span>
           <div>
-            <h4 className="font-semibold text-gray-800">{item.name}</h4>
+            <h4 
+              className="font-semibold text-gray-800 cursor-move select-none"
+              {...(dragListeners || {})}
+            >
+              {item.name}
+            </h4>
             <p className="text-sm text-gray-600 capitalize">{getCategoryNameOnly(item.category, customCategories)}</p>
           </div>
         </div>
