@@ -42,17 +42,31 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
   // Helper function to check if target is a button or interactive element
   const isInteractiveElement = useCallback((target: EventTarget | null): boolean => {
     if (!target || !(target instanceof HTMLElement)) return false;
-    return !!(
-      target.closest('button') || 
-      target.closest('[role="button"]') || 
-      target.closest('input') || 
-      target.closest('select') ||
-      target.closest('a') ||
-      target.closest('[tabindex]') ||
-      // Additional protection for elements inside buttons
-      target.closest('.card-buttons') ||
-      target.hasAttribute('onclick')
-    );
+    
+    // Find the closest button element
+    const closestButton = target.closest('button');
+    
+    // If we're not inside any button, allow dragging
+    if (!closestButton) {
+      return !!(
+        target.closest('[role="button"]') || 
+        target.closest('input') || 
+        target.closest('select') ||
+        target.closest('a') ||
+        target.closest('[tabindex]') ||
+        target.hasAttribute('onclick')
+      );
+    }
+    
+    // If we are inside a button, check if it's one of the action buttons within the card
+    // These should prevent dragging: "Update Count" and "Report Waste" buttons
+    const buttonText = closestButton.textContent?.trim() || '';
+    const isActionButton = buttonText.includes('Update Count') || 
+                          buttonText.includes('Report Waste') ||
+                          !!closestButton.closest('.card-buttons');
+    
+    // Only prevent dragging for actual action buttons, not the card wrapper
+    return isActionButton;
   }, []);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
