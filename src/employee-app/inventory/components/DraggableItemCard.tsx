@@ -231,8 +231,6 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
     // Don't start drag if clicking on a button or interactive element
     if (isInteractiveElement(e.target)) {
       console.log('🔘 Interactive element detected, preventing pointer drag');
-      e.preventDefault();
-      e.stopPropagation();
       return;
     }
 
