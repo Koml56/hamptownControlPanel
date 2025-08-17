@@ -369,8 +369,8 @@ export const useFirebaseData = () => {
     }, 2000); // Increased debounce to reduce save frequency
   }, [debouncedSave, connectionStatus]);
 
-  // PERFORMANCE: Fast, non-blocking load with enhanced prep data handling
-  const loadFromFirebase = useCallback(async () => {
+  // PERFORMANCE: Fast, non-blocking load with enhanced prep data handling and retry logic
+  const loadFromFirebase = useCallback(async (retryCount: number = 0) => {
     if (isLoading) return;
 
     setIsLoading(true);
@@ -382,7 +382,7 @@ export const useFirebaseData = () => {
       // Load main data with timeout to prevent hanging
       const loadPromise = firebaseService.loadData();
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Load timeout')), 10000) // 10 second timeout
+        setTimeout(() => reject(new Error('Load timeout after 10 seconds')), 10000)
       );
 
       const data = await Promise.race([loadPromise, timeoutPromise]) as any;
@@ -460,7 +460,13 @@ export const useFirebaseData = () => {
       console.log('✅ Data loaded successfully');
 
     } catch (error) {
-      console.error('❌ Load failed:', error);
+      // Enhanced error logging to show meaningful details
+      console.error('❌ Load failed:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        name: error instanceof Error ? error.name : 'Error',
+        stack: error instanceof Error ? error.stack : undefined,
+        error: error
+      });
       setConnectionStatus('error');
 
       // Set defaults on error - but don't mark as initialized to prevent sync overwrite
@@ -474,6 +480,26 @@ export const useFirebaseData = () => {
         setPrepSelections({});
         setStoreItems(getDefaultStoreItems());
         // DON'T set isInitializedRef.current = true here to prevent sync overwrite
+      }
+
+      // Add retry logic for transient network errors
+      const maxRetries = 3;
+      const isRetriableError = error instanceof Error && 
+        (error.message.includes('timeout') || 
+         error.message.includes('fetch') ||
+         error.message.includes('network') ||
+         error.name === 'TypeError');
+
+      if (retryCount < maxRetries && isRetriableError) {
+        const delay = Math.min(1000 * Math.pow(2, retryCount), 5000); // Exponential backoff, max 5s
+        console.log(`🔄 Retrying load in ${delay}ms (attempt ${retryCount + 1}/${maxRetries})`);
+        
+        setTimeout(() => {
+          loadFromFirebase(retryCount + 1);
+        }, delay);
+        return; // Don't set loading to false yet
+      } else if (retryCount >= maxRetries) {
+        console.error(`❌ Load failed after ${maxRetries} retries, giving up`);
       }
     } finally {
       setIsLoading(false);

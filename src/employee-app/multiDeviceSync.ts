@@ -232,11 +232,29 @@ export class MultiDeviceSyncService {
               }
             }).catch(console.warn);
           }, 1000); // Debounce device count updates
+        } else {
+          console.warn(`⚠️ Presence update failed: HTTP ${response.status} ${response.statusText}`);
         }
-      }).catch(console.warn);
+      }).catch(error => {
+        // Enhanced error logging for presence updates
+        console.warn('⚠️ Presence update failed:', {
+          message: error instanceof Error ? error.message : 'Unknown error',
+          name: error instanceof Error ? error.name : 'Error',
+          presenceRef: this.presenceRef,
+          baseUrl: this.baseUrl,
+          error: error
+        });
+      });
 
     } catch (error) {
-      console.warn('⚠️ Presence update failed:', error);
+      // Enhanced error logging for presence updates
+      console.warn('⚠️ Presence update failed:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        name: error instanceof Error ? error.name : 'Error',
+        presenceRef: this.presenceRef,
+        baseUrl: this.baseUrl,
+        error: error
+      });
     }
   }
 
@@ -244,11 +262,23 @@ export class MultiDeviceSyncService {
 
   private async removePresence(): Promise<void> {
     try {
-      await fetch(`${this.baseUrl}/${this.presenceRef}.json`, {
+      const response = await fetch(`${this.baseUrl}/${this.presenceRef}.json`, {
         method: 'DELETE'
       });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
     } catch (error) {
-      console.warn('⚠️ Failed to remove presence:', error);
+      // Enhanced error logging to show meaningful details
+      console.warn('⚠️ Failed to remove presence:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        name: error instanceof Error ? error.name : 'Error',
+        stack: error instanceof Error ? error.stack : undefined,
+        presenceRef: this.presenceRef,
+        baseUrl: this.baseUrl,
+        error: error
+      });
     }
   }
 
