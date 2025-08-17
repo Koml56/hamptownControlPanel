@@ -461,7 +461,15 @@ export class FirebaseService {
     console.log('🔥 Loading data from Firebase...');
 
     try {
-      // FIXED: Load ALL fields including prep and store data
+      // Helper function to check fetch response and provide context
+      const checkResponse = async (response: Response, resource: string) => {
+        if (!response.ok) {
+          throw new Error(`Failed to fetch ${resource}: HTTP ${response.status} ${response.statusText}`);
+        }
+        return response;
+      };
+
+      // FIXED: Load ALL fields including prep and store data with error checking
       const [
         employeesRes,
         tasksRes,
@@ -481,23 +489,23 @@ export class FirebaseService {
         inventoryCustomCategoriesRes,
         stockCountSnapshotsRes
       ] = await Promise.all([
-        fetch(`${this.baseUrl}/employees.json`),
-        fetch(`${this.baseUrl}/tasks.json`),
-        fetch(`${this.baseUrl}/dailyData.json`),
-        fetch(`${this.baseUrl}/completedTasks.json`),
-        fetch(`${this.baseUrl}/taskAssignments.json`),
-        fetch(`${this.baseUrl}/customRoles.json`),
-        fetch(`${this.baseUrl}/prepItems.json`),
-        fetch(`${this.baseUrl}/scheduledPreps.json`),
-        fetch(`${this.baseUrl}/prepSelections.json`),
-        fetch(`${this.baseUrl}/storeItems.json`),
-        fetch(`${this.baseUrl}/inventoryDailyItems.json`),
-        fetch(`${this.baseUrl}/inventoryWeeklyItems.json`),
-        fetch(`${this.baseUrl}/inventoryMonthlyItems.json`),
-        fetch(`${this.baseUrl}/inventoryDatabaseItems.json`),
-        fetch(`${this.baseUrl}/inventoryActivityLog.json`),
-        fetch(`${this.baseUrl}/inventoryCustomCategories.json`),
-        fetch(`${this.baseUrl}/stockCountSnapshots.json`)
+        fetch(`${this.baseUrl}/employees.json`).then(r => checkResponse(r, 'employees')),
+        fetch(`${this.baseUrl}/tasks.json`).then(r => checkResponse(r, 'tasks')),
+        fetch(`${this.baseUrl}/dailyData.json`).then(r => checkResponse(r, 'dailyData')),
+        fetch(`${this.baseUrl}/completedTasks.json`).then(r => checkResponse(r, 'completedTasks')),
+        fetch(`${this.baseUrl}/taskAssignments.json`).then(r => checkResponse(r, 'taskAssignments')),
+        fetch(`${this.baseUrl}/customRoles.json`).then(r => checkResponse(r, 'customRoles')),
+        fetch(`${this.baseUrl}/prepItems.json`).then(r => checkResponse(r, 'prepItems')),
+        fetch(`${this.baseUrl}/scheduledPreps.json`).then(r => checkResponse(r, 'scheduledPreps')),
+        fetch(`${this.baseUrl}/prepSelections.json`).then(r => checkResponse(r, 'prepSelections')),
+        fetch(`${this.baseUrl}/storeItems.json`).then(r => checkResponse(r, 'storeItems')),
+        fetch(`${this.baseUrl}/inventoryDailyItems.json`).then(r => checkResponse(r, 'inventoryDailyItems')),
+        fetch(`${this.baseUrl}/inventoryWeeklyItems.json`).then(r => checkResponse(r, 'inventoryWeeklyItems')),
+        fetch(`${this.baseUrl}/inventoryMonthlyItems.json`).then(r => checkResponse(r, 'inventoryMonthlyItems')),
+        fetch(`${this.baseUrl}/inventoryDatabaseItems.json`).then(r => checkResponse(r, 'inventoryDatabaseItems')),
+        fetch(`${this.baseUrl}/inventoryActivityLog.json`).then(r => checkResponse(r, 'inventoryActivityLog')),
+        fetch(`${this.baseUrl}/inventoryCustomCategories.json`).then(r => checkResponse(r, 'inventoryCustomCategories')),
+        fetch(`${this.baseUrl}/stockCountSnapshots.json`).then(r => checkResponse(r, 'stockCountSnapshots'))
       ]);
       
       const employeesData = await employeesRes.json();
@@ -564,7 +572,23 @@ export class FirebaseService {
       };
       
     } catch (error) {
-      console.error('❌ Firebase connection failed:', error);
+      // Enhanced error logging with detailed Firebase connection info
+      console.error('❌ Firebase connection failed:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        name: error instanceof Error ? error.name : 'Error',
+        stack: error instanceof Error ? error.stack : undefined,
+        baseUrl: this.baseUrl,
+        timestamp: new Date().toISOString(),
+        error: error
+      });
+      
+      // Check if it's a network error or specific Firebase error
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        console.error('🌐 Network connectivity issue detected - check internet connection');
+      } else if (error instanceof Error && error.message.includes('timeout')) {
+        console.error('⏱️ Request timeout - Firebase may be slow or unreachable');
+      }
+      
       throw error;
     }
   }
