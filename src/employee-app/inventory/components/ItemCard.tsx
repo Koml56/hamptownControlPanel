@@ -110,6 +110,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
         <div className="flex gap-2 card-buttons">
           <button
             onClick={() => {
+              console.log('🔘 Button onClick called!', item.id, 'Update Count');
               console.log('Button clicked!', item.id, 'Update Count');
               onUpdateCount(item.id);
             }}
@@ -121,6 +122,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
           </button>
           <button
             onClick={() => {
+              console.log('🔘 Button onClick called!', item.id, 'Report Waste');
               console.log('Button clicked!', item.id, 'Report Waste');
               onReportWaste(item.id);
             }}

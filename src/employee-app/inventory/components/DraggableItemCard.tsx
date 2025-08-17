@@ -169,12 +169,56 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
     }
   }, [isInteractiveElement, listeners]);
 
-  // Create custom listeners with conditional touch handling to prevent button interference
+  // Mouse event handlers to prevent drag on button clicks
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    console.log('🖱️ Custom mouse down handler called', e.target, isInteractiveElement(e.target));
+    
+    // Don't start drag if clicking on a button or interactive element
+    if (isInteractiveElement(e.target)) {
+      console.log('🔘 Interactive element detected, preventing drag');
+      return;
+    }
+
+    console.log('📦 Non-interactive element, calling dnd-kit handler');
+    // Call dnd-kit handler
+    if (listeners?.onMouseDown) {
+      listeners.onMouseDown(e);
+    }
+  }, [isInteractiveElement, listeners]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    // Don't handle if moving over interactive elements
+    if (isInteractiveElement(e.target)) {
+      return;
+    }
+
+    // Call dnd-kit handler
+    if (listeners?.onMouseMove) {
+      listeners.onMouseMove(e);
+    }
+  }, [isInteractiveElement, listeners]);
+
+  const handleMouseUp = useCallback((e: React.MouseEvent) => {
+    // Don't handle if releasing over interactive elements
+    if (isInteractiveElement(e.target)) {
+      return;
+    }
+
+    // Call dnd-kit handler
+    if (listeners?.onMouseUp) {
+      listeners.onMouseUp(e);
+    }
+  }, [isInteractiveElement, listeners]);
+
+  // Create custom listeners with conditional handling to prevent button interference
   const customListeners = {
     ...listeners,
     onTouchStart: handleTouchStart,
     onTouchMove: handleTouchMove,
     onTouchEnd: handleTouchEnd,
+    onMouseDown: handleMouseDown,
+    onMouseMove: handleMouseMove,
+    onMouseUp: handleMouseUp,
   };
 
   const style = {
