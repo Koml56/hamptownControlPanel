@@ -8,7 +8,6 @@ import DatabaseView from './components/DatabaseView';
 import DailyView from './components/DailyView';
 import WeeklyView from './components/WeeklyView';
 import MonthlyView from './components/MonthlyView';
-import ReportsViewEnhanced from './components/ReportsViewEnhanced';
 import OutOfStockView from './components/OutOfStockView';
 import TabNavigation from './components/TabNavigation';
 import ToastContainer from './components/ToastContainer';
@@ -120,9 +119,7 @@ const InventoryContent: React.FC = () => {
         return <OutOfStockView />;
       case 'database':
         return <DatabaseView />;
-      case 'reports':
-        return <ReportsViewEnhanced />;
-      case 'stock-history':
+      case 'analytics':
         return <StockCountHistoryView />;
       default:
         return <DailyView />;
