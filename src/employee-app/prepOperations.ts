@@ -16,20 +16,20 @@ const DEVICE_ID = (() => {
 const opManager = new OperationManager(DEVICE_ID);
 
 export function addPrepItemOperation(prepItems: PrepItem[], item: PrepItem): SyncOperation {
-  return opManager.createOperation('ADD_TASK', item, 'prepItems');
+  return opManager.createOperation('ADD_PREP_ITEM', item, 'prepItems');
 }
 
 export function updatePrepItemOperation(prepItems: PrepItem[], id: number, field: keyof PrepItem, value: any): SyncOperation {
   const oldItem = prepItems.find(i => i.id === id);
   if (!oldItem) throw new Error('PrepItem not found');
   const updatedItem = { ...oldItem, [field]: value };
-  return opManager.createOperation('ADD_TASK', updatedItem, 'prepItems'); // або UPDATE_PREP_ITEM
+  return opManager.createOperation('UPDATE_PREP_ITEM', updatedItem, 'prepItems');
 }
 
 export function deletePrepItemOperation(prepItems: PrepItem[], id: number): SyncOperation {
   const oldItem = prepItems.find(i => i.id === id);
   if (!oldItem) throw new Error('PrepItem not found');
-  return opManager.createOperation('DELETE_ITEM', oldItem, 'prepItems');
+  return opManager.createOperation('DELETE_PREP_ITEM', oldItem, 'prepItems');
 }
 
 export function applyPrepItemOperation(prepItems: PrepItem[], op: SyncOperation): PrepItem[] {

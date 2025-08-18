@@ -38,4 +38,77 @@ describe('OperationManager', () => {
     const rolledBack = opManagerA.rollbackOperations([op], initial);
     expect(rolledBack.tasks).toHaveLength(0);
   });
+
+  // PREP ITEM TESTS
+  it('should create and apply ADD_PREP_ITEM operation', () => {
+    const initial = { prepItems: [] };
+    const prepItem = { 
+      id: 1, 
+      name: 'Test Prep', 
+      category: 'Vegetables', 
+      estimatedTime: '30 min', 
+      isCustom: false, 
+      hasRecipe: false, 
+      frequency: 1, 
+      recipe: null 
+    };
+    const op = opManagerA.createOperation('ADD_PREP_ITEM', prepItem, 'prepItems');
+    const result = opManagerA.applyOperation(op, initial);
+    expect(result.prepItems).toHaveLength(1);
+    expect(result.prepItems[0]).toEqual(prepItem);
+  });
+
+  it('should create and apply UPDATE_PREP_ITEM operation', () => {
+    const prepItem = { 
+      id: 1, 
+      name: 'Test Prep', 
+      category: 'Vegetables', 
+      estimatedTime: '30 min', 
+      isCustom: false, 
+      hasRecipe: false, 
+      frequency: 1, 
+      recipe: null 
+    };
+    const initial = { prepItems: [prepItem] };
+    const updatedItem = { ...prepItem, name: 'Updated Prep', estimatedTime: '45 min' };
+    const op = opManagerA.createOperation('UPDATE_PREP_ITEM', updatedItem, 'prepItems');
+    const result = opManagerA.applyOperation(op, initial);
+    expect(result.prepItems).toHaveLength(1);
+    expect(result.prepItems[0].name).toBe('Updated Prep');
+    expect(result.prepItems[0].estimatedTime).toBe('45 min');
+  });
+
+  it('should create and apply DELETE_PREP_ITEM operation', () => {
+    const prepItem = { 
+      id: 1, 
+      name: 'Test Prep', 
+      category: 'Vegetables', 
+      estimatedTime: '30 min', 
+      isCustom: false, 
+      hasRecipe: false, 
+      frequency: 1, 
+      recipe: null 
+    };
+    const initial = { prepItems: [prepItem] };
+    const op = opManagerA.createOperation('DELETE_PREP_ITEM', prepItem, 'prepItems');
+    const result = opManagerA.applyOperation(op, initial);
+    expect(result.prepItems).toHaveLength(0);
+  });
+
+  it('should rollback ADD_PREP_ITEM operation', () => {
+    const prepItem = { 
+      id: 1, 
+      name: 'Test Prep', 
+      category: 'Vegetables', 
+      estimatedTime: '30 min', 
+      isCustom: false, 
+      hasRecipe: false, 
+      frequency: 1, 
+      recipe: null 
+    };
+    const initial = { prepItems: [prepItem] };
+    const op = opManagerA.createOperation('ADD_PREP_ITEM', prepItem, 'prepItems');
+    const rolledBack = opManagerA.rollbackOperations([op], initial);
+    expect(rolledBack.prepItems).toHaveLength(0);
+  });
 });
