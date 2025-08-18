@@ -69,7 +69,7 @@ const ReportsView: React.FC = () => {
     const data = getAnalyticsData(calculatedDateRange);
     
     // Provide default structure if data is undefined
-    return data || {
+    const defaultData = {
       storageGrowth: [],
       orderFrequency: [],
       wasteAnalysis: [],
@@ -80,6 +80,34 @@ const ReportsView: React.FC = () => {
         orderAccuracy: 0,
         stockoutFrequency: 0
       }
+    };
+
+    if (!data) return defaultData;
+
+    // Aggregate consumption trends by date for chart consumption
+    const aggregatedConsumptionTrends = data.consumptionTrends.reduce((acc: Record<string, {date: string, consumed: number, remaining: number}>, trend) => {
+      if (!trend || typeof trend !== 'object') return acc;
+      
+      const date = trend.date;
+      if (!date) return acc;
+
+      if (!acc[date]) {
+        acc[date] = {
+          date,
+          consumed: 0,
+          remaining: 0
+        };
+      }
+      
+      acc[date].consumed += trend.consumed || 0;
+      acc[date].remaining += trend.remaining || 0;
+      
+      return acc;
+    }, {});
+
+    return {
+      ...data,
+      consumptionTrends: Object.values(aggregatedConsumptionTrends).sort((a, b) => a.date.localeCompare(b.date))
     };
   }, [getAnalyticsData, calculatedDateRange]);
 
