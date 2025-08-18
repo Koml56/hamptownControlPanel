@@ -287,28 +287,14 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
         
       } else {
         console.error('❌ Failed to save prep completion to Firebase');
-        // FIXED: Don't revert immediately, wait a bit in case it's a temporary issue
-        console.log('⏳ Waiting before reverting state due to save failure...');
-        setTimeout(() => {
-          // Only revert if we're still in saving state
-          if (!isSaving) {
-            console.log('🔄 Reverting prep completion state due to save failure');
-            setScheduledPreps(() => scheduledPreps);
-          }
-        }, 2000);
+        // Revert the state change if save failed
+        setScheduledPreps(() => scheduledPreps);
       }
 
     } catch (error) {
       console.error('❌ Error toggling prep completion:', error);
-      // FIXED: Don't revert immediately, wait a bit in case it's a temporary issue
-      console.log('⏳ Waiting before reverting state due to error...');
-      setTimeout(() => {
-        // Only revert if we're still having issues
-        if (!isSaving) {
-          console.log('🔄 Reverting prep completion state due to error');
-          setScheduledPreps(() => scheduledPreps);
-        }
-      }, 2000);
+      // Revert the state change if there was an error
+      setScheduledPreps(() => scheduledPreps);
     } finally {
       setIsSaving(false);
     }
