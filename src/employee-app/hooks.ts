@@ -245,6 +245,12 @@ export const useFirebaseData = () => {
     }
   }, []);
 
+  // INSTANT SYNC: Immediate save function for critical operations (bypasses debouncing)
+  const quickSaveImmediate = useCallback(async (field: string, data: any): Promise<boolean> => {
+    console.log(`🚀 INSTANT SYNC: Immediate save for ${field}`);
+    return await firebaseService.quickSaveImmediate(field, data);
+  }, [firebaseService]);
+
   // PERFORMANCE: Non-blocking main save function - FIXED to include all fields
   const debouncedSave = useCallback(async () => {
     if (isSavingRef.current || connectionStatus === 'error') {
@@ -784,6 +790,7 @@ export const useFirebaseData = () => {
     loadFromFirebase,
     saveToFirebase,
     quickSave,
+    quickSaveImmediate,
 
     // Додаємо applyTaskOperation для застосування операцій до задач
     applyTaskSyncOperation

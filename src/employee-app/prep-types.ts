@@ -80,4 +80,5 @@ export interface PrepListPrototypeProps {
   setPrepSelections: (updater: (prev: PrepSelections) => PrepSelections) => void;
   // Firebase actions - FIXED: Changed return type from Promise<void> to Promise<boolean>
   quickSave: (field: string, data: any) => Promise<boolean>;
+  quickSaveImmediate: (field: string, data: any) => Promise<boolean>;
 }

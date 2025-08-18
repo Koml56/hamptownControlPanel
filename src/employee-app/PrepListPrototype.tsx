@@ -36,7 +36,8 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
   setPrepItems,
   setScheduledPreps,
   setPrepSelections,
-  quickSave
+  quickSave,
+  quickSaveImmediate
 }) => {
   // UI State
   const [activeView, setActiveView] = useState('today');
@@ -239,51 +240,34 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
       // Update state immediately for UI responsiveness
       setScheduledPreps(() => updatedScheduledPreps);
 
-      // CRITICAL: Save to Firebase immediately with detailed logging
-      console.log('🔥 Saving prep completion to Firebase...');
-      const saveSuccess = await quickSave('scheduledPreps', updatedScheduledPreps);
+      // CRITICAL: Save to Firebase immediately with detailed logging - INSTANT SYNC
+      console.log('🚀 INSTANT SYNC: Saving prep completion for instant multi-device sync...');
+      const saveSuccess = await quickSaveImmediate('scheduledPreps', updatedScheduledPreps);
 
       if (saveSuccess) {
-        console.log('✅ Prep completion saved successfully');
+        console.log('✅ Prep completion saved successfully - sync enabled for instant multi-device updates');
         
-        // ENHANCED: Wait longer before re-enabling sync to ensure save propagates
+        // INSTANT SYNC: No delay for multi-device sync - verification is optional and non-blocking
         setTimeout(async () => {
-          console.log('🔄 Save operation completed');
+          console.log('🔄 Background verification (non-blocking)');
           
-          // Verify what we actually saved
           try {
             const verifyResponse = await fetch('https://hamptown-panel-default-rtdb.firebaseio.com/scheduledPreps.json');
             const firebaseData = await verifyResponse.json();
             
             if (firebaseData) {
-              const firebaseTodayPreps = firebaseData.filter((prep: any) => prep.scheduledDate === todayStr);
-              const firebaseTodayCompleted = firebaseTodayPreps.filter((prep: any) => prep.completed === true);
               const firebaseUpdatedItem = firebaseData.find((prep: any) => prep.id === scheduledPrepId);
               
-              console.log('🔍 Firebase verification after save:', {
-                firebaseTotalCount: firebaseData.length,
-                firebaseTodayCount: firebaseTodayPreps.length,
-                firebaseTodayCompleted: firebaseTodayCompleted.length,
-                firebaseUpdatedItem: firebaseUpdatedItem ? {
-                  id: firebaseUpdatedItem.id,
-                  name: firebaseUpdatedItem.name,
-                  completed: firebaseUpdatedItem.completed,
-                  scheduledDate: firebaseUpdatedItem.scheduledDate
-                } : 'NOT FOUND'
-              });
-              
               if (!firebaseUpdatedItem || firebaseUpdatedItem.completed !== newCompletedStatus) {
-                console.error('❌ SAVE VERIFICATION FAILED! Item not found or completion status mismatch');
+                console.warn('⚠️ Background verification: Save status mismatch detected');
               } else {
-                console.log('✅ Save verification passed');
+                console.log('✅ Background verification: Save confirmed');
               }
-            } else {
-              console.error('❌ No data found in Firebase during verification');
             }
           } catch (error) {
-            console.warn('⚠️ Failed to verify save:', error);
+            console.log('ℹ️ Background verification skipped:', error instanceof Error ? error.message : String(error));
           }
-        }, 3000); // Wait 3 seconds before resuming sync
+        }, 500); // Quick background check only
         
       } else {
         console.error('❌ Failed to save prep completion to Firebase');
