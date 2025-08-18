@@ -12,9 +12,11 @@ import {
   EyeOff,
   Package,
   Activity,
-  Calendar
+  Calendar,
+  Search
 } from 'lucide-react';
 import { useInventory } from '../InventoryContext';
+import { getStockStatus } from '../stockUtils';
 import {
   StorageGrowthLineChart,
   OrderFrequencyBarChart,
@@ -35,7 +37,9 @@ const ReportsView: React.FC = () => {
     getAnalyticsData,
     compareWithPreviousPeriod,
     createSnapshot,
-    customCategories
+    customCategories,
+    stockCountSnapshots,
+    dailyInventorySnapshots
   } = useInventory();
   
   const [dateRange, setDateRange] = useState<'7days' | '30days' | '90days' | 'custom'>('30days');
@@ -46,6 +50,13 @@ const ReportsView: React.FC = () => {
   const [comparisonPeriod, setComparisonPeriod] = useState<'day' | 'week' | 'month'>('week');
   const [showComparison, setShowComparison] = useState(true);
   const [showSnapshotModule, setShowSnapshotModule] = useState(false);
+  
+  // Snapshot module state
+  const [snapshotSelectedDate, setSnapshotSelectedDate] = useState(() => {
+    const today = new Date();
+    return today.toISOString().split('T')[0];
+  });
+  const [snapshotSearchTerm, setSnapshotSearchTerm] = useState('');
 
   // Calculate date range
   const calculatedDateRange = useMemo((): DateRange => {
@@ -158,6 +169,159 @@ const ReportsView: React.FC = () => {
 
     return { totalValue, totalItems, stockLevels };
   }, [dailyItems, weeklyItems, monthlyItems]);
+
+  // Snapshot module logic - reused from StockCountHistoryView
+  const snapshotAvailableDates = useMemo(() => {
+    const dates = new Set<string>();
+    
+    // Add dates from daily snapshots (priority)
+    dailyInventorySnapshots.forEach(snapshot => {
+      dates.add(snapshot.date);
+    });
+    
+    // Add dates from stock count snapshots
+    stockCountSnapshots.forEach(snapshot => {
+      dates.add(snapshot.date);
+    });
+    
+    // Always include today for live data
+    const today = new Date().toISOString().split('T')[0];
+    dates.add(today);
+    
+    return Array.from(dates).sort().reverse(); // Most recent first
+  }, [stockCountSnapshots, dailyInventorySnapshots]);
+
+  // Get snapshot for selected date in snapshot module
+  const selectedSnapshotData = useMemo(() => {
+    // First try to get daily snapshot
+    const dailySnapshot = dailyInventorySnapshots.find(s => s.date === snapshotSelectedDate);
+    if (dailySnapshot) {
+      return {
+        type: 'daily' as const,
+        data: dailySnapshot,
+        items: Object.values(dailySnapshot.items)
+      };
+    }
+    
+    // Fallback to stock count snapshots
+    const snapshots = stockCountSnapshots.filter(s => s.date === snapshotSelectedDate);
+    if (snapshots.length === 0) {
+      return null;
+    }
+    
+    if (snapshots.length === 1) {
+      return {
+        type: 'stock' as const,
+        data: snapshots[0].snapshot,
+        items: Object.values(snapshots[0].snapshot.itemCounts).map((item: any) => ({
+          id: item.itemId || Math.random(),
+          name: item.itemName,
+          category: item.category,
+          frequency: item.frequency,
+          currentStock: item.currentStock,
+          unit: item.unit,
+          minimumLevel: item.minLevel,
+          unitCost: item.unitCost,
+          totalValue: item.totalValue,
+          lastCountDate: item.lastCountDate,
+          countedBy: item.countedBy,
+          optimalLevel: item.optimalLevel
+        }))
+      };
+    }
+    
+    return null;
+  }, [snapshotSelectedDate, stockCountSnapshots, dailyInventorySnapshots]);
+
+  // Convert snapshot to historical item data for snapshot module
+  const snapshotHistoricalData = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    const isToday = snapshotSelectedDate === today;
+    
+    if (!selectedSnapshotData) {
+      // If viewing today and no snapshot exists yet, show current live data
+      if (isToday) {
+        const allItems = [...dailyItems, ...weeklyItems, ...monthlyItems];
+        return allItems.map(item => ({
+          itemId: item.id,
+          itemName: item.name,
+          category: item.category,
+          frequency: item.frequency,
+          stockLevel: item.currentStock,
+          unit: item.unit,
+          unitCost: item.cost,
+          totalValue: item.currentStock * item.cost,
+          stockStatus: getStockStatus(item.currentStock, item.minLevel),
+          minLevel: item.minLevel,
+          optimalLevel: item.minLevel * 2,
+          lastCountDate: new Date().toISOString(),
+          countedBy: 'Live Data'
+        }));
+      }
+      return [];
+    }
+    
+    if (selectedSnapshotData.type === 'daily') {
+      // Handle daily inventory snapshot structure
+      return Object.entries(selectedSnapshotData.data.items).map(([itemId, item]) => ({
+        itemId,
+        itemName: item.name,
+        category: item.category,
+        frequency: item.frequency,
+        stockLevel: item.currentStock,
+        unit: item.unit,
+        unitCost: item.unitCost,
+        totalValue: item.totalValue,
+        stockStatus: getStockStatus(item.currentStock, item.minimumLevel),
+        minLevel: item.minimumLevel,
+        optimalLevel: item.optimalLevel || item.minimumLevel * 2,
+        lastCountDate: item.lastCountDate,
+        countedBy: item.countedBy
+      }));
+    } else {
+      // Handle stock count snapshot structure
+      return Object.entries(selectedSnapshotData.data.itemCounts).map(([itemId, item]) => ({
+        itemId,
+        itemName: item.itemName,
+        category: item.category,
+        frequency: item.frequency,
+        stockLevel: item.currentStock,
+        unit: item.unit,
+        unitCost: item.unitCost,
+        totalValue: item.totalValue,
+        stockStatus: getStockStatus(item.currentStock, item.minLevel),
+        minLevel: item.minLevel,
+        optimalLevel: item.optimalLevel,
+        lastCountDate: item.lastCountDate,
+        countedBy: item.countedBy
+      }));
+    }
+  }, [selectedSnapshotData, snapshotSelectedDate, dailyItems, weeklyItems, monthlyItems]);
+
+  // Filter snapshot data based on search term
+  const filteredSnapshotData = useMemo(() => {
+    let filtered = snapshotHistoricalData;
+    
+    // Filter by search term
+    if (snapshotSearchTerm.trim()) {
+      const searchLower = snapshotSearchTerm.toLowerCase();
+      filtered = filtered.filter(item =>
+        item.itemName.toLowerCase().includes(searchLower) ||
+        item.category.toLowerCase().includes(searchLower)
+      );
+    }
+    
+    return filtered;
+  }, [snapshotHistoricalData, snapshotSearchTerm]);
+
+  // Format display date
+  const formatDisplayDate = (dateStr: string) => {
+    const today = new Date().toISOString().split('T')[0];
+    if (dateStr === today) {
+      return `Today (${new Date(dateStr).toLocaleDateString()})`;
+    }
+    return new Date(dateStr).toLocaleDateString();
+  };
 
   // Prepare data for charts
   const chartData = useMemo(() => {
@@ -397,27 +561,204 @@ const ReportsView: React.FC = () => {
         {/* Snapshot Module - Expandable */}
         {showSnapshotModule && (
           <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-            <h3 className="text-lg font-semibold text-gray-900 mb-3">Historical Snapshots</h3>
-            <div className="flex flex-wrap gap-3 mb-4">
-              <button
-                onClick={handleCreateSnapshot}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
-              >
-                Create Snapshot
-              </button>
-              <p className="text-sm text-gray-600 flex items-center">
-                <Package className="w-4 h-4 mr-1" />
-                {historicalSnapshots.length} snapshots available
-              </p>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {historicalSnapshots.slice(-6).map((snapshot, index) => (
-                <div key={snapshot.id} className="bg-white p-3 rounded border">
-                  <p className="font-medium text-sm">{snapshot.date}</p>
-                  <p className="text-xs text-gray-600">{snapshot.totalItems} items</p>
-                  <p className="text-xs text-gray-600">${snapshot.totalValue.toFixed(2)}</p>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Historical Snapshots</h3>
+            
+            {/* Snapshot Controls */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+              {/* Date Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <Calendar className="w-4 h-4 inline mr-1" />
+                  Select Date
+                </label>
+                <select
+                  value={snapshotSelectedDate}
+                  onChange={(e) => setSnapshotSelectedDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  {snapshotAvailableDates.map(date => (
+                    <option key={date} value={date}>
+                      {formatDisplayDate(date)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Search */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <Search className="w-4 h-4 inline mr-1" />
+                  Search Items
+                </label>
+                <input
+                  type="text"
+                  placeholder="Search by name or category..."
+                  value={snapshotSearchTerm}
+                  onChange={(e) => setSnapshotSearchTerm(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              {/* Actions */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Actions</label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleCreateSnapshot}
+                    className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+                  >
+                    Create Snapshot
+                  </button>
+                  <span className="text-sm text-gray-600 flex items-center px-2">
+                    <Package className="w-4 h-4 mr-1" />
+                    {historicalSnapshots.length} total
+                  </span>
                 </div>
-              ))}
+              </div>
+            </div>
+
+            {/* Snapshot Summary */}
+            {selectedSnapshotData && (
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                <div className="bg-white p-3 rounded border">
+                  <p className="text-sm text-gray-600">Total Items</p>
+                  <p className="text-lg font-semibold">{filteredSnapshotData.length}</p>
+                </div>
+                <div className="bg-white p-3 rounded border">
+                  <p className="text-sm text-gray-600">Total Value</p>
+                  <p className="text-lg font-semibold">
+                    ${filteredSnapshotData.reduce((sum, item) => sum + item.totalValue, 0).toFixed(2)}
+                  </p>
+                </div>
+                <div className="bg-white p-3 rounded border">
+                  <p className="text-sm text-gray-600">Out of Stock</p>
+                  <p className="text-lg font-semibold text-red-600">
+                    {filteredSnapshotData.filter(item => item.stockStatus === 'out').length}
+                  </p>
+                </div>
+                <div className="bg-white p-3 rounded border">
+                  <p className="text-sm text-gray-600">Critical Items</p>
+                  <p className="text-lg font-semibold text-orange-600">
+                    {filteredSnapshotData.filter(item => item.stockStatus === 'critical').length}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Snapshot Items Table */}
+            <div className="bg-white rounded-lg border overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-200">
+                <h4 className="text-md font-semibold text-gray-900">
+                  Items for {formatDisplayDate(snapshotSelectedDate)}
+                  {selectedSnapshotData ? (
+                    <span className="ml-2 px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                      {selectedSnapshotData.type === 'daily' ? 'Snapshot Data' : 'Stock Count Data'}
+                    </span>
+                  ) : (
+                    <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                      Live Data
+                    </span>
+                  )}
+                </h4>
+              </div>
+
+              <div className="overflow-x-auto max-h-96">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50 sticky top-0">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Item
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Category
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Frequency
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Stock Level
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Value
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {filteredSnapshotData.map((item) => (
+                      <tr key={item.itemId} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">{item.itemName}</div>
+                            <div className="text-sm text-gray-500">Min: {item.minLevel} {item.unit}</div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          {item.category}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                            item.frequency === 'daily' ? 'bg-blue-100 text-blue-800' :
+                            item.frequency === 'weekly' ? 'bg-green-100 text-green-800' :
+                            'bg-purple-100 text-purple-800'
+                          }`}>
+                            {item.frequency}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          {item.stockLevel} {item.unit}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                            item.stockStatus === 'out' ? 'bg-red-100 text-red-800' :
+                            item.stockStatus === 'critical' ? 'bg-orange-100 text-orange-800' :
+                            item.stockStatus === 'low' ? 'bg-yellow-100 text-yellow-800' :
+                            item.stockStatus === 'ok' ? 'bg-green-100 text-green-800' :
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                            {item.stockStatus === 'out' ? 'Out of Stock' :
+                             item.stockStatus === 'critical' ? 'Critical' :
+                             item.stockStatus === 'low' ? 'Low' : 
+                             item.stockStatus === 'ok' ? 'Good' : 'Unknown'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          ${item.totalValue.toFixed(2)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {filteredSnapshotData.length === 0 && (
+                <div className="px-4 py-8 text-center">
+                  {!selectedSnapshotData ? (
+                    <div>
+                      <AlertTriangle className="w-12 h-12 text-orange-400 mx-auto mb-4" />
+                      <h4 className="text-lg font-medium text-gray-900 mb-2">No Snapshot Available</h4>
+                      <p className="text-gray-500 mb-4">
+                        No inventory snapshot was created for {formatDisplayDate(snapshotSelectedDate)}.
+                      </p>
+                      <button
+                        onClick={handleCreateSnapshot}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        Create Snapshot for This Date
+                      </button>
+                    </div>
+                  ) : (
+                    <div>
+                      <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-500">
+                        No items found matching your search criteria.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}
