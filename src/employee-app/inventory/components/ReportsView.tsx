@@ -71,7 +71,21 @@ const ReportsView: React.FC = () => {
   // Get analytics data with real calculations
   const analyticsData = useMemo(() => {
     const allItems = [...dailyItems, ...weeklyItems, ...monthlyItems];
-    return getAnalyticsData(calculatedDateRange);
+    const data = getAnalyticsData(calculatedDateRange);
+    
+    // Provide default structure if data is undefined
+    return data || {
+      storageGrowth: [],
+      orderFrequency: [],
+      wasteAnalysis: [],
+      consumptionTrends: [],
+      performanceMetrics: {
+        stockTurnoverRate: 0,
+        wastePercentage: 0,
+        orderAccuracy: 0,
+        stockoutFrequency: 0
+      }
+    };
   }, [dailyItems, weeklyItems, monthlyItems, getAnalyticsData, calculatedDateRange]);
 
   // Calculate current vs previous period comparison
@@ -108,6 +122,17 @@ const ReportsView: React.FC = () => {
 
   // Prepare data for charts
   const chartData = useMemo(() => {
+    // Defensive check for undefined analyticsData
+    if (!analyticsData || !analyticsData.wasteAnalysis) {
+      return {
+        wasteData: {},
+        totalWaste: 0,
+        storageGrowthData: [],
+        categoryDistribution: [],
+        stockLevels: { out: 0, critical: 0, low: 0, ok: 0 }
+      };
+    }
+
     // Stock level distribution for chart
     const stockLevelData = [
       { level: 'Out of Stock', count: currentMetrics.stockLevels.out, color: '#EF4444' },
