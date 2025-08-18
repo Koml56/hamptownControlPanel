@@ -4,17 +4,14 @@
 import React, { useState, useMemo } from 'react';
 import { 
   BarChart3, 
-  TrendingUp, 
   AlertTriangle, 
   DollarSign, 
-  Calendar, 
   GitCompare, 
   Download, 
   Eye, 
   EyeOff,
   Package,
-  Activity,
-  Percent
+  Activity
 } from 'lucide-react';
 import { useInventory } from '../InventoryContext';
 import {
@@ -32,7 +29,6 @@ const ReportsView: React.FC = () => {
     dailyItems, 
     weeklyItems, 
     monthlyItems,
-    activityLog,
     historicalSnapshots,
     getAnalyticsData,
     compareWithPreviousPeriod,
@@ -70,7 +66,6 @@ const ReportsView: React.FC = () => {
 
   // Get analytics data with real calculations
   const analyticsData = useMemo(() => {
-    const allItems = [...dailyItems, ...weeklyItems, ...monthlyItems];
     const data = getAnalyticsData(calculatedDateRange);
     
     // Provide default structure if data is undefined
@@ -86,7 +81,7 @@ const ReportsView: React.FC = () => {
         stockoutFrequency: 0
       }
     };
-  }, [dailyItems, weeklyItems, monthlyItems, getAnalyticsData, calculatedDateRange]);
+  }, [getAnalyticsData, calculatedDateRange]);
 
   // Calculate current vs previous period comparison
   const comparisonData = useMemo(() => {
@@ -129,7 +124,10 @@ const ReportsView: React.FC = () => {
         totalWaste: 0,
         storageGrowthData: [],
         categoryDistribution: [],
-        stockLevels: { out: 0, critical: 0, low: 0, ok: 0 }
+        stockLevels: { out: 0, critical: 0, low: 0, ok: 0 },
+        stockLevelData: [] as Array<{level: string, count: number, color: string}>,
+        categoryChartData: [] as Array<{category: string, totalItems: number, totalValue: number, avgItemValue: number}>,
+        wasteChartData: [] as Array<{name: string, value: number, percentage: number}>
       };
     }
 
