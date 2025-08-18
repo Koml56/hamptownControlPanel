@@ -118,7 +118,7 @@ describe('Prep List Multi-Device Sync Integration', () => {
       await mockSyncPrepData('scheduledPreps', scheduledPreps);
     } catch (error) {
       expect(error).toBeInstanceOf(Error);
-      expect(error.message).toBe('Sync failed');
+      expect((error as Error).message).toBe('Sync failed');
     }
     
     expect(mockSyncPrepData).toHaveBeenCalled();
