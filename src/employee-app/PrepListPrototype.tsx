@@ -400,65 +400,155 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
     setShowRecipeModal(true);
   };
 
-  // Toggle prep selection
-  const togglePrepSelection = (prep: PrepItem): void => {
+  // Toggle prep selection with instant sync (same pattern as togglePrepCompletion)
+  const togglePrepSelection = async (prep: PrepItem): Promise<void> => {
     const selectionKey = getSelectionKey(selectedDate, prep.id);
     const isSelected = prepSelections[selectionKey]?.selected;
 
-    if (isSelected) {
-      setPrepSelections(prev => {
-        const newSelections = { ...prev };
-        delete newSelections[selectionKey];
-        return newSelections;
-      });
-      
-      setScheduledPreps(prev => prev.filter(p => 
-        !(p.prepId === prep.id && p.scheduledDate === getDateString(selectedDate))
-      ));
-    } else {
-      const existingScheduledPrep = scheduledPreps.find(p => 
-        p.prepId === prep.id && p.scheduledDate === getDateString(selectedDate)
-      );
-      
-      if (existingScheduledPrep) {
-        setPrepSelections(prev => ({
-          ...prev,
-          [selectionKey]: { 
-            priority: existingScheduledPrep.priority, 
-            timeSlot: existingScheduledPrep.timeSlot, 
-            selected: true 
-          }
-        }));
-      } else {
-        const newSelection = { priority: 'medium' as Priority, timeSlot: '', selected: true };
-        setPrepSelections(prev => ({
-          ...prev,
-          [selectionKey]: newSelection
-        }));
+    // Prevent concurrent saves
+    if (isSaving) {
+      console.log('⏳ Save in progress, skipping prep selection toggle...');
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      console.log(`🔄 Toggling prep selection for: ${prep.name} (${isSelected ? 'SELECTED' : 'UNSELECTED'} → ${!isSelected ? 'SELECTED' : 'UNSELECTED'})`);
+      console.log('🛡️ SYNC PAUSED during save operation');
+
+      let updatedPrepSelections: PrepSelections;
+      let updatedScheduledPreps: ScheduledPrep[];
+
+      if (isSelected) {
+        // Deselecting prep
+        updatedPrepSelections = { ...prepSelections };
+        delete updatedPrepSelections[selectionKey];
         
-        const newScheduledPrep: ScheduledPrep = {
-          id: generateUniqueId(),
-          prepId: prep.id,
-          name: prep.name,
-          category: prep.category,
-          estimatedTime: prep.estimatedTime,
-          isCustom: prep.isCustom,
-          hasRecipe: prep.hasRecipe,
-          recipe: prep.recipe,
-          scheduledDate: getDateString(selectedDate),
-          priority: 'medium',
-          timeSlot: '',
-          completed: false,
-          assignedTo: null,
-          notes: ''
-        };
-        setScheduledPreps(prev => [...prev, newScheduledPrep]);
+        updatedScheduledPreps = scheduledPreps.filter(p => 
+          !(p.prepId === prep.id && p.scheduledDate === getDateString(selectedDate))
+        );
+      } else {
+        // Selecting prep
+        const existingScheduledPrep = scheduledPreps.find(p => 
+          p.prepId === prep.id && p.scheduledDate === getDateString(selectedDate)
+        );
+        
+        if (existingScheduledPrep) {
+          updatedPrepSelections = {
+            ...prepSelections,
+            [selectionKey]: { 
+              priority: existingScheduledPrep.priority, 
+              timeSlot: existingScheduledPrep.timeSlot, 
+              selected: true 
+            }
+          };
+          updatedScheduledPreps = scheduledPreps;
+        } else {
+          const newSelection = { priority: 'medium' as Priority, timeSlot: '', selected: true };
+          updatedPrepSelections = {
+            ...prepSelections,
+            [selectionKey]: newSelection
+          };
+          
+          const newScheduledPrep: ScheduledPrep = {
+            id: generateUniqueId(),
+            prepId: prep.id,
+            name: prep.name,
+            category: prep.category,
+            estimatedTime: prep.estimatedTime,
+            isCustom: prep.isCustom,
+            hasRecipe: prep.hasRecipe,
+            recipe: prep.recipe,
+            scheduledDate: getDateString(selectedDate),
+            priority: 'medium',
+            timeSlot: '',
+            completed: false,
+            assignedTo: null,
+            notes: ''
+          };
+          updatedScheduledPreps = [...scheduledPreps, newScheduledPrep];
+        }
       }
+
+      // ENHANCED: Log what we're about to save
+      console.log('📤 About to save prep selections and scheduled preps:', {
+        prepSelectionsCount: Object.keys(updatedPrepSelections).length,
+        scheduledPrepsCount: updatedScheduledPreps.length,
+        selectedDatePrepsCount: updatedScheduledPreps.filter(p => p.scheduledDate === getDateString(selectedDate)).length,
+        updatedPrep: {
+          name: prep.name,
+          selected: !isSelected,
+          scheduledDate: getDateString(selectedDate)
+        }
+      });
+
+      // Update state immediately for UI responsiveness
+      setPrepSelections(() => updatedPrepSelections);
+      setScheduledPreps(() => updatedScheduledPreps);
+
+      // CRITICAL: Save to Firebase immediately with detailed logging - INSTANT SYNC
+      console.log('🚀 INSTANT SYNC: Saving prep selection for instant multi-device sync...');
+      
+      const [selectionsSuccess, scheduledSuccess] = await Promise.all([
+        quickSaveImmediate('prepSelections', updatedPrepSelections),
+        quickSaveImmediate('scheduledPreps', updatedScheduledPreps)
+      ]);
+
+      if (selectionsSuccess && scheduledSuccess) {
+        console.log('✅ Prep selection saved successfully - sync enabled for instant multi-device updates');
+        
+        // INSTANT SYNC: No delay for multi-device sync - verification is optional and non-blocking
+        setTimeout(async () => {
+          console.log('🔄 Background verification (non-blocking)');
+          
+          try {
+            const [selectionsResponse, scheduledResponse] = await Promise.all([
+              fetch('https://hamptown-panel-default-rtdb.firebaseio.com/prepSelections.json'),
+              fetch('https://hamptown-panel-default-rtdb.firebaseio.com/scheduledPreps.json')
+            ]);
+            
+            const [firebasePrepSelections, firebaseScheduledPreps] = await Promise.all([
+              selectionsResponse.json(),
+              scheduledResponse.json()
+            ]);
+            
+            if (firebasePrepSelections && firebaseScheduledPreps) {
+              const firebaseHasSelection = firebasePrepSelections[selectionKey]?.selected === !isSelected;
+              const firebaseHasScheduled = isSelected ? 
+                !firebaseScheduledPreps?.some((p: any) => p.prepId === prep.id && p.scheduledDate === getDateString(selectedDate)) :
+                firebaseScheduledPreps?.some((p: any) => p.prepId === prep.id && p.scheduledDate === getDateString(selectedDate));
+              
+              if (!firebaseHasSelection || !firebaseHasScheduled) {
+                console.warn('⚠️ Background verification: Save status mismatch detected');
+              } else {
+                console.log('✅ Background verification: Save confirmed');
+              }
+            }
+          } catch (error) {
+            console.log('ℹ️ Background verification skipped:', error instanceof Error ? error.message : String(error));
+          }
+        }, 500); // Quick background check only
+        
+      } else {
+        console.error('❌ Failed to save prep selection to Firebase');
+        // Revert the state changes if save failed
+        setPrepSelections(() => prepSelections);
+        setScheduledPreps(() => scheduledPreps);
+      }
+
+    } catch (error) {
+      console.error('❌ Error toggling prep selection:', error);
+      // Revert the state changes if there was an error
+      setPrepSelections(() => prepSelections);
+      setScheduledPreps(() => scheduledPreps);
+    } finally {
+      setIsSaving(false);
     }
   };
 
   // Add custom prep
-  const addCustomPrep = () => {
+  const addCustomPrep = async () => {
     if (!newPrepName.trim()) return;
 
     const customPrep: PrepItem = {
@@ -482,7 +572,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
     setRecipeData({ ingredients: '', instructions: '' });
     setSelectedCategory('majoneesit');
 
-    togglePrepSelection(customPrep);
+    await togglePrepSelection(customPrep);
   };
 
   // Filter preps

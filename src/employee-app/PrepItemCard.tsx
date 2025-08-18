@@ -15,7 +15,7 @@ interface PrepItemCardProps {
   showPriorityOptions: number | string | null;
   showTimeOptions: number | string | null;
   assignmentStep: Record<number, string | null>;
-  onToggleSelection: (prep: PrepItem) => void;
+  onToggleSelection: (prep: PrepItem) => void | Promise<void>;
   onUpdateSelection: (prep: PrepItem, field: 'priority' | 'timeSlot', value: string, context?: string) => void;
   onShowPriorityOptions: (prepId: number | string | null) => void;
   onShowRecipe: (recipe: Recipe, name: string) => void;
