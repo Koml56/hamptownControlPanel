@@ -4,6 +4,7 @@ import { CheckSquare, Check, Users, Star } from 'lucide-react';
 import { getPriorityColor, getFormattedDate } from './utils';
 import { toggleTaskComplete, assignTask, getAssignedEmployee, reassignCompletedTask } from './taskFunctions';
 import type { Task, Employee, TaskAssignments, DailyDataMap, CurrentUser } from './types';
+import CrossTabDebugPanel from './CrossTabDebugPanel';
 
 interface TaskManagerProps {
   currentUser: CurrentUser;
@@ -223,6 +224,9 @@ const TaskManager: React.FC<TaskManagerProps> = ({
           })}
         </div>
       </div>
+      
+      {/* Cross-Tab Sync Debug Panel */}
+      <CrossTabDebugPanel />
     </>
   );
 };
