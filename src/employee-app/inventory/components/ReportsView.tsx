@@ -11,7 +11,8 @@ import {
   Eye, 
   EyeOff,
   Package,
-  Activity
+  Activity,
+  Calendar
 } from 'lucide-react';
 import { useInventory } from '../InventoryContext';
 import {
@@ -23,6 +24,7 @@ import {
   StockLevelChart
 } from './AnalyticsCharts';
 import type { DateRange } from '../../types';
+import { getCategoryNameOnly } from '../utils';
 
 const ReportsView: React.FC = () => {
   const { 
@@ -32,16 +34,30 @@ const ReportsView: React.FC = () => {
     historicalSnapshots,
     getAnalyticsData,
     compareWithPreviousPeriod,
-    createSnapshot
+    createSnapshot,
+    customCategories
   } = useInventory();
   
-  const [dateRange, setDateRange] = useState<'7days' | '30days' | '90days'>('30days');
+  const [dateRange, setDateRange] = useState<'7days' | '30days' | '90days' | 'custom'>('30days');
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const today = new Date();
+    return today.toISOString().split('T')[0]; // YYYY-MM-DD format
+  });
   const [comparisonPeriod, setComparisonPeriod] = useState<'day' | 'week' | 'month'>('week');
   const [showComparison, setShowComparison] = useState(true);
   const [showSnapshotModule, setShowSnapshotModule] = useState(false);
 
   // Calculate date range
   const calculatedDateRange = useMemo((): DateRange => {
+    if (dateRange === 'custom') {
+      // For custom/single date selection, use the selected date
+      return {
+        startDate: selectedDate,
+        endDate: selectedDate,
+        period: 'day'
+      };
+    }
+    
     const endDate = new Date();
     const startDate = new Date();
     
@@ -62,7 +78,7 @@ const ReportsView: React.FC = () => {
       endDate: endDate.toISOString().split('T')[0],
       period: 'day'
     };
-  }, [dateRange]);
+  }, [dateRange, selectedDate]);
 
   // Get analytics data with real calculations
   const analyticsData = useMemo(() => {
@@ -170,12 +186,13 @@ const ReportsView: React.FC = () => {
     // Category breakdown data
     const categoryData: Record<string, {totalItems: number, totalValue: number}> = {};
     [...dailyItems, ...weeklyItems, ...monthlyItems].forEach(item => {
-      const category = item.category || 'Uncategorized';
-      if (!categoryData[category]) {
-        categoryData[category] = { totalItems: 0, totalValue: 0 };
+      const categoryId = item.category || 'uncategorized';
+      const categoryName = getCategoryNameOnly(categoryId, customCategories);
+      if (!categoryData[categoryName]) {
+        categoryData[categoryName] = { totalItems: 0, totalValue: 0 };
       }
-      categoryData[category].totalItems += 1;
-      categoryData[category].totalValue += item.currentStock * (item.cost || 0);
+      categoryData[categoryName].totalItems += 1;
+      categoryData[categoryName].totalValue += item.currentStock * (item.cost || 0);
     });
 
     const categoryChartData = Object.entries(categoryData).map(([category, data]) => ({
@@ -187,8 +204,9 @@ const ReportsView: React.FC = () => {
 
     // Waste analysis data
     const wasteData = analyticsData.wasteAnalysis.reduce((acc, day) => {
-      Object.entries(day.wasteByCategory).forEach(([category, count]) => {
-        acc[category] = (acc[category] || 0) + count;
+      Object.entries(day.wasteByCategory).forEach(([categoryId, count]) => {
+        const categoryName = getCategoryNameOnly(categoryId, customCategories);
+        acc[categoryName] = (acc[categoryName] || 0) + count;
       });
       return acc;
     }, {} as Record<string, number>);
@@ -205,7 +223,7 @@ const ReportsView: React.FC = () => {
       categoryChartData,
       wasteChartData
     };
-  }, [currentMetrics, analyticsData, dailyItems, weeklyItems, monthlyItems]);
+  }, [currentMetrics, analyticsData, dailyItems, weeklyItems, monthlyItems, customCategories]);
 
   // KPI Card Component
   const KPICard: React.FC<{
@@ -305,7 +323,22 @@ const ReportsView: React.FC = () => {
               <option value="7days">Last 7 Days</option>
               <option value="30days">Last 30 Days</option>
               <option value="90days">Last 90 Days</option>
+              <option value="custom">Specific Day</option>
             </select>
+
+            {/* Custom Date Picker - Show only when custom is selected */}
+            {dateRange === 'custom' && (
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-gray-500" />
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  max={new Date().toISOString().split('T')[0]} // Prevent future dates
+                />
+              </div>
+            )}
 
             {/* Comparison Period */}
             <select
