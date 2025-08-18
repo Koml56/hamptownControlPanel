@@ -1,9 +1,10 @@
 // src/employee-app/inventory/excelExport.ts
 import * as XLSX from 'xlsx';
-import { EnhancedInventoryItem } from '../types';
+import { EnhancedInventoryItem, CustomCategory } from '../types';
 import { getStockStatus } from './stockUtils';
+import { getCategoryNameOnly } from './utils';
 
-export const generateOrderExcel = (items: EnhancedInventoryItem[]): string => {
+export const generateOrderExcel = (items: EnhancedInventoryItem[], customCategories: CustomCategory[] = []): string => {
   // Filter items that need ordering and are not already ordered
   const needsOrdering = items.filter(item => {
     const status = getStockStatus(item.currentStock, item.minimumLevel);
@@ -28,7 +29,7 @@ export const generateOrderExcel = (items: EnhancedInventoryItem[]): string => {
     'Pack Size': item.unitPackSize || 1,
     'Packs to Order': Math.ceil((item.recommendedOrder || 0) / (item.unitPackSize || 1)),
     'Frequency': item.frequency.toUpperCase(),
-    'Category': item.category,
+    'Category': getCategoryNameOnly(item.category, customCategories),
     'Cost per Unit': item.cost ? `€${item.cost.toFixed(2)}` : 'N/A',
     'Total Cost': item.cost ? `€${(item.cost * (item.recommendedOrder || 0)).toFixed(2)}` : 'N/A',
     'Last Updated': new Date(item.lastUsed).toLocaleDateString(),

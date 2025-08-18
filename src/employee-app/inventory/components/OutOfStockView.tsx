@@ -19,7 +19,7 @@ import {
 import HolidayAlert from './HolidayAlert';
 
 const OutOfStockView: React.FC = () => {
-  const { dailyItems, weeklyItems, monthlyItems, setDailyItems, setWeeklyItems, setMonthlyItems, quickSave } = useInventory();
+  const { dailyItems, weeklyItems, monthlyItems, setDailyItems, setWeeklyItems, setMonthlyItems, quickSave, customCategories } = useInventory();
   const [filter, setFilter] = useState<'all' | 'critical' | 'low' | 'out'>('critical');
   const [holidayAlerts] = useState<HolidayAlertType[]>(checkUpcomingHolidays());
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
@@ -61,7 +61,7 @@ const OutOfStockView: React.FC = () => {
 
   const handleGenerateExcel = () => {
     try {
-      const fileName = generateOrderExcel(enhancedItems);
+      const fileName = generateOrderExcel(enhancedItems, customCategories);
       showToast(`Excel file "${fileName}" generated successfully!`);
     } catch (error) {
       showToast('Error generating Excel file');
