@@ -199,7 +199,30 @@ describe('StockCountHistoryView', () => {
     addCustomCategory: jest.fn(),
     updateCustomCategory: jest.fn(),
     deleteCustomCategory: jest.fn(),
-    createStockSnapshot: jest.fn().mockResolvedValue([{ success: true }]),
+    createStockSnapshot: jest.fn().mockResolvedValue([
+      {
+        snapshotId: 'daily_20240118',
+        date: '2024-01-18',
+        frequency: 'daily',
+        snapshot: {
+          date: '2024-01-18',
+          frequency: 'daily',
+          timestamp: '2024-01-18T23:59:59Z',
+          totalItems: 1,
+          totalValue: 25,
+          itemCounts: {},
+          summary: {
+            dailyItemsCount: 1,
+            weeklyItemsCount: 0,
+            monthlyItemsCount: 0,
+            totalInventoryValue: 25,
+            outOfStockItems: 0,
+            criticalStockItems: 0,
+            lowStockItems: 0
+          }
+        }
+      }
+    ]),
     // Analytics functions
     createSnapshot: jest.fn(),
     getAnalyticsData: jest.fn(),

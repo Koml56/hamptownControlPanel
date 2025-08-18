@@ -8,14 +8,18 @@ jest.mock('../firebaseService', () => ({
   getStockCountSnapshots: jest.fn().mockResolvedValue([])
 }));
 
-// Mock the stockUtils
+// Mock the stockUtils at the path level
 jest.mock('./stockUtils', () => ({
-  getStockStatus: jest.fn((currentStock: number, minLevel: number) => {
-    if (currentStock === 0) return 'out';
-    if (currentStock <= minLevel * 0.5) return 'critical';
-    if (currentStock <= minLevel) return 'low';
-    return 'ok';
-  })
+  getStockStatus: (currentStock: number, minLevel: number) => {
+    if (minLevel === 0) return 'unknown';
+    
+    const percentage = (currentStock / minLevel) * 100;
+    
+    if (currentStock === 0) return 'out';           // 0% - RED - Out of stock
+    if (percentage <= 20) return 'critical';        // ≤20% - ORANGE - Critical  
+    if (percentage <= 50) return 'low';             // ≤50% - YELLOW - Low
+    return 'ok';                                    // >50% - GREEN - OK
+  }
 }));
 
 describe('SnapshotService', () => {
@@ -127,9 +131,9 @@ describe('SnapshotService', () => {
       
       const summary = result.snapshot.summary;
       expect(summary.totalInventoryValue).toBe(149.5);
-      expect(summary.outOfStockItems).toBe(1); // Oregano
-      expect(summary.criticalStockItems).toBe(0);
-      expect(summary.lowStockItems).toBe(1); // Bread (3 <= 5)
+      expect(summary.outOfStockItems).toBe(1); // Oregano (stock=0)
+      expect(summary.criticalStockItems).toBe(0); // None ≤20% of minLevel
+      expect(summary.lowStockItems).toBe(0); // None ≤50% of minLevel (Bread is 60%)
     });
 
     test('sets correct timestamp and date', async () => {

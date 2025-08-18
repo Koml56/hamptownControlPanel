@@ -151,30 +151,34 @@ export class SnapshotErrorHandler {
 }
 
 // Helper functions for creating snapshots - export the key functions
-export const createStockSnapshot = (
+export const createStockSnapshot = async (
   items: InventoryItem[],
   frequency: InventoryFrequency,
   currentUser: string = 'System'
 ): Promise<StockCountHistoryEntry> => {
-  return new Promise((resolve, reject) => {
-    try {
-      // FIXED: Use the correct function for single frequency snapshots
-      const snapshot = createStockCountSnapshot(items, frequency, undefined, currentUser);
+  try {
+    // Import the Firebase service
+    const { addStockCountSnapshot } = await import('../firebaseService');
+    
+    // FIXED: Use the correct function for single frequency snapshots
+    const snapshot = createStockCountSnapshot(items, frequency, undefined, currentUser);
 
-      // Convert StockCountSnapshot to StockCountHistoryEntry
-      const historyEntry: StockCountHistoryEntry = {
-        snapshotId: `${frequency}_${snapshot.date.replace(/-/g, '')}`,
-        date: snapshot.date,
-        frequency: snapshot.frequency,
-        snapshot: snapshot
-      };
+    // Convert StockCountSnapshot to StockCountHistoryEntry
+    const historyEntry: StockCountHistoryEntry = {
+      snapshotId: `${frequency}_${snapshot.date.replace(/-/g, '')}`,
+      date: snapshot.date,
+      frequency: snapshot.frequency,
+      snapshot: snapshot
+    };
 
-      resolve(historyEntry);
-    } catch (error) {
-      console.error(`❌ Error creating ${frequency} snapshot:`, error);
-      reject(error);
-    }
-  });
+    // Save to Firebase
+    await addStockCountSnapshot(historyEntry);
+
+    return historyEntry;
+  } catch (error) {
+    console.error(`❌ Error creating ${frequency} snapshot:`, error);
+    throw error;
+  }
 };
 
 export const generateSnapshotSummary = (snapshot: any) => {
@@ -206,9 +210,17 @@ export const generateSnapshotSummary = (snapshot: any) => {
     if (item.frequency === 'weekly') weeklyItemsCount++;
     if (item.frequency === 'monthly') monthlyItemsCount++;
 
-    if (item.currentStock === 0) outOfStockItems++;
-    else if (item.currentStock <= item.minLevel * 0.5) criticalStockItems++;
-    else if (item.currentStock <= item.minLevel) lowStockItems++;
+    // Use the same logic as getStockStatus for consistency
+    if (item.currentStock === 0) {
+      outOfStockItems++;
+    } else if (item.minLevel > 0) {
+      const percentage = (item.currentStock / item.minLevel) * 100;
+      if (percentage <= 20) {
+        criticalStockItems++;
+      } else if (percentage <= 50) {
+        lowStockItems++;
+      }
+    }
   });
 
   return {
