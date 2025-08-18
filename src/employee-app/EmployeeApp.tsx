@@ -277,6 +277,11 @@ const EmployeeApp: React.FC = () => {
       syncServiceRef.current.onFieldChange('tasks', setTasks);
       syncServiceRef.current.onFieldChange('dailyData', setDailyData);
       
+      // ENHANCED: Add prep list field change listeners for multi-device sync
+      syncServiceRef.current.onFieldChange('prepItems', setPrepItems);
+      syncServiceRef.current.onFieldChange('scheduledPreps', setScheduledPreps);
+      syncServiceRef.current.onFieldChange('prepSelections', setPrepSelections);
+      
       // Connect the service
       syncServiceRef.current.connect().catch(console.error);
     }
@@ -287,7 +292,7 @@ const EmployeeApp: React.FC = () => {
         syncServiceRef.current = null;
       }
     };
-  }, [currentUser, setCompletedTasks, setDailyData, setEmployees, setTaskAssignments, setTasks]);
+  }, [currentUser, setCompletedTasks, setDailyData, setEmployees, setTaskAssignments, setTasks, setPrepItems, setScheduledPreps, setPrepSelections]);
 
   // Set up periodic auto-save (every 5 minutes)
   // Set up periodic auto-save (every 5 minutes) with logging for cleaning tasks
@@ -549,6 +554,25 @@ const EmployeeApp: React.FC = () => {
 
   const currentEmployee = employees.find(emp => emp.id === currentUser.id);
 
+  // ENHANCED: Prep list sync helper functions
+  const syncPrepData = useCallback(async (field: string, data: any): Promise<boolean> => {
+    if (syncServiceRef.current && isMultiDeviceEnabled) {
+      console.log(`🔄 [PREP-SYNC] Syncing ${field}:`, data);
+      try {
+        await syncServiceRef.current.syncData(field, data);
+        console.log(`✅ [PREP-SYNC] ${field} synced successfully`);
+        return true;
+      } catch (error) {
+        console.error(`❌ [PREP-SYNC] Failed to sync ${field}:`, error);
+        // Fallback to manual save if sync fails
+        return await quickSave(field, data);
+      }
+    } else {
+      // Fallback to manual save if sync is disabled
+      return await quickSave(field, data);
+    }
+  }, [isMultiDeviceEnabled, quickSave]);
+
   // Multi-device sync helper functions
   const toggleMultiDeviceSync = useCallback(() => {
     setIsMultiDeviceEnabled(prev => !prev);
@@ -578,6 +602,11 @@ const EmployeeApp: React.FC = () => {
         }
         if (syncData.taskAssignments) setTaskAssignments(syncData.taskAssignments);
         
+        // ENHANCED: Apply prep list synced data
+        if (syncData.prepItems) setPrepItems(syncData.prepItems);
+        if (syncData.scheduledPreps) setScheduledPreps(syncData.scheduledPreps);
+        if (syncData.prepSelections) setPrepSelections(syncData.prepSelections);
+        
         console.log('✅ Data refreshed from all devices');
       } catch (error) {
         console.error('❌ Failed to refresh from all devices:', error);
@@ -586,7 +615,7 @@ const EmployeeApp: React.FC = () => {
       // Fallback to regular Firebase refresh
       await loadFromFirebase();
     }
-  }, [loadFromFirebase, setEmployees, setTasks, setDailyData, setCompletedTasks, setTaskAssignments]);
+  }, [loadFromFirebase, setEmployees, setTasks, setDailyData, setCompletedTasks, setTaskAssignments, setPrepItems, setScheduledPreps, setPrepSelections]);
 
   // Simple daily reset - only checks on app startup
 
@@ -857,7 +886,7 @@ const EmployeeApp: React.FC = () => {
             setPrepItems={setPrepItems}
             setScheduledPreps={setScheduledPreps}
             setPrepSelections={setPrepSelections}
-            quickSave={quickSave}
+            quickSave={syncPrepData}
           />
         )}
 
