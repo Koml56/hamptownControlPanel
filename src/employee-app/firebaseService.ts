@@ -109,6 +109,22 @@ export class FirebaseService {
       return false;
     }
   }
+  
+  // INSTANT SYNC: Immediate save for critical operations (bypasses debouncing)
+  async quickSaveImmediate(field: string, data: any): Promise<boolean> {
+    console.log(`🚀 INSTANT SYNC: Immediate save for ${field} (bypassing debounce)`);
+    
+    // Clear any pending debounced save for this field
+    const existingTimeout = this.pendingSaves.get(field);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+      this.pendingSaves.delete(field);
+      console.log(`🚀 INSTANT SYNC: Cancelled pending debounced save for ${field}`);
+    }
+    
+    return this.executeSave(field, data);
+  }
+  
   // Enhanced Quick save with smart debouncing and deduplication
   async quickSave(field: string, data: any): Promise<boolean> {
     const now = Date.now();
