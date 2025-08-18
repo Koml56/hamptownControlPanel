@@ -1,4 +1,3 @@
-// src/employee-app/inventory/RestaurantInventory.tsx
 import React from 'react';
 import { ChefHat, AlertTriangle, TrendingDown, CheckCircle, Database, Package } from 'lucide-react';
 import { InventoryProvider, useInventory } from './InventoryContext';
@@ -11,7 +10,6 @@ import MonthlyView from './components/MonthlyView';
 import OutOfStockView from './components/OutOfStockView';
 import TabNavigation from './components/TabNavigation';
 import ToastContainer from './components/ToastContainer';
-import StockCountHistoryView from './components/StockCountHistoryView';
 import ReportsView from './components/ReportsView'; // Import our new analytics dashboard
 
 // Simple Header Component - No background wrapper
@@ -122,8 +120,6 @@ const InventoryContent: React.FC = () => {
         return <DatabaseView />;
       case 'analytics':
         return <ReportsView />; // Use our new analytics dashboard
-      case 'history': // Keep stock count history as a separate view
-        return <StockCountHistoryView />;
       default:
         return <DailyView />;
     }

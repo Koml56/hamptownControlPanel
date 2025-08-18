@@ -158,7 +158,8 @@ export const createStockSnapshot = async (
 ): Promise<StockCountHistoryEntry> => {
   try {
     // Import the Firebase service
-    const { addStockCountSnapshot } = await import('../firebaseService');
+    const { FirebaseService } = await import('../firebaseService');
+    const firebaseService = new FirebaseService();
     
     // FIXED: Use the correct function for single frequency snapshots
     const snapshot = createStockCountSnapshot(items, frequency, undefined, currentUser);
@@ -172,7 +173,7 @@ export const createStockSnapshot = async (
     };
 
     // Save to Firebase
-    await addStockCountSnapshot(historyEntry);
+    await firebaseService.saveStockCountSnapshot(historyEntry);
 
     return historyEntry;
   } catch (error) {
