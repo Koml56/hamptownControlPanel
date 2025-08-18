@@ -387,10 +387,15 @@ export class MultiDeviceSyncService {
         // ENHANCED: Longer throttle period to prevent loops
         if (now - lastUpdate > 3000) { // Only update every 3 seconds (increased from 2)
           
-          // ANTI-LOOP: Check if this is our own operation coming back
-          const operationKey = `${field}_${JSON.stringify(data[field]).slice(0, 100)}`;
-          if (this.ourOperations.has(operationKey)) {
-            console.log(`🔄 [SYNC] ${field} update ignored - this was our own operation`);
+          // ANTI-LOOP: Check if this is from our own device (improved detection)
+          // Only block if this data was recently sent by this specific device
+          const hasRecentOwnOperation = Array.from(this.ourOperations).some(opKey => 
+            opKey.startsWith(`${this.deviceId}_${field}_`) && 
+            (now - parseInt(opKey.split('_')[2])) < 5000 // Within 5 seconds
+          );
+          
+          if (hasRecentOwnOperation) {
+            console.log(`🔄 [SYNC] ${field} update ignored - this was our own recent operation`);
             continue;
           }
           
@@ -481,8 +486,8 @@ export class MultiDeviceSyncService {
 
   // ENHANCED: Batched sync operations with loop prevention
   async syncData(field: string, data: any): Promise<void> {
-    // ANTI-LOOP: Track this as our operation
-    const operationKey = `${field}_${JSON.stringify(data).slice(0, 100)}`;
+    // ANTI-LOOP: Track this as our operation with device-specific identifier
+    const operationKey = `${this.deviceId}_${field}_${Date.now()}`;
     this.ourOperations.add(operationKey);
     
     // Auto-cleanup operation tracking after timeout
