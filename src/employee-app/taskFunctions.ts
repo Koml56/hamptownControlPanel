@@ -1,8 +1,21 @@
-// taskFunctions.ts - Fixed to prevent duplicate daily completions with debouncing
+// taskFunctions.ts - Fixed to prevent duplicate daily completions with cross-tab coordination
 import { getFormattedDate } from './utils';
 import type { Task, TaskAssignments, Employee, DailyDataMap } from './types';
+import { CrossTabOperationManager } from './CrossTabOperationManager';
 
-// Debouncing mechanism to prevent rapid clicking issues
+// Cross-tab operation coordination to prevent conflicts
+const DEVICE_ID = (() => {
+  let id = localStorage.getItem('hamptown_deviceId');
+  if (!id) {
+    id = 'device-' + Math.random().toString(36).slice(2, 10) + '-' + Date.now().toString(36);
+    localStorage.setItem('hamptown_deviceId', id);
+  }
+  return id;
+})();
+
+const crossTabManager = new CrossTabOperationManager(DEVICE_ID);
+
+// Legacy debouncing mechanism (kept for backward compatibility)
 const pendingOperations = new Map<number, NodeJS.Timeout>();
 const operationTimestamps = new Map<number, number>();
 
@@ -15,13 +28,20 @@ const clearPendingOperation = (taskId: number) => {
   }
 };
 
-// Check if operation should be allowed (debounce rapid clicks)
-const shouldAllowOperation = (taskId: number, minDelay: number = 500): boolean => {
+// Enhanced cross-tab aware operation check
+const shouldAllowOperation = (taskId: number, minDelay: number = 1000): boolean => {
+  // First check cross-tab coordination
+  if (!crossTabManager.shouldAllowOperation(taskId, 'TOGGLE_TASK', minDelay)) {
+    return false;
+  }
+  
+  // Then check local timing (additional protection)
   const lastOperation = operationTimestamps.get(taskId) || 0;
   const now = Date.now();
   
   if (now - lastOperation < minDelay) {
-    console.warn(`⚠️ Task operation debounced for task ${taskId} - too rapid`);
+    console.warn(`⚠️ Task operation debounced locally for task ${taskId} - too rapid`);
+    crossTabManager.completeOperation(taskId); // Clean up cross-tab state
     return false;
   }
   
@@ -202,8 +222,9 @@ export const toggleTaskComplete = (
   setEmployees: (updater: (prev: Employee[]) => Employee[]) => void,
   saveToFirebase?: () => void
 ) => {
-  // DEBOUNCE: Prevent rapid clicking on the same task
+  // ENHANCED CROSS-TAB DEBOUNCE: Prevent rapid clicking across tabs
   if (!shouldAllowOperation(taskId, 1000)) {
+    console.warn(`🚫 Task ${taskId} operation blocked by cross-tab coordination`);
     return;
   }
 
@@ -217,75 +238,90 @@ export const toggleTaskComplete = (
   
   if (!task) {
     console.error('Task not found:', taskId);
+    crossTabManager.completeOperation(taskId); // Clean up cross-tab state
     return;
   }
 
-  if (wasCompleted) {
-    // UNCOMPLETING A TASK
-    console.log(`🔄 Uncompleting task: ${task.task}`);
-    
-    newCompletedTasks.delete(taskId);
-    
-    // Remove task assignment when uncompleting
-    setTaskAssignments(prev => {
-      const newAssignments = { ...prev };
-      delete newAssignments[taskId];
-      return newAssignments;
-    });
-    
-    // Deduct points from the employee who had completed it
-    if (currentlyAssignedEmp) {
-      deductPoints(currentlyAssignedEmp.id, task.points, setEmployees);
-      console.log(`📉 Deducted ${task.points} points from ${currentlyAssignedEmp.name} for uncompleting task`);
+  console.log(`🔄 Processing task ${taskId} (${task.task}) - wasCompleted: ${wasCompleted}, device: ${DEVICE_ID}`);
+
+  try {
+    if (wasCompleted) {
+      // UNCOMPLETING A TASK
+      console.log(`🔄 Uncompleting task: ${task.task}`);
+      
+      newCompletedTasks.delete(taskId);
+      
+      // Remove task assignment when uncompleting
+      setTaskAssignments(prev => {
+        const newAssignments = { ...prev };
+        delete newAssignments[taskId];
+        return newAssignments;
+      });
+      
+      // Deduct points from the employee who had completed it
+      if (currentlyAssignedEmp) {
+        deductPoints(currentlyAssignedEmp.id, task.points, setEmployees);
+        console.log(`📉 Deducted ${task.points} points from ${currentlyAssignedEmp.name} for uncompleting task`);
+      }
+      
+      // CRITICAL: Remove from daily completion tracking
+      removeDailyTaskCompletion(taskId, tasks, setDailyData);
+      
+    } else {
+      // COMPLETING A TASK
+      console.log(`✅ Completing task: ${task.task}`);
+      
+      const targetEmployeeId = assignToEmployeeId || currentlyAssignedEmp?.id || currentUserId;
+      
+      // Update assignment if a specific employee was provided
+      if (assignToEmployeeId) {
+        setTaskAssignments(prev => ({ ...prev, [taskId]: assignToEmployeeId }));
+      } else if (!currentlyAssignedEmp) {
+        setTaskAssignments(prev => ({ ...prev, [taskId]: currentUserId }));
+      }
+      
+      newCompletedTasks.add(taskId);
+      
+      // Award points and save completion to daily tracking
+      awardPoints(targetEmployeeId, task.points, setEmployees);
+      saveDailyTaskCompletion(taskId, targetEmployeeId, task.task, task.points, tasks, setDailyData);
+      
+      console.log(`📈 Awarded ${task.points} points to employee ${targetEmployeeId} for completing task`);
     }
     
-    // CRITICAL: Remove from daily completion tracking
-    removeDailyTaskCompletion(taskId, tasks, setDailyData);
+    setCompletedTasks(newCompletedTasks);
     
-  } else {
-    // COMPLETING A TASK
-    console.log(`✅ Completing task: ${task.task}`);
-    
-    const targetEmployeeId = assignToEmployeeId || currentlyAssignedEmp?.id || currentUserId;
-    
-    // Update assignment if a specific employee was provided
-    if (assignToEmployeeId) {
-      setTaskAssignments(prev => ({ ...prev, [taskId]: assignToEmployeeId }));
-    } else if (!currentlyAssignedEmp) {
-      setTaskAssignments(prev => ({ ...prev, [taskId]: currentUserId }));
+    // CROSS-TAB COORDINATED SAVE: Save to Firebase after task completion change
+    if (saveToFirebase) {
+      console.log('🔥 [CRITICAL-SAVE] Cleaning tasks: About to save via cross-tab coordination');
+      
+      // Clear any existing pending save for this task
+      clearPendingOperation(taskId);
+      
+      // Schedule a coordinated save operation
+      const saveTimeout = setTimeout(() => {
+        console.log(`⏰ Executing coordinated save for task ${taskId} from device ${DEVICE_ID}`);
+        saveToFirebase();
+        pendingOperations.delete(taskId);
+        crossTabManager.completeOperation(taskId); // Mark operation as complete
+      }, 750); // Slightly faster save but still debounced
+      
+      pendingOperations.set(taskId, saveTimeout);
+    } else {
+      // If no save function, still mark operation as complete
+      crossTabManager.completeOperation(taskId);
     }
     
-    newCompletedTasks.add(taskId);
+    console.log(`✅ Task ${taskId} operation completed successfully by device ${DEVICE_ID}`);
     
-    // Award points and save completion to daily tracking
-    awardPoints(targetEmployeeId, task.points, setEmployees);
-    saveDailyTaskCompletion(taskId, targetEmployeeId, task.task, task.points, tasks, setDailyData);
-    
-    console.log(`📈 Awarded ${task.points} points to employee ${targetEmployeeId} for completing task`);
-  }
-  
-  setCompletedTasks(newCompletedTasks);
-  
-  // DEBOUNCED: Save to Firebase after task completion change with proper debouncing
-  if (saveToFirebase) {
-    console.log('🔥 [CRITICAL-SAVE] Cleaning tasks: About to save taskAssignments:', taskAssignments);
-    console.log(`🔥 [CRITICAL-SAVE] Cleaning tasks: About to save completedTasks:`, Array.from(newCompletedTasks));
-    
-    // Clear any existing pending save for this task
-    clearPendingOperation(taskId);
-    
-    // Schedule a debounced save operation
-    const saveTimeout = setTimeout(() => {
-      console.log('⏰ Executing debounced save for task:', taskId);
-      saveToFirebase();
-      pendingOperations.delete(taskId);
-    }, 500); // 500ms debounce delay
-    
-    pendingOperations.set(taskId, saveTimeout);
+  } catch (error) {
+    console.error(`❌ Error processing task ${taskId}:`, error);
+    crossTabManager.completeOperation(taskId); // Clean up cross-tab state on error
+    throw error; // Re-throw to maintain error handling behavior
   }
 };
 
-// Handle reassignment of already completed tasks with debouncing
+// Handle reassignment of already completed tasks with cross-tab coordination
 export const reassignCompletedTask = (
   taskId: number,
   newEmployeeId: number,
@@ -298,8 +334,9 @@ export const reassignCompletedTask = (
   setEmployees: (updater: (prev: Employee[]) => Employee[]) => void,
   saveToFirebase?: () => void
 ) => {
-  // DEBOUNCE: Prevent rapid reassignment clicks
-  if (!shouldAllowOperation(taskId, 800)) {
+  // ENHANCED CROSS-TAB DEBOUNCE: Prevent rapid reassignment clicks across tabs
+  if (!crossTabManager.shouldAllowOperation(taskId, 'ASSIGN_TASK', 800)) {
+    console.warn(`🚫 Task ${taskId} reassignment blocked by cross-tab coordination`);
     return;
   }
 
@@ -309,47 +346,50 @@ export const reassignCompletedTask = (
   
   if (!task || !newAssignedEmp) {
     console.error('Task or new employee not found');
+    crossTabManager.completeOperation(taskId); // Clean up cross-tab state
     return;
   }
 
-  // Only proceed if the task is completed and assignment is actually changing
-  if (!completedTasks.has(taskId) || oldAssignedEmp?.id === newEmployeeId) {
-    // If task is not completed, just update assignment normally
+  console.log(`🔄 Reassigning completed task ${taskId} from ${oldAssignedEmp?.name || 'unassigned'} to ${newAssignedEmp.name} (device: ${DEVICE_ID})`);
+
+  try {
+    // Transfer points: deduct from old employee, add to new employee
+    if (oldAssignedEmp && oldAssignedEmp.id !== newEmployeeId) {
+      transferPoints(oldAssignedEmp.id, newEmployeeId, task.points, setEmployees);
+      console.log(`💰 Transferred ${task.points} points from ${oldAssignedEmp.name} to ${newAssignedEmp.name}`);
+    } else if (!oldAssignedEmp) {
+      // If no previous assignee, just award points to new assignee
+      awardPoints(newEmployeeId, task.points, setEmployees);
+      console.log(`📈 Awarded ${task.points} points to ${newAssignedEmp.name} for reassigned task`);
+    }
+    
+    // Update task assignment
     setTaskAssignments(prev => ({ ...prev, [taskId]: newEmployeeId }));
-    return;
-  }
-
-  console.log(`🔄 Reassigning completed task from ${oldAssignedEmp?.name || 'unassigned'} to ${newAssignedEmp.name}`);
-
-  // Transfer points from old employee to new employee
-  if (oldAssignedEmp) {
-    transferPoints(oldAssignedEmp.id, newEmployeeId, task.points, setEmployees);
-  } else {
-    // If no previous assignment, just award points to new employee
-    awardPoints(newEmployeeId, task.points, setEmployees);
-  }
-
-  // Update task assignment
-  setTaskAssignments(prev => ({ ...prev, [taskId]: newEmployeeId }));
-
-  // CRITICAL: Update daily data to reflect the new assignment
-  // This replaces the old completion record with the new employee
-  saveDailyTaskCompletion(taskId, newEmployeeId, task.task, task.points, tasks, setDailyData);
-
-  // DEBOUNCED: Save to Firebase
-  if (saveToFirebase) {
-    console.log('🔥 Debounced save triggered by task reassignment');
     
-    // Clear any existing pending save for this task
-    clearPendingOperation(taskId);
+    // Update daily tracking - remove old completion and add new one
+    removeDailyTaskCompletion(taskId, tasks, setDailyData);
+    saveDailyTaskCompletion(taskId, newEmployeeId, task.task, task.points, tasks, setDailyData);
     
-    // Schedule a debounced save operation
-    const saveTimeout = setTimeout(() => {
-      console.log('⏰ Executing debounced reassignment save for task:', taskId);
-      saveToFirebase();
-      pendingOperations.delete(taskId);
-    }, 600); // 600ms debounce delay for reassignments
+    // CROSS-TAB COORDINATED SAVE: Save changes with coordination
+    if (saveToFirebase) {
+      setTimeout(() => {
+        console.log(`⏰ Executing coordinated reassignment save for task ${taskId} from device ${DEVICE_ID}`);
+        saveToFirebase();
+        crossTabManager.completeOperation(taskId); // Mark operation as complete
+      }, 600); // Slightly faster for reassignments
+    } else {
+      crossTabManager.completeOperation(taskId);
+    }
     
-    pendingOperations.set(taskId, saveTimeout);
+    console.log(`✅ Task ${taskId} reassignment completed successfully by device ${DEVICE_ID}`);
+    
+  } catch (error) {
+    console.error(`❌ Error reassigning task ${taskId}:`, error);
+    crossTabManager.completeOperation(taskId); // Clean up cross-tab state on error
+    throw error;
   }
 };
+
+// Export the cross-tab manager for debugging
+export const getCrossTabManagerStatus = () => crossTabManager.getStatus();
+export const getCrossTabDeviceId = () => DEVICE_ID;
