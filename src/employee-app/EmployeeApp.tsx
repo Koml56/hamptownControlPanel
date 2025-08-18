@@ -186,6 +186,8 @@ const EmployeeApp: React.FC = () => {
   const [syncEvents, setSyncEvents] = useState<SyncEvent[]>([]);
   const [deviceCount, setDeviceCount] = useState(1);
   const [isMultiDeviceEnabled, setIsMultiDeviceEnabled] = useState(true);
+  const [syncMode, setSyncMode] = useState<string>('firebase');
+  const [isUsingFallback, setIsUsingFallback] = useState(false);
   
   // Multi-device sync service
   const syncServiceRef = useRef<MultiDeviceSyncService | null>(null);
@@ -279,6 +281,25 @@ const EmployeeApp: React.FC = () => {
       
       // Connect the service
       syncServiceRef.current.connect().catch(console.error);
+      
+      // Periodic sync stats update to track fallback mode
+      const updateSyncStats = () => {
+        if (syncServiceRef.current) {
+          const stats = syncServiceRef.current.getSyncStats();
+          setSyncMode(stats.syncMode);
+          setIsUsingFallback(stats.isUsingFallback);
+        }
+      };
+      
+      // Initial update
+      setTimeout(updateSyncStats, 1000);
+      
+      // Periodic updates
+      const statsInterval = setInterval(updateSyncStats, 5000);
+      
+      return () => {
+        clearInterval(statsInterval);
+      };
     }
     
     return () => {
@@ -817,6 +838,8 @@ const EmployeeApp: React.FC = () => {
           isMultiDeviceEnabled={isMultiDeviceEnabled}
           toggleMultiDeviceSync={toggleMultiDeviceSync}
           refreshFromAllDevices={refreshFromAllDevices}
+          syncMode={syncMode}
+          isUsingFallback={isUsingFallback}
         />
 
         {/* Tab Content */}

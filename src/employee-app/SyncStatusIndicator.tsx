@@ -18,6 +18,9 @@ interface SyncStatusIndicatorProps {
   refreshFromAllDevices?: () => void;
   // Додаємо для нової архітектури:
   conflictCount?: number;
+  // NEW: Sync mode information
+  syncMode?: string;
+  isUsingFallback?: boolean;
 }
 
 const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
@@ -31,7 +34,9 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
   isMultiDeviceEnabled = true, // Default to true now
   toggleMultiDeviceSync = () => {},
   refreshFromAllDevices = () => {},
-  conflictCount = 0 // Default to 0
+  conflictCount = 0, // Default to 0
+  syncMode = 'firebase',
+  isUsingFallback = false
 }) => {
   const [showSyncPulse, setShowSyncPulse] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
@@ -399,9 +404,12 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
                       <Users className="w-3 h-3 text-white" />
                     </div>
                     <div>
-                      <span className="text-sm font-semibold text-gray-800">Multi-Device Sync</span>
+                      <span className="text-sm font-semibold text-gray-800">
+                        {isUsingFallback ? 'Local Tab Sync' : 'Multi-Device Sync'}
+                      </span>
                       <div className="text-xs text-gray-600">
                         {deviceCount} device{deviceCount !== 1 ? 's' : ''} connected
+                        {isUsingFallback && ' (local)'}
                       </div>
                     </div>
                   </div>
@@ -437,7 +445,11 @@ const SyncStatusIndicator: React.FC<SyncStatusIndicatorProps> = ({
                     </div>
                   </div>
                   <div className="text-xs text-gray-600">
-                    {connectionStatus === 'connected' ? 'All changes sync automatically across devices' :
+                    {connectionStatus === 'connected' ? 
+                      (isUsingFallback ? 
+                        'Local sync active - changes sync across browser tabs' :
+                        'All changes sync automatically across devices'
+                      ) :
                      connectionStatus === 'connecting' ? 'Connecting to sync service...' :
                      'Connection failed - working offline'}
                   </div>

@@ -60,6 +60,11 @@ export class MultiDeviceSyncService {
   private maxRetries = 3;
   private retryTimeout: NodeJS.Timeout | null = null;
   
+  // FALLBACK: LocalStorage sync for when Firebase is unavailable
+  private useLocalStorageFallback = false;
+  private localStoragePrefix = 'workVibe_sync_';
+  private storageEventListener: ((e: StorageEvent) => void) | null = null;
+  
   // PERFORMANCE: Throttle sync operations
   private syncQueue: Map<string, any> = new Map();
   private syncTimer: NodeJS.Timeout | null = null;
@@ -133,7 +138,7 @@ export class MultiDeviceSyncService {
     };
   }
 
-  // PERFORMANCE: Fast, non-blocking connect
+  // ENHANCED: Connection with fallback mechanism
   async connect(): Promise<void> {
     if (this.isConnected) {
       console.log('✅ Already connected');
@@ -143,11 +148,19 @@ export class MultiDeviceSyncService {
     try {
       console.log('🔗 Connecting sync service...');
       
+      // Test Firebase connectivity first
+      const connectivityTest = await this.testFirebaseConnectivity();
+      
+      if (connectivityTest) {
+        console.log('✅ Firebase available, using real-time sync');
+        await this.connectToFirebase();
+      } else {
+        console.log('⚠️ Firebase unavailable, using localStorage fallback');
+        this.connectToLocalStorage();
+      }
+      
       // Update presence (fire and forget)
       this.updatePresence(true).catch(console.warn);
-      
-      // Start listening (non-blocking)
-      this.startListening();
       
       // Start heartbeat (lightweight)
       this.startHeartbeat();
@@ -161,14 +174,131 @@ export class MultiDeviceSyncService {
         timestamp: Date.now(),
         deviceId: this.deviceId,
         deviceName: this.deviceInfo.name,
-        description: `${this.deviceInfo.name} connected`
+        description: `${this.deviceInfo.name} connected${this.useLocalStorageFallback ? ' (local mode)' : ''}`
       });
       
-      console.log('✅ Sync service connected');
+      console.log(`✅ Sync service connected${this.useLocalStorageFallback ? ' in local mode' : ''}`);
       
     } catch (error) {
       console.error('❌ Connection failed:', error);
       this.scheduleReconnect();
+    }
+  }
+
+  // Test Firebase connectivity
+  private async testFirebaseConnectivity(): Promise<boolean> {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+      
+      const response = await fetch(`${this.baseUrl}/presence.json`, {
+        method: 'GET',
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      return response.ok;
+    } catch (error) {
+      console.warn('⚠️ Firebase connectivity test failed:', error);
+      return false;
+    }
+  }
+
+  // Connect to Firebase (original method)
+  private async connectToFirebase(): Promise<void> {
+    this.useLocalStorageFallback = false;
+    
+    // Start listening (non-blocking)
+    this.startListening();
+  }
+
+  // Connect using localStorage fallback
+  private connectToLocalStorage(): void {
+    this.useLocalStorageFallback = true;
+    
+    console.log('🔄 Initializing localStorage sync...');
+    
+    // Set up storage event listener for cross-tab sync
+    this.storageEventListener = (e: StorageEvent) => {
+      if (e.key && e.key.startsWith(this.localStoragePrefix)) {
+        const field = e.key.substring(this.localStoragePrefix.length);
+        
+        if (e.newValue && this.syncCallbacks.has(field)) {
+          console.log(`📥 Received localStorage update for ${field}`);
+          
+          try {
+            const data = JSON.parse(e.newValue);
+            let processedData = data;
+            
+            if (field === 'completedTasks' && Array.isArray(data)) {
+              processedData = new Set(data);
+            }
+            
+            const callback = this.syncCallbacks.get(field)!;
+            callback(processedData);
+            
+            // Emit sync event
+            this.emitSyncEvent({
+              type: 'data_update',
+              timestamp: Date.now(),
+              deviceId: 'local',
+              deviceName: 'Local Storage',
+              field,
+              description: `${field} updated from another tab`
+            });
+            
+          } catch (error) {
+            console.warn(`⚠️ Error processing localStorage update for ${field}:`, error);
+          }
+        }
+      }
+    };
+    
+    window.addEventListener('storage', this.storageEventListener);
+    
+    // Load initial data from localStorage
+    this.loadInitialLocalData();
+  }
+
+  // Load initial data from localStorage
+  private loadInitialLocalData(): void {
+    const relevantFields = [
+      'employees', 
+      'tasks', 
+      'dailyData', 
+      'completedTasks', 
+      'taskAssignments', 
+      'customRoles',
+      'prepItems',
+      'scheduledPreps',
+      'prepSelections',
+      'storeItems',
+      'inventoryDailyItems',
+      'inventoryWeeklyItems', 
+      'inventoryMonthlyItems',
+      'inventoryDatabaseItems',
+      'inventoryActivityLog'
+    ];
+
+    for (const field of relevantFields) {
+      try {
+        const stored = localStorage.getItem(this.localStoragePrefix + field);
+        if (stored && this.syncCallbacks.has(field)) {
+          const data = JSON.parse(stored);
+          let processedData = data;
+          
+          if (field === 'completedTasks' && Array.isArray(data)) {
+            processedData = new Set(data);
+          }
+          
+          const callback = this.syncCallbacks.get(field)!;
+          callback(processedData);
+          
+          console.log(`📂 Loaded ${field} from localStorage`);
+        }
+      } catch (error) {
+        console.warn(`⚠️ Error loading ${field} from localStorage:`, error);
+      }
     }
   }
 
@@ -194,6 +324,12 @@ export class MultiDeviceSyncService {
         this.syncTimer = null;
       }
       
+      // Clean up localStorage event listener
+      if (this.storageEventListener) {
+        window.removeEventListener('storage', this.storageEventListener);
+        this.storageEventListener = null;
+      }
+      
       // Remove presence (fire and forget)
       this.removePresence().catch(console.warn);
       
@@ -213,38 +349,43 @@ export class MultiDeviceSyncService {
     };
 
     try {
-      // Fire and forget - don't wait for response
-      fetch(`${this.baseUrl}/${this.presenceRef}.json`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(this.deviceInfo)
-      }).then(response => {
-        if (response.ok) {
-          // ENHANCED: Update device count asynchronously with debouncing
-          if (this.deviceCountTimeout) {
-            clearTimeout(this.deviceCountTimeout);
+      if (this.useLocalStorageFallback) {
+        // Update presence in localStorage
+        this.updateLocalPresence();
+      } else {
+        // Fire and forget - don't wait for response
+        fetch(`${this.baseUrl}/${this.presenceRef}.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(this.deviceInfo)
+        }).then(response => {
+          if (response.ok) {
+            // ENHANCED: Update device count asynchronously with debouncing
+            if (this.deviceCountTimeout) {
+              clearTimeout(this.deviceCountTimeout);
+            }
+            this.deviceCountTimeout = setTimeout(() => {
+              this.getActiveDevices().then(devices => {
+                if (this.onDeviceCountChange) {
+                  console.log(`📱 Device count updated: ${devices.length} devices connected`);
+                  this.onDeviceCountChange(devices.length, devices);
+                }
+              }).catch(console.warn);
+            }, 1000); // Debounce device count updates
+          } else {
+            console.warn(`⚠️ Presence update failed: HTTP ${response.status} ${response.statusText}`);
           }
-          this.deviceCountTimeout = setTimeout(() => {
-            this.getActiveDevices().then(devices => {
-              if (this.onDeviceCountChange) {
-                console.log(`📱 Device count updated: ${devices.length} devices connected`);
-                this.onDeviceCountChange(devices.length, devices);
-              }
-            }).catch(console.warn);
-          }, 1000); // Debounce device count updates
-        } else {
-          console.warn(`⚠️ Presence update failed: HTTP ${response.status} ${response.statusText}`);
-        }
-      }).catch(error => {
-        // Enhanced error logging for presence updates
-        console.warn('⚠️ Presence update failed:', {
-          message: error instanceof Error ? error.message : 'Unknown error',
-          name: error instanceof Error ? error.name : 'Error',
-          presenceRef: this.presenceRef,
-          baseUrl: this.baseUrl,
-          error: error
+        }).catch(error => {
+          // Enhanced error logging for presence updates
+          console.warn('⚠️ Presence update failed:', {
+            message: error instanceof Error ? error.message : 'Unknown error',
+            name: error instanceof Error ? error.name : 'Error',
+            presenceRef: this.presenceRef,
+            baseUrl: this.baseUrl,
+            error: error
+          });
         });
-      });
+      }
 
     } catch (error) {
       // Enhanced error logging for presence updates
@@ -258,16 +399,54 @@ export class MultiDeviceSyncService {
     }
   }
 
+  // Update presence in localStorage (fallback mode)
+  private updateLocalPresence(): void {
+    try {
+      const stored = localStorage.getItem(this.localStoragePrefix + 'activeDevices');
+      let devices: DeviceInfo[] = stored ? JSON.parse(stored) : [];
+      
+      // Remove stale devices and our old entry
+      const now = Date.now();
+      devices = devices.filter(device => 
+        device.id !== this.deviceId && 
+        device.isActive && 
+        (now - device.lastSeen) < 120000 // 2 minutes
+      );
+      
+      // Add our current device info
+      devices.push(this.deviceInfo);
+      
+      // Save back to localStorage
+      localStorage.setItem(
+        this.localStoragePrefix + 'activeDevices', 
+        JSON.stringify(devices)
+      );
+      
+      // Update device count
+      if (this.onDeviceCountChange) {
+        this.onDeviceCountChange(devices.length, devices);
+      }
+      
+    } catch (error) {
+      console.warn('⚠️ Error updating local presence:', error);
+    }
+  }
+
   private deviceCountTimeout: NodeJS.Timeout | null = null;
 
   private async removePresence(): Promise<void> {
     try {
-      const response = await fetch(`${this.baseUrl}/${this.presenceRef}.json`, {
-        method: 'DELETE'
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      if (this.useLocalStorageFallback) {
+        // Remove presence from localStorage
+        this.removeLocalPresence();
+      } else {
+        const response = await fetch(`${this.baseUrl}/${this.presenceRef}.json`, {
+          method: 'DELETE'
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
       }
     } catch (error) {
       // Enhanced error logging to show meaningful details
@@ -282,6 +461,28 @@ export class MultiDeviceSyncService {
     }
   }
 
+  // Remove presence from localStorage (fallback mode)
+  private removeLocalPresence(): void {
+    try {
+      const stored = localStorage.getItem(this.localStoragePrefix + 'activeDevices');
+      if (!stored) return;
+      
+      let devices: DeviceInfo[] = JSON.parse(stored);
+      
+      // Remove our device
+      devices = devices.filter(device => device.id !== this.deviceId);
+      
+      // Save back to localStorage
+      localStorage.setItem(
+        this.localStoragePrefix + 'activeDevices', 
+        JSON.stringify(devices)
+      );
+      
+    } catch (error) {
+      console.warn('⚠️ Error removing local presence:', error);
+    }
+  }
+
   // PERFORMANCE: Cached device list with filtering
   private deviceCache: { devices: DeviceInfo[], timestamp: number } | null = null;
   private readonly DEVICE_CACHE_TTL = 30000; // 30 seconds
@@ -292,6 +493,11 @@ export class MultiDeviceSyncService {
       const now = Date.now();
       if (this.deviceCache && (now - this.deviceCache.timestamp) < this.DEVICE_CACHE_TTL) {
         return this.deviceCache.devices;
+      }
+
+      if (this.useLocalStorageFallback) {
+        // Use localStorage to track active tabs
+        return this.getLocalActiveDevices();
       }
 
       const response = await fetch(`${this.baseUrl}/presence.json`);
@@ -316,7 +522,36 @@ export class MultiDeviceSyncService {
       
     } catch (error) {
       console.warn('⚠️ Failed to get devices:', error);
-      return [];
+      return this.useLocalStorageFallback ? this.getLocalActiveDevices() : [];
+    }
+  }
+
+  // Get active devices from localStorage (fallback mode)
+  private getLocalActiveDevices(): DeviceInfo[] {
+    try {
+      const stored = localStorage.getItem(this.localStoragePrefix + 'activeDevices');
+      if (!stored) return [this.deviceInfo];
+      
+      const devices = JSON.parse(stored) as DeviceInfo[];
+      const now = Date.now();
+      
+      // Filter stale devices (inactive for more than 2 minutes in local mode)
+      const activeDevices = devices.filter(device => 
+        device.isActive && (now - device.lastSeen) < 120000
+      );
+      
+      // Always include ourselves
+      const ourDevice = activeDevices.find(d => d.id === this.deviceId);
+      if (!ourDevice) {
+        activeDevices.push(this.deviceInfo);
+      }
+      
+      this.deviceCache = { devices: activeDevices, timestamp: now };
+      return activeDevices;
+      
+    } catch (error) {
+      console.warn('⚠️ Error reading local active devices:', error);
+      return [this.deviceInfo];
     }
   }
 
@@ -513,6 +748,54 @@ export class MultiDeviceSyncService {
     try {
       console.log('📤 Processing sync queue:', Array.from(queue.keys()));
       
+      if (this.useLocalStorageFallback) {
+        // Process localStorage sync
+        this.processLocalStorageSync(queue);
+      } else {
+        // Process Firebase sync
+        await this.processFirebaseSync(queue);
+      }
+      
+    } finally {
+      this.isSyncing = false;
+    }
+  }
+
+  // Process sync using localStorage fallback
+  private processLocalStorageSync(queue: Map<string, any>): void {
+    console.log('📂 Processing localStorage sync...');
+    
+    for (const [field, data] of queue.entries()) {
+      try {
+        let processedData = data instanceof Set ? Array.from(data) : data;
+        
+        // Save to localStorage
+        localStorage.setItem(
+          this.localStoragePrefix + field, 
+          JSON.stringify(processedData)
+        );
+        
+        console.log(`✅ Synced ${field} to localStorage`);
+        
+        // Emit sync event
+        this.emitSyncEvent({
+          type: 'data_update',
+          timestamp: Date.now(),
+          deviceId: this.deviceId,
+          deviceName: this.deviceInfo.name,
+          field,
+          description: `${field} synced locally`
+        });
+        
+      } catch (error) {
+        console.warn(`⚠️ Failed to sync ${field} to localStorage:`, error);
+      }
+    }
+  }
+
+  // Process sync using Firebase
+  private async processFirebaseSync(queue: Map<string, any>): Promise<void> {
+    try {
       // Process all queued syncs in parallel
       const syncPromises = Array.from(queue.entries()).map(async ([field, data]) => {
         try {
@@ -548,16 +831,9 @@ export class MultiDeviceSyncService {
       });
 
       await Promise.allSettled(syncPromises);
-      
+        
     } catch (error) {
-      console.error('❌ Sync queue processing failed:', error);
-    } finally {
-      this.isSyncing = false;
-      
-      // Process any new items that were queued during sync
-      if (this.syncQueue.size > 0) {
-        setTimeout(() => this.processSyncQueue(), 2000);
-      }
+      console.error('❌ Firebase sync processing failed:', error);
     }
   }
 
@@ -669,13 +945,17 @@ export class MultiDeviceSyncService {
     lastSync: number; 
     isListening: boolean;
     queueSize: number;
+    isUsingFallback: boolean;
+    syncMode: string;
   } {
     return {
       isConnected: this.isConnected,
       deviceCount: this.deviceCache?.devices.length || 0,
       lastSync: Math.max(...Array.from(this.lastDataTimestamp.values()), 0),
       isListening: this.eventSource !== null,
-      queueSize: this.syncQueue.size
+      queueSize: this.syncQueue.size,
+      isUsingFallback: this.useLocalStorageFallback,
+      syncMode: this.useLocalStorageFallback ? 'localStorage' : 'firebase'
     };
   }
 }
