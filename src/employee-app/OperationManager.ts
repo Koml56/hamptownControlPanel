@@ -4,7 +4,7 @@ import { VectorClock } from './VectorClock';
 
 export interface SyncOperation {
   id: string;
-  type: 'ADD_TASK' | 'UPDATE_EMPLOYEE' | 'COMPLETE_TASK' | 'DELETE_ITEM' | 'ADD_STORE_ITEM' | 'UPDATE_STORE_ITEM' | 'DELETE_STORE_ITEM';
+  type: 'ADD_TASK' | 'UPDATE_EMPLOYEE' | 'COMPLETE_TASK' | 'DELETE_ITEM' | 'ADD_STORE_ITEM' | 'UPDATE_STORE_ITEM' | 'DELETE_STORE_ITEM' | 'ADD_PREP_ITEM' | 'UPDATE_PREP_ITEM' | 'DELETE_PREP_ITEM';
   payload: any;
   timestamp: number;
   deviceId: string;
@@ -77,6 +77,27 @@ export class OperationManager {
           return {
             ...currentState,
             storeItems: currentState.storeItems.filter((item: any) => item.id !== operation.payload.id),
+          };
+        default:
+          return currentState;
+      }
+    }
+    // PrepItems operations
+    if (operation.targetField === 'prepItems') {
+      switch (operation.type) {
+        case 'ADD_PREP_ITEM':
+          return { ...currentState, prepItems: [...currentState.prepItems, operation.payload] };
+        case 'UPDATE_PREP_ITEM':
+          return {
+            ...currentState,
+            prepItems: currentState.prepItems.map((item: any) =>
+              item.id === operation.payload.id ? { ...item, ...operation.payload } : item
+            ),
+          };
+        case 'DELETE_PREP_ITEM':
+          return {
+            ...currentState,
+            prepItems: currentState.prepItems.filter((item: any) => item.id !== operation.payload.id),
           };
         default:
           return currentState;
@@ -156,6 +177,20 @@ export class OperationManager {
             break;
           case 'DELETE_STORE_ITEM':
             state.storeItems = [...state.storeItems, op.payload];
+            break;
+        }
+      }
+      if (op.targetField === 'prepItems') {
+        switch (op.type) {
+          case 'ADD_PREP_ITEM':
+            state.prepItems = state.prepItems.filter((item: any) => item.id !== op.payload.id);
+            break;
+          case 'UPDATE_PREP_ITEM':
+            // For rollback, we'd need to store the previous state, but for simplicity, skip complex rollback
+            console.warn('Prep item update rollback not fully implemented');
+            break;
+          case 'DELETE_PREP_ITEM':
+            state.prepItems = [...state.prepItems, op.payload];
             break;
         }
       }
