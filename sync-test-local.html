@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Local Sync Test - Multi-Device Sync Fix</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        .info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #b7d7e0; }
+        .task-item {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin: 5px 0;
+            background: #f9f9f9;
+            cursor: pointer;
+        }
+        .task-item.completed {
+            background: #d4edda;
+            text-decoration: line-through;
+        }
+        .device-info {
+            background: #e9ecef;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 Multi-Device Sync Fix Test</h1>
+        
+        <div class="status success">
+            <strong>✅ LocalStorage Fallback Active:</strong> Cross-tab sync working without Firebase dependency
+        </div>
+        
+        <div class="status info">
+            <strong>📋 Test Instructions:</strong>
+            <ol>
+                <li>Open this page in multiple browser tabs</li>
+                <li>Click on tasks to toggle completion</li>
+                <li>Watch changes sync instantly across tabs</li>
+                <li>Check device count updates in real-time</li>
+            </ol>
+        </div>
+
+        <div id="connectionStatus" class="status warning">
+            🔄 Initializing sync...
+        </div>
+        
+        <div class="device-info">
+            <strong>Device Info:</strong><br>
+            <span id="deviceInfo">Loading...</span><br>
+            <strong>Active Devices:</strong> <span id="deviceCount">1</span><br>
+            <strong>Last Sync:</strong> <span id="lastSync">Never</span><br>
+            <strong>Sync Mode:</strong> <span id="syncMode">Detecting...</span>
+        </div>
+
+        <h3>🧹 Test Tasks</h3>
+        <div id="taskContainer">
+            <!-- Tasks will be populated by JavaScript -->
+        </div>
+
+        <h3>🎮 Test Actions</h3>
+        <button onclick="checkRandomTask()">Check Random Task</button>
+        <button onclick="uncheckAllTasks()">Uncheck All</button>
+        <button onclick="checkAllTasks()">Check All</button>
+        <button onclick="clearAllData()">Clear Data</button>
+        
+        <h3>📊 Sync Events</h3>
+        <div id="syncEvents" style="max-height: 200px; overflow-y: auto; background: #f8f9fa; padding: 10px; border-radius: 4px;">
+            No events yet...
+        </div>
+    </div>
+
+    <script>
+        // Mock MultiDeviceSync service with localStorage fallback
+        class LocalSyncTest {
+            constructor() {
+                this.deviceId = this.generateDeviceId();
+                this.tasks = [
+                    { id: 1, name: 'Clean Kitchen', completed: false },
+                    { id: 2, name: 'Mop Floors', completed: false },
+                    { id: 3, name: 'Empty Trash', completed: false },
+                    { id: 4, name: 'Clean Bathrooms', completed: false },
+                    { id: 5, name: 'Wipe Tables', completed: false }
+                ];
+                this.completedTasks = new Set();
+                this.syncEvents = [];
+                this.activeDevices = [];
+                
+                this.init();
+            }
+            
+            generateDeviceId() {
+                let deviceId = sessionStorage.getItem('syncTest_deviceId');
+                if (!deviceId) {
+                    const timestamp = Date.now().toString(36);
+                    const random = Math.random().toString(36).substr(2, 6);
+                    deviceId = `device_${timestamp}_${random}`;
+                    sessionStorage.setItem('syncTest_deviceId', deviceId);
+                }
+                return deviceId;
+            }
+            
+            init() {
+                // Load existing data
+                this.loadData();
+                
+                // Set up storage listener for cross-tab sync
+                window.addEventListener('storage', (e) => {
+                    if (e.key === 'syncTest_completedTasks') {
+                        this.handleRemoteUpdate(e.newValue);
+                    } else if (e.key === 'syncTest_activeDevices') {
+                        this.updateDeviceCount();
+                    }
+                });
+                
+                // Register this device
+                this.registerDevice();
+                
+                // Update UI
+                this.updateUI();
+                this.updateDeviceInfo();
+                
+                // Heartbeat to maintain device presence
+                setInterval(() => this.heartbeat(), 2000);
+                
+                // Test Firebase connectivity
+                this.testFirebaseConnectivity();
+                
+                // Cleanup on page unload
+                window.addEventListener('beforeunload', () => this.cleanup());
+                
+                // Initial status
+                this.addSyncEvent('device_join', 'Device connected in local mode');
+                document.getElementById('connectionStatus').innerHTML = 
+                    '<strong>✅ Connected:</strong> Local sync active (Firebase fallback)';
+                document.getElementById('connectionStatus').className = 'status success';
+            }
+            
+            async testFirebaseConnectivity() {
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 3000);
+                    
+                    const response = await fetch('https://hamptown-panel-default-rtdb.firebaseio.com/presence.json', {
+                        method: 'GET',
+                        signal: controller.signal
+                    });
+                    
+                    clearTimeout(timeoutId);
+                    
+                    if (response.ok) {
+                        document.getElementById('syncMode').textContent = 'Firebase Available (using fallback for demo)';
+                    } else {
+                        document.getElementById('syncMode').textContent = 'LocalStorage Fallback';
+                    }
+                } catch (error) {
+                    document.getElementById('syncMode').textContent = 'LocalStorage Fallback (Firebase unreachable)';
+                    console.log('Firebase connectivity test failed (expected in this environment):', error.message);
+                }
+            }
+            
+            loadData() {
+                const stored = localStorage.getItem('syncTest_completedTasks');
+                if (stored) {
+                    this.completedTasks = new Set(JSON.parse(stored));
+                }
+            }
+            
+            saveData() {
+                localStorage.setItem('syncTest_completedTasks', JSON.stringify([...this.completedTasks]));
+                this.updateSyncTime();
+            }
+            
+            handleRemoteUpdate(newValue) {
+                if (newValue) {
+                    const startTime = performance.now();
+                    this.completedTasks = new Set(JSON.parse(newValue));
+                    this.updateUI();
+                    
+                    const latency = (performance.now() - startTime).toFixed(2);
+                    console.log(`📡 Cross-tab sync received in ${latency}ms`);
+                    
+                    this.addSyncEvent('data_update', `Tasks updated from another tab (${latency}ms)`);
+                }
+            }
+            
+            registerDevice() {
+                const deviceInfo = {
+                    id: this.deviceId,
+                    name: `Tab-${this.deviceId.slice(-4)}`,
+                    lastSeen: Date.now(),
+                    isActive: true,
+                    platform: 'browser',
+                    userAgent: navigator.userAgent.split(' ').slice(-2).join(' ')
+                };
+                
+                const stored = localStorage.getItem('syncTest_activeDevices');
+                let devices = stored ? JSON.parse(stored) : [];
+                
+                // Remove stale devices and our old entry
+                const now = Date.now();
+                devices = devices.filter(d => 
+                    d.id !== this.deviceId && 
+                    d.isActive && 
+                    (now - d.lastSeen) < 60000 // 1 minute
+                );
+                
+                // Add our device
+                devices.push(deviceInfo);
+                
+                localStorage.setItem('syncTest_activeDevices', JSON.stringify(devices));
+                this.updateDeviceCount();
+            }
+            
+            updateDeviceCount() {
+                try {
+                    const stored = localStorage.getItem('syncTest_activeDevices');
+                    const devices = stored ? JSON.parse(stored) : [];
+                    const activeCount = devices.filter(d => d.isActive).length;
+                    
+                    document.getElementById('deviceCount').textContent = activeCount;
+                    this.activeDevices = devices;
+                } catch (error) {
+                    console.warn('Error updating device count:', error);
+                }
+            }
+            
+            updateUI() {
+                const container = document.getElementById('taskContainer');
+                container.innerHTML = this.tasks.map(task => {
+                    const isCompleted = this.completedTasks.has(task.id);
+                    return `
+                        <div class="task-item ${isCompleted ? 'completed' : ''}" onclick="syncTest.toggleTask(${task.id})">
+                            <input type="checkbox" ${isCompleted ? 'checked' : ''} onchange="syncTest.toggleTask(${task.id})">
+                            <span style="margin-left: 8px;">${task.name}</span>
+                        </div>
+                    `;
+                }).join('');
+            }
+            
+            updateDeviceInfo() {
+                document.getElementById('deviceInfo').innerHTML = `
+                    ID: ${this.deviceId}<br>
+                    Platform: ${navigator.platform}<br>
+                    Browser: ${navigator.userAgent.split(' ').slice(-2).join(' ')}
+                `;
+            }
+            
+            updateSyncTime() {
+                const now = new Date();
+                document.getElementById('lastSync').textContent = now.toLocaleTimeString();
+            }
+            
+            toggleTask(taskId) {
+                if (this.completedTasks.has(taskId)) {
+                    this.completedTasks.delete(taskId);
+                } else {
+                    this.completedTasks.add(taskId);
+                }
+                
+                this.saveData();
+                this.updateUI();
+                this.addSyncEvent('task_toggle', `Task ${taskId} toggled`);
+            }
+            
+            addSyncEvent(type, description) {
+                const event = {
+                    type,
+                    timestamp: new Date().toLocaleTimeString(),
+                    description
+                };
+                
+                this.syncEvents.unshift(event);
+                if (this.syncEvents.length > 10) {
+                    this.syncEvents = this.syncEvents.slice(0, 10);
+                }
+                
+                const eventsContainer = document.getElementById('syncEvents');
+                eventsContainer.innerHTML = this.syncEvents.map(e => 
+                    `<div><strong>[${e.timestamp}]</strong> ${e.type}: ${e.description}</div>`
+                ).join('');
+            }
+            
+            heartbeat() {
+                this.registerDevice();
+            }
+            
+            cleanup() {
+                // Remove our device from active list
+                try {
+                    const stored = localStorage.getItem('syncTest_activeDevices');
+                    if (stored) {
+                        let devices = JSON.parse(stored);
+                        devices = devices.filter(d => d.id !== this.deviceId);
+                        localStorage.setItem('syncTest_activeDevices', JSON.stringify(devices));
+                    }
+                } catch (error) {
+                    console.warn('Error during cleanup:', error);
+                }
+            }
+        }
+        
+        // Initialize the test
+        const syncTest = new LocalSyncTest();
+        
+        // Test functions
+        function checkRandomTask() {
+            const availableTasks = syncTest.tasks.filter(t => !syncTest.completedTasks.has(t.id));
+            if (availableTasks.length > 0) {
+                const randomTask = availableTasks[Math.floor(Math.random() * availableTasks.length)];
+                syncTest.toggleTask(randomTask.id);
+            }
+        }
+        
+        function uncheckAllTasks() {
+            syncTest.completedTasks.clear();
+            syncTest.saveData();
+            syncTest.updateUI();
+            syncTest.addSyncEvent('bulk_action', 'All tasks unchecked');
+        }
+        
+        function checkAllTasks() {
+            syncTest.tasks.forEach(task => syncTest.completedTasks.add(task.id));
+            syncTest.saveData();
+            syncTest.updateUI();
+            syncTest.addSyncEvent('bulk_action', 'All tasks checked');
+        }
+        
+        function clearAllData() {
+            localStorage.removeItem('syncTest_completedTasks');
+            localStorage.removeItem('syncTest_activeDevices');
+            syncTest.completedTasks.clear();
+            syncTest.updateUI();
+            syncTest.addSyncEvent('data_clear', 'All data cleared');
+        }
+    </script>
+</body>
+</html>
