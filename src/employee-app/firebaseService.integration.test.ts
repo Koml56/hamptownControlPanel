@@ -59,7 +59,8 @@ describe('FirebaseService inventoryCustomCategories Integration', () => {
       inventoryActivityLog: [],
       inventoryCustomCategories: mockCustomCategories, // This was the missing piece!
       stockCountSnapshots: [],
-      dailyInventorySnapshots: []
+      dailyInventorySnapshots: [],
+      inventoryHistoricalSnapshots: []
     };
 
     // This call should now succeed without the "Failed fields: Array ['inventoryCustomCategories']" error
@@ -180,7 +181,8 @@ describe('FirebaseService inventoryCustomCategories Integration', () => {
       inventoryActivityLog: [],
       inventoryCustomCategories: realWorldCustomCategories,
       stockCountSnapshots: [],
-      dailyInventorySnapshots: []
+      dailyInventorySnapshots: [],
+      inventoryHistoricalSnapshots: []
     };
 
     await expect(firebaseService.saveData(realWorldData)).resolves.not.toThrow();

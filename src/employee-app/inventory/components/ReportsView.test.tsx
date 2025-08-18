@@ -139,6 +139,7 @@ describe('ReportsView', () => {
     customCategories: [],
     stockCountSnapshots: mockStockCountSnapshots,
     dailyInventorySnapshots: [],
+    historicalSnapshots: [],
     employees: [{ id: 1, name: 'John Doe', role: 'Manager', mood: 5, lastUpdated: '2024-01-15', lastMoodDate: '2024-01-15', points: 100 }],
     currentUser: { id: 1, name: 'John Doe' },
     selectedItems: new Set(),
@@ -171,6 +172,10 @@ describe('ReportsView', () => {
     updateCustomCategory: jest.fn(),
     deleteCustomCategory: jest.fn(),
     createStockSnapshot: jest.fn().mockResolvedValue([{ success: true }]),
+    // Analytics functions
+    createSnapshot: jest.fn(),
+    getAnalyticsData: jest.fn(),
+    compareWithPreviousPeriod: jest.fn(),
     reorderItems: jest.fn(),
     quickSave: jest.fn().mockResolvedValue(true)
   };

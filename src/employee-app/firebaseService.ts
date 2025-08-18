@@ -1,7 +1,7 @@
 // firebaseService.ts - FIXED to include all prep and store fields
 import { FIREBASE_CONFIG } from './constants';
 import { getDefaultEmployees, getDefaultTasks, getEmptyDailyData } from './defaultData';
-import type { Employee, Task, DailyDataMap, TaskAssignments, PrepItem, ScheduledPrep, PrepSelections, StoreItem, InventoryItem, DatabaseItem, ActivityLogEntry, StockCountHistoryEntry, CustomCategory, DailyInventorySnapshot } from './types';
+import type { Employee, Task, DailyDataMap, TaskAssignments, PrepItem, ScheduledPrep, PrepSelections, StoreItem, InventoryItem, DatabaseItem, ActivityLogEntry, StockCountHistoryEntry, CustomCategory, DailyInventorySnapshot, HistoricalSnapshot } from './types';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, onValue, off } from 'firebase/database';
 
@@ -643,6 +643,7 @@ export class FirebaseService {
     inventoryCustomCategories: CustomCategory[];
     stockCountSnapshots: StockCountHistoryEntry[];
     dailyInventorySnapshots: DailyInventorySnapshot[];
+    inventoryHistoricalSnapshots: HistoricalSnapshot[];
   }) {
     console.log('🔥 Saving all data to Firebase...');
 
@@ -664,7 +665,9 @@ export class FirebaseService {
       'inventoryDatabaseItems',
       'inventoryActivityLog',
       'inventoryCustomCategories',
-      'stockCountSnapshots'
+      'stockCountSnapshots',
+      'dailyInventorySnapshots',
+      'inventoryHistoricalSnapshots'
     ];
 
     const success = await this.batchSave(fields, data);

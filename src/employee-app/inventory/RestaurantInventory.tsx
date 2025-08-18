@@ -151,6 +151,7 @@ const RestaurantInventory: React.FC<InventoryTabProps> = ({
   inventoryCustomCategories,
   stockCountSnapshots,
   dailyInventorySnapshots,
+  inventoryHistoricalSnapshots,
   setInventoryDailyItems,
   setInventoryWeeklyItems,
   setInventoryMonthlyItems,
@@ -159,6 +160,7 @@ const RestaurantInventory: React.FC<InventoryTabProps> = ({
   setInventoryCustomCategories,
   setStockCountSnapshots,
   setDailyInventorySnapshots,
+  setInventoryHistoricalSnapshots,
   quickSave
 }) => {
   return (
@@ -174,6 +176,7 @@ const RestaurantInventory: React.FC<InventoryTabProps> = ({
       inventoryCustomCategories={inventoryCustomCategories}
       stockCountSnapshots={stockCountSnapshots}
       dailyInventorySnapshots={dailyInventorySnapshots}
+      inventoryHistoricalSnapshots={inventoryHistoricalSnapshots}
       setInventoryDailyItems={setInventoryDailyItems}
       setInventoryWeeklyItems={setInventoryWeeklyItems}
       setInventoryMonthlyItems={setInventoryMonthlyItems}
@@ -182,6 +185,7 @@ const RestaurantInventory: React.FC<InventoryTabProps> = ({
       setInventoryCustomCategories={setInventoryCustomCategories}
       setStockCountSnapshots={setStockCountSnapshots}
       setDailyInventorySnapshots={setDailyInventorySnapshots}
+      setInventoryHistoricalSnapshots={setInventoryHistoricalSnapshots}
       quickSave={quickSave}
     >
       <InventoryContent />

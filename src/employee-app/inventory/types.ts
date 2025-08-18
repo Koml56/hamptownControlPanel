@@ -11,7 +11,11 @@ import type {
   Employee,
   CurrentUser,
   StockCountHistoryEntry,
-  DailyInventorySnapshot
+  DailyInventorySnapshot,
+  HistoricalSnapshot,
+  AnalyticsData,
+  DateRange,
+  ComparisonData
 } from '../types';
 
 export interface InventoryTabProps {
@@ -28,6 +32,7 @@ export interface InventoryTabProps {
   inventoryCustomCategories: CustomCategory[];
   stockCountSnapshots: StockCountHistoryEntry[];
   dailyInventorySnapshots: DailyInventorySnapshot[];
+  inventoryHistoricalSnapshots: HistoricalSnapshot[];
   setInventoryDailyItems: (items: InventoryItem[]) => void;
   setInventoryWeeklyItems: (items: InventoryItem[]) => void;
   setInventoryMonthlyItems: (items: InventoryItem[]) => void;
@@ -36,6 +41,7 @@ export interface InventoryTabProps {
   setInventoryCustomCategories: (categories: CustomCategory[]) => void;
   setStockCountSnapshots: (snapshots: StockCountHistoryEntry[]) => void;
   setDailyInventorySnapshots: (snapshots: DailyInventorySnapshot[]) => void;
+  setInventoryHistoricalSnapshots: (snapshots: HistoricalSnapshot[]) => void;
   quickSave: (field: string, data: any) => Promise<boolean>;
 }
 
@@ -49,6 +55,7 @@ export interface InventoryContextType {
   customCategories: CustomCategory[];
   stockCountSnapshots: StockCountHistoryEntry[];
   dailyInventorySnapshots: DailyInventorySnapshot[];
+  historicalSnapshots: HistoricalSnapshot[];
   employees: Employee[];
   currentUser: CurrentUser;
   selectedItems: Set<number | string>;
@@ -85,6 +92,10 @@ export interface InventoryContextType {
   deleteCustomCategory: (id: string) => void;
   // Stock Count Snapshots
   createStockSnapshot: (date?: string, frequencies?: ('daily' | 'weekly' | 'monthly')[]) => Promise<any[]>;
+  // Analytics Functions
+  createSnapshot: () => HistoricalSnapshot;
+  getAnalyticsData: (dateRange: DateRange) => AnalyticsData;
+  compareWithPreviousPeriod: (currentDate: string, period: string) => ComparisonData | null;
   // Drag and Drop
   reorderItems: (frequency: InventoryFrequency, oldIndex: number, newIndex: number) => void;
   // Firebase integration

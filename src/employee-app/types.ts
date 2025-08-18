@@ -438,3 +438,81 @@ export interface StockCountComparison {
     outOfStockChange: number;
   };
 }
+
+// ========================================
+// ANALYTICS OVERHAUL - NEW INTERFACES
+// ========================================
+
+// Enhanced Historical Snapshot for Analytics
+export interface HistoricalSnapshot {
+  id: string;
+  date: string;
+  timestamp: number;
+  totalItems: number;
+  totalValue: number;
+  stockLevels: {
+    critical: number;
+    low: number;
+    ok: number;
+    out: number;
+  };
+  categoryBreakdown: Record<string, number>;
+  itemSnapshots: {
+    itemId: string;
+    name: string;
+    stock: number;
+    value: number;
+    category: string;
+  }[];
+}
+
+// Comprehensive Analytics Data Structure
+export interface AnalyticsData {
+  storageGrowth: Array<{
+    date: string;
+    totalValue: number;
+    totalItems: number;
+    dailyItems: number;
+    weeklyItems: number;
+    monthlyItems: number;
+  }>;
+  orderFrequency: Array<{
+    item: string;
+    frequency: number;
+    lastOrdered: string;
+    avgOrderQuantity: number;
+  }>;
+  wasteAnalysis: Array<{
+    date: string;
+    totalWaste: number;
+    wasteValue: number;
+    wasteByCategory: Record<string, number>;
+  }>;
+  consumptionTrends: Array<{
+    date: string;
+    itemName: string;
+    consumed: number;
+    remaining: number;
+  }>;
+  performanceMetrics: {
+    stockTurnoverRate: number;
+    wastePercentage: number;
+    orderAccuracy: number;
+    stockoutFrequency: number;
+  };
+}
+
+// Date Range for Analytics Queries
+export interface DateRange {
+  startDate: string;
+  endDate: string;
+  period: 'day' | 'week' | 'month' | 'quarter' | 'year';
+}
+
+// Performance Comparison Data
+export interface ComparisonData {
+  valueChange: number;
+  itemCountChange: number;
+  stockLevelChanges: Record<string, number>;
+  percentageChanges: Record<string, number>;
+}
