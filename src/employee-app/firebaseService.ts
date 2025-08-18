@@ -14,6 +14,7 @@ export class FirebaseService {
   
   // Enhanced debouncing for critical saves to prevent rapid fire saves
   private pendingSaves = new Map<string, NodeJS.Timeout>();
+  private pendingData = new Map<string, any>(); // FIXED: Store pending data to prevent loss
   private lastSaveTimestamps = new Map<string, number>();
   private saveAttempts = new Map<string, number>();
 
@@ -115,19 +116,26 @@ export class FirebaseService {
     const lastSave = this.lastSaveTimestamps.get(field) || 0;
     const timeSinceLastSave = now - lastSave;
     
-    // Prevent rapid saves (within 2 seconds) of the same field
+    // FIXED: Instead of dropping rapid saves, queue them with latest data
     if (timeSinceLastSave < 2000) {
-      console.log(`⏳ Debouncing rapid save for ${field} (${timeSinceLastSave}ms since last save)`);
+      console.log(`⏳ Queuing rapid save for ${field} (${timeSinceLastSave}ms since last save)`);
       
-      // Clear any pending save for this field
+      // Always store the latest data (don't drop it)
+      this.pendingData.set(field, data);
+      
+      // Clear any existing timeout and set a new one
       const existingTimeout = this.pendingSaves.get(field);
       if (existingTimeout) {
         clearTimeout(existingTimeout);
       }
       
-      // Schedule a debounced save
+      // Schedule a debounced save with the latest data
       const timeout = setTimeout(() => {
-        this.executeSave(field, data);
+        const latestData = this.pendingData.get(field);
+        if (latestData !== undefined) {
+          this.executeSave(field, latestData);
+          this.pendingData.delete(field);
+        }
         this.pendingSaves.delete(field);
       }, 1500);
       

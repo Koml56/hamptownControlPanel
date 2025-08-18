@@ -24,6 +24,7 @@ yarn-error.log*
 
 # Manual test files
 manual-test-*.html
+sync-fix-test.html
 
 # IDE
 .vscode
