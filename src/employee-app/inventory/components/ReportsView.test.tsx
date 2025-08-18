@@ -7,6 +7,14 @@ import { useInventory } from '../InventoryContext';
 import { InventoryContextType } from '../types';
 import type { InventoryItem, ActivityLogEntry, StockCountSnapshot, StockCountHistoryEntry } from '../../types';
 
+// Mock ResizeObserver for Recharts
+global.ResizeObserver = class ResizeObserver {
+  constructor(callback: ResizeObserverCallback) {}
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
+
 // Mock the InventoryContext
 jest.mock('../InventoryContext', () => ({
   useInventory: jest.fn()
@@ -139,6 +147,7 @@ describe('ReportsView', () => {
     customCategories: [],
     stockCountSnapshots: mockStockCountSnapshots,
     dailyInventorySnapshots: [],
+    historicalSnapshots: [],
     employees: [{ id: 1, name: 'John Doe', role: 'Manager', mood: 5, lastUpdated: '2024-01-15', lastMoodDate: '2024-01-15', points: 100 }],
     currentUser: { id: 1, name: 'John Doe' },
     selectedItems: new Set(),
@@ -171,6 +180,67 @@ describe('ReportsView', () => {
     updateCustomCategory: jest.fn(),
     deleteCustomCategory: jest.fn(),
     createStockSnapshot: jest.fn().mockResolvedValue([{ success: true }]),
+    // Analytics functions
+    createSnapshot: jest.fn(),
+    getAnalyticsData: jest.fn().mockReturnValue({
+      storageGrowth: [
+        {
+          date: '2024-01-15',
+          totalValue: 100,
+          totalItems: 5,
+          dailyItems: 50,
+          weeklyItems: 30,
+          monthlyItems: 20
+        }
+      ],
+      orderFrequency: [
+        {
+          item: 'Test Item',
+          frequency: 5,
+          lastOrdered: '2024-01-15',
+          avgOrderQuantity: 10
+        }
+      ],
+      wasteAnalysis: [
+        {
+          date: '2024-01-15',
+          totalWaste: 2,
+          wasteValue: 10,
+          wasteByCategory: { dairy: 1, meat: 1 }
+        }
+      ],
+      consumptionTrends: [
+        {
+          date: '2024-01-15',
+          itemName: 'Test Item',
+          consumed: 5,
+          remaining: 10
+        }
+      ],
+      performanceMetrics: {
+        stockTurnoverRate: 2.5,
+        wastePercentage: 5.0,
+        orderAccuracy: 95.0,
+        stockoutFrequency: 2
+      }
+    }),
+    compareWithPreviousPeriod: jest.fn().mockReturnValue({
+      currentPeriod: {
+        totalValue: 100,
+        totalItems: 5,
+        averageStock: 10
+      },
+      previousPeriod: {
+        totalValue: 90,
+        totalItems: 4,
+        averageStock: 9
+      },
+      percentageChanges: {
+        totalValue: 11.1,
+        totalItems: 25.0,
+        averageStock: 11.1
+      }
+    }),
     reorderItems: jest.fn(),
     quickSave: jest.fn().mockResolvedValue(true)
   };
@@ -184,11 +254,11 @@ describe('ReportsView', () => {
     test('renders main heading and components', () => {
       render(<ReportsView />);
       
-      expect(screen.getByText('Daily Inventory Reports')).toBeInTheDocument();
-      expect(screen.getByText(/Detailed analysis for/)).toBeInTheDocument();
+      expect(screen.getByText('Advanced Analytics Dashboard')).toBeInTheDocument();
+      expect(screen.getByText(/Comprehensive inventory analysis/)).toBeInTheDocument();
       expect(screen.getByText('Total Items')).toBeInTheDocument();
       expect(screen.getByText('Critical Items')).toBeInTheDocument();
-      expect(screen.getByText('Inventory Value')).toBeInTheDocument();
+      expect(screen.getByText('Total Inventory Value')).toBeInTheDocument();
     });
 
     test('displays correct item counts', () => {

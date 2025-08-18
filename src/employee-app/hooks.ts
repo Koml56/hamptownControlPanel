@@ -19,7 +19,8 @@ import type {
   ActivityLogEntry,
   CustomCategory,
   StockCountHistoryEntry,
-  DailyInventorySnapshot
+  DailyInventorySnapshot,
+  HistoricalSnapshot
 } from './types';
 import type { SyncOperation } from './OperationManager';
 import { getDatabase, ref, onValue, off } from 'firebase/database';
@@ -106,6 +107,7 @@ export const useFirebaseData = () => {
   const [inventoryCustomCategories, setInventoryCustomCategories] = useState<CustomCategory[]>([]);
   const [stockCountSnapshots, setStockCountSnapshots] = useState<StockCountHistoryEntry[]>([]);
   const [dailyInventorySnapshots, setDailyInventorySnapshots] = useState<DailyInventorySnapshot[]>([]);
+  const [inventoryHistoricalSnapshots, setInventoryHistoricalSnapshots] = useState<HistoricalSnapshot[]>([]);
   
   // Previous inventory state for change detection
   const previousInventoryDailyRef = useRef<InventoryItem[]>([]);
@@ -299,7 +301,8 @@ export const useFirebaseData = () => {
         inventoryActivityLog,
         inventoryCustomCategories,
         stockCountSnapshots,
-        dailyInventorySnapshots
+        dailyInventorySnapshots,
+        inventoryHistoricalSnapshots
       });
 
       setLastSync(new Date().toLocaleTimeString());
@@ -317,7 +320,8 @@ export const useFirebaseData = () => {
           employees, tasks, dailyData, completedTasks, taskAssignments, customRoles,
           prepItems, scheduledPreps, prepSelections, storeItems,
           inventoryDailyItems, inventoryWeeklyItems, inventoryMonthlyItems, 
-          inventoryDatabaseItems, inventoryActivityLog, stockCountSnapshots, dailyInventorySnapshots
+          inventoryDatabaseItems, inventoryActivityLog, stockCountSnapshots, dailyInventorySnapshots,
+          inventoryHistoricalSnapshots
         }),
         timestamp: new Date().toISOString()
       });
@@ -349,7 +353,7 @@ export const useFirebaseData = () => {
   }, [
     employees, tasks, dailyData, completedTasks, taskAssignments, customRoles,
     prepItems, scheduledPreps, prepSelections, storeItems,
-    inventoryDailyItems, inventoryWeeklyItems, inventoryMonthlyItems, inventoryDatabaseItems, inventoryActivityLog, inventoryCustomCategories, stockCountSnapshots, dailyInventorySnapshots,
+    inventoryDailyItems, inventoryWeeklyItems, inventoryMonthlyItems, inventoryDatabaseItems, inventoryActivityLog, inventoryCustomCategories, stockCountSnapshots, dailyInventorySnapshots, inventoryHistoricalSnapshots,
     connectionStatus, firebaseService
   ]);
 
@@ -434,6 +438,7 @@ export const useFirebaseData = () => {
       setInventoryCustomCategories(data.inventoryCustomCategories || []);
       setStockCountSnapshots(data.stockCountSnapshots || []);
       setDailyInventorySnapshots(data.dailyInventorySnapshots || []);
+      setInventoryHistoricalSnapshots(data.inventoryHistoricalSnapshots || []);
       
       // Initialize previous inventory references for change detection
       previousInventoryDailyRef.current = [...dailyItems];
@@ -693,6 +698,13 @@ export const useFirebaseData = () => {
       setDailyInventorySnapshots(Array.isArray(data) ? data : Object.values(data));
     };
     onValue(dailyInventorySnapshotsRef, handleDailyInventorySnapshots);
+
+    const inventoryHistoricalSnapshotsRef = ref(db, 'inventoryHistoricalSnapshots');
+    const handleInventoryHistoricalSnapshots = (snapshot: any) => {
+      const data = snapshot.val() || [];
+      setInventoryHistoricalSnapshots(Array.isArray(data) ? data : Object.values(data));
+    };
+    onValue(inventoryHistoricalSnapshotsRef, handleInventoryHistoricalSnapshots);
     // Cleanup
     return () => {
       off(employeesRef, 'value', handleEmployees);
@@ -713,6 +725,7 @@ export const useFirebaseData = () => {
       off(inventoryActivityLogRef, 'value', handleInventoryActivityLog);
       off(stockCountSnapshotsRef, 'value', handleStockCountSnapshots);
       off(dailyInventorySnapshotsRef, 'value', handleDailyInventorySnapshots);
+      off(inventoryHistoricalSnapshotsRef, 'value', handleInventoryHistoricalSnapshots);
     };
   }, []);
 
@@ -744,6 +757,7 @@ export const useFirebaseData = () => {
     inventoryCustomCategories,
     stockCountSnapshots,
     dailyInventorySnapshots,
+    inventoryHistoricalSnapshots,
 
     // Setters
     setEmployees,
@@ -764,6 +778,7 @@ export const useFirebaseData = () => {
     setInventoryCustomCategories,
     setStockCountSnapshots,
     setDailyInventorySnapshots,
+    setInventoryHistoricalSnapshots,
 
     // Actions
     loadFromFirebase,

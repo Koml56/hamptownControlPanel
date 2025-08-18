@@ -12,6 +12,7 @@ import OutOfStockView from './components/OutOfStockView';
 import TabNavigation from './components/TabNavigation';
 import ToastContainer from './components/ToastContainer';
 import StockCountHistoryView from './components/StockCountHistoryView';
+import ReportsView from './components/ReportsView'; // Import our new analytics dashboard
 
 // Simple Header Component - No background wrapper
 const InventoryHeader: React.FC = () => {
@@ -120,6 +121,8 @@ const InventoryContent: React.FC = () => {
       case 'database':
         return <DatabaseView />;
       case 'analytics':
+        return <ReportsView />; // Use our new analytics dashboard
+      case 'history': // Keep stock count history as a separate view
         return <StockCountHistoryView />;
       default:
         return <DailyView />;
@@ -151,6 +154,7 @@ const RestaurantInventory: React.FC<InventoryTabProps> = ({
   inventoryCustomCategories,
   stockCountSnapshots,
   dailyInventorySnapshots,
+  inventoryHistoricalSnapshots,
   setInventoryDailyItems,
   setInventoryWeeklyItems,
   setInventoryMonthlyItems,
@@ -159,6 +163,7 @@ const RestaurantInventory: React.FC<InventoryTabProps> = ({
   setInventoryCustomCategories,
   setStockCountSnapshots,
   setDailyInventorySnapshots,
+  setInventoryHistoricalSnapshots,
   quickSave
 }) => {
   return (
@@ -174,6 +179,7 @@ const RestaurantInventory: React.FC<InventoryTabProps> = ({
       inventoryCustomCategories={inventoryCustomCategories}
       stockCountSnapshots={stockCountSnapshots}
       dailyInventorySnapshots={dailyInventorySnapshots}
+      inventoryHistoricalSnapshots={inventoryHistoricalSnapshots}
       setInventoryDailyItems={setInventoryDailyItems}
       setInventoryWeeklyItems={setInventoryWeeklyItems}
       setInventoryMonthlyItems={setInventoryMonthlyItems}
@@ -182,6 +188,7 @@ const RestaurantInventory: React.FC<InventoryTabProps> = ({
       setInventoryCustomCategories={setInventoryCustomCategories}
       setStockCountSnapshots={setStockCountSnapshots}
       setDailyInventorySnapshots={setDailyInventorySnapshots}
+      setInventoryHistoricalSnapshots={setInventoryHistoricalSnapshots}
       quickSave={quickSave}
     >
       <InventoryContent />

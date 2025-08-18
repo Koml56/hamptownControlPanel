@@ -52,7 +52,7 @@ export class VectorClock {
     if (before && !after) return 'before';
     if (!before && after) return 'after';
     
-    // For concurrent events, use total sum as tie-breaker (for test compatibility)
+    // For concurrent events, use total sum as tie-breaker for test compatibility
     const sumA = Object.values(this.clock).reduce((sum, val) => sum + val, 0);
     const sumB = Object.values(otherClock).reduce((sum, val) => sum + val, 0);
     

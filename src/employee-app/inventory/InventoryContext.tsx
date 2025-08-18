@@ -11,13 +11,22 @@ import {
   Employee,
   CurrentUser,
   StockCountHistoryEntry,
-  DailyInventorySnapshot
+  DailyInventorySnapshot,
+  HistoricalSnapshot,
+  AnalyticsData,
+  DateRange,
+  ComparisonData
 } from '../types'; // Import from main types.ts
 import { InventoryContextType } from './types'; // Local context type
 import { generateId, showToast } from './utils';
 import { sendInventoryNotification } from './notificationService';
 import { createStockSnapshot as createInventorySnapshot } from './snapshotService';
 import { DailySnapshotAutomation, DEFAULT_SNAPSHOT_CONFIG } from './dailySnapshotAutomation';
+import { 
+  createDailySnapshot, 
+  generateAnalyticsData, 
+  comparePerformanceMetrics 
+} from './analyticsEngine';
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
 
@@ -43,6 +52,7 @@ interface InventoryProviderProps {
   inventoryCustomCategories: CustomCategory[];
   stockCountSnapshots: StockCountHistoryEntry[];
   dailyInventorySnapshots: DailyInventorySnapshot[];
+  inventoryHistoricalSnapshots: HistoricalSnapshot[];
   setInventoryDailyItems: (items: InventoryItem[]) => void;
   setInventoryWeeklyItems: (items: InventoryItem[]) => void;
   setInventoryMonthlyItems: (items: InventoryItem[]) => void;
@@ -51,6 +61,7 @@ interface InventoryProviderProps {
   setInventoryCustomCategories: (categories: CustomCategory[]) => void;
   setStockCountSnapshots: (snapshots: StockCountHistoryEntry[]) => void;
   setDailyInventorySnapshots: (snapshots: DailyInventorySnapshot[]) => void;
+  setInventoryHistoricalSnapshots: (snapshots: HistoricalSnapshot[]) => void;
   quickSave: (field: string, data: any) => Promise<boolean>;
 }
 
@@ -67,6 +78,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
   inventoryCustomCategories,
   stockCountSnapshots,
   dailyInventorySnapshots,
+  inventoryHistoricalSnapshots,
   setInventoryDailyItems,
   setInventoryWeeklyItems,
   setInventoryMonthlyItems,
@@ -75,6 +87,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
   setInventoryCustomCategories,
   setStockCountSnapshots,
   setDailyInventorySnapshots,
+  setInventoryHistoricalSnapshots,
   quickSave
 }) => {
   // Use Firebase state instead of local state
@@ -791,6 +804,70 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     quickSave(`inventory${frequency.charAt(0).toUpperCase() + frequency.slice(1)}Items`, reorderedItems);
   }, [getItemsByFrequency, setItemsByFrequency, quickSave]);
 
+  // Analytics Functions
+  const createSnapshot = useCallback((): HistoricalSnapshot => {
+    return createDailySnapshot(dailyItems, weeklyItems, monthlyItems);
+  }, [dailyItems, weeklyItems, monthlyItems]);
+
+  const getAnalyticsData = useCallback((dateRange: DateRange): AnalyticsData => {
+    const allItems = [...dailyItems, ...weeklyItems, ...monthlyItems];
+    return generateAnalyticsData(inventoryHistoricalSnapshots, allItems, activityLog, dateRange);
+  }, [inventoryHistoricalSnapshots, dailyItems, weeklyItems, monthlyItems, activityLog]);
+
+  const compareWithPreviousPeriod = useCallback((currentDate: string, period: string): ComparisonData | null => {
+    const currentSnapshot = inventoryHistoricalSnapshots.find(s => s.date === currentDate);
+    if (!currentSnapshot) return null;
+
+    // Calculate previous date based on period
+    const current = new Date(currentDate);
+    let previousDate: Date;
+    
+    switch (period) {
+      case 'day':
+        previousDate = new Date(current);
+        previousDate.setDate(current.getDate() - 1);
+        break;
+      case 'week':
+        previousDate = new Date(current);
+        previousDate.setDate(current.getDate() - 7);
+        break;
+      case 'month':
+        previousDate = new Date(current);
+        previousDate.setMonth(current.getMonth() - 1);
+        break;
+      default:
+        previousDate = new Date(current);
+        previousDate.setDate(current.getDate() - 1);
+    }
+
+    const previousDateStr = previousDate.toISOString().split('T')[0];
+    const previousSnapshot = inventoryHistoricalSnapshots.find(s => s.date === previousDateStr);
+    
+    if (!previousSnapshot) return null;
+
+    return comparePerformanceMetrics(currentSnapshot, previousSnapshot);
+  }, [inventoryHistoricalSnapshots]);
+
+  // Auto-create snapshot if needed
+  useEffect(() => {
+    const createDailySnapshotIfNeeded = () => {
+      const today = new Date().toISOString().split('T')[0];
+      const hasSnapshotToday = inventoryHistoricalSnapshots.some(
+        snapshot => snapshot.date === today
+      );
+      
+      if (!hasSnapshotToday && (dailyItems.length > 0 || weeklyItems.length > 0 || monthlyItems.length > 0)) {
+        const newSnapshot = createDailySnapshot(dailyItems, weeklyItems, monthlyItems);
+        const updatedSnapshots = [...inventoryHistoricalSnapshots, newSnapshot];
+        setInventoryHistoricalSnapshots(updatedSnapshots);
+        quickSave('inventoryHistoricalSnapshots', updatedSnapshots);
+      }
+    };
+
+    // Run daily snapshot check
+    createDailySnapshotIfNeeded();
+  }, [dailyItems, weeklyItems, monthlyItems, inventoryHistoricalSnapshots, setInventoryHistoricalSnapshots, quickSave]);
+
   const value: InventoryContextType = {
     // Data
     dailyItems,
@@ -801,6 +878,7 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     customCategories,
     stockCountSnapshots: snapshots,
     dailyInventorySnapshots,
+    historicalSnapshots: inventoryHistoricalSnapshots,
     employees,
     currentUser,
     selectedItems,
@@ -837,6 +915,10 @@ export const InventoryProvider: React.FC<InventoryProviderProps> = ({
     deleteCustomCategory,
     // Stock Count Snapshots
     createStockSnapshot,
+    // Analytics Functions
+    createSnapshot,
+    getAnalyticsData,
+    compareWithPreviousPeriod,
     // Drag and Drop
     reorderItems,
     // Firebase integration
