@@ -30,9 +30,10 @@ export class VectorClock {
     let after = false;
     let equal = true;
     
-    const allKeys = new Set([...Object.keys(this.clock), ...Object.keys(otherClock)]);
+    const allKeys = [...Object.keys(this.clock), ...Object.keys(otherClock)];
+    const uniqueKeys = Array.from(new Set(allKeys));
     
-    for (const key of allKeys) {
+    for (const key of uniqueKeys) {
       const a = this.clock[key] || 0;
       const b = otherClock[key] || 0;
       
