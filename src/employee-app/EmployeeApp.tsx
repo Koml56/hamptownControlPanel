@@ -353,6 +353,14 @@ const EmployeeApp: React.FC = () => {
     return () => clearInterval(interval);
   }, [connectionStatus, isLoading, saveToFirebase, completedTasks, taskAssignments]);
 
+  // FIXED: Track completedTasks changes and notify sync service for proper merging
+  useEffect(() => {
+    if (syncServiceRef.current && completedTasks) {
+      // Update the sync service with current state so it can merge properly
+      syncServiceRef.current.updateFieldState('completedTasks', completedTasks);
+    }
+  }, [completedTasks]);
+
   // Simple daily reset check on startup only
   useEffect(() => {
     if (!isLoading && connectionStatus === 'connected') {
