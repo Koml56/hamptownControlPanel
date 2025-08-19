@@ -78,6 +78,8 @@ const migrateScheduledPreps = (scheduledPreps: any[]): ScheduledPrep[] => {
 };
 
 export const useFirebaseData = () => {
+  // Ref to hold sync service that gets set after initialization
+  const syncServiceRef = useRef<{ syncData: (field: string, data: any) => Promise<void> } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
@@ -248,7 +250,21 @@ export const useFirebaseData = () => {
   // INSTANT SYNC: Immediate save function for critical operations (bypasses debouncing)
   const quickSaveImmediate = useCallback(async (field: string, data: any): Promise<boolean> => {
     console.log(`🚀 INSTANT SYNC: Immediate save for ${field}`);
-    return await firebaseService.quickSaveImmediate(field, data);
+    
+    // Always call Firebase service (may fail if offline, which is expected)
+    const firebaseResult = await firebaseService.quickSaveImmediate(field, data);
+    
+    // FIXED: Also call multi-device sync service for localStorage cross-tab sync
+    if (syncServiceRef.current) {
+      try {
+        await syncServiceRef.current.syncData(field, data);
+        console.log(`✅ Multi-device sync completed for ${field}`);
+      } catch (error) {
+        console.warn(`⚠️ Multi-device sync failed for ${field}:`, error);
+      }
+    }
+    
+    return firebaseResult;
   }, [firebaseService]);
 
   // PERFORMANCE: Non-blocking main save function - FIXED to include all fields
@@ -740,6 +756,11 @@ export const useFirebaseData = () => {
     setTasks(prev => applyTaskOperation(prev, op));
   };
 
+  // Function to set sync service from outside
+  const setSyncService = useCallback((syncService: { syncData: (field: string, data: any) => Promise<void> } | null) => {
+    syncServiceRef.current = syncService;
+  }, []);
+
   return {
     // State
     isLoading,
@@ -791,6 +812,7 @@ export const useFirebaseData = () => {
     saveToFirebase,
     quickSave,
     quickSaveImmediate,
+    setSyncService,
 
     // Додаємо applyTaskOperation для застосування операцій до задач
     applyTaskSyncOperation
