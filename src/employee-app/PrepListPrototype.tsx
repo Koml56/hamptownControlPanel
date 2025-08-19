@@ -62,7 +62,8 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
   const [movedPrepsNotification, setMovedPrepsNotification] = useState<number>(0);
 
   // FIXED: Track if we're in the middle of a save operation to prevent race conditions
-  const [isSaving, setIsSaving] = useState(false);
+  // COPIED PATTERN FROM TODAYVIEW - Track which prep items are currently being saved
+  const [savingPreps, setSavingPreps] = useState<Set<number>>(new Set());
 
   // Detect admin mode by checking for admin UI elements
   const [isAdminMode, setIsAdminMode] = useState(false);
@@ -116,7 +117,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
 
   // FIXED: Auto-save scheduledPreps whenever they change (but not during save operation)
   useEffect(() => {
-    if (scheduledPreps.length > 0 && !isSaving) {
+    if (scheduledPreps.length > 0 && savingPreps.size === 0) {
       console.log('🔄 Auto-saving scheduledPreps due to state change');
       
       // Add a small delay to ensure state is fully updated
@@ -132,7 +133,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
 
       return () => clearTimeout(saveTimer);
     }
-  }, [scheduledPreps, quickSave, isSaving]);
+  }, [scheduledPreps, quickSave, savingPreps.size]);
 
   // Move incomplete preps from yesterday to today
   useEffect(() => {
@@ -189,18 +190,17 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
     }
   }, [scheduledPreps, setPrepSelections, setScheduledPreps]);
 
-  // FIXED: Proper prep completion toggle with sync protection
+  // FIXED: Proper prep completion toggle with sync protection - COPIED TODAYVIEW PATTERN
   const togglePrepCompletion = async (scheduledPrepId: number): Promise<void> => {
     console.log('🔄 Toggling prep completion for ID:', scheduledPrepId);
     
-    // Prevent concurrent saves
-    if (isSaving) {
-      console.log('⏳ Save in progress, skipping...');
-      return;
+    if (savingPreps.has(scheduledPrepId)) {
+      console.log('⏳ Completion toggle already in progress for prep:', scheduledPrepId);
+      return; // Prevent double-clicks while saving
     }
 
-    setIsSaving(true);
-
+    setSavingPreps(prev => new Set(prev).add(scheduledPrepId));
+    
     try {
       // Find the prep item to update
       const prepToUpdate = scheduledPreps.find(p => p.id === scheduledPrepId);
@@ -211,7 +211,6 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
 
       const newCompletedStatus = !prepToUpdate.completed;
       console.log(`📋 ${prepToUpdate.name}: ${prepToUpdate.completed ? 'COMPLETED' : 'PENDING'} → ${newCompletedStatus ? 'COMPLETED' : 'PENDING'}`);
-      console.log('🛡️ SYNC PAUSED during save operation');
 
       // Update the state
       const updatedScheduledPreps = scheduledPreps.map(prep =>
@@ -220,67 +219,22 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
           : prep
       );
 
-      // ENHANCED: Log what we're about to save
-      const todayStr = getDateString(new Date());
-      const updatedTodayPreps = updatedScheduledPreps.filter(prep => prep.scheduledDate === todayStr);
-      const updatedTodayCompleted = updatedTodayPreps.filter(prep => prep.completed);
-      
-      console.log('📤 About to save scheduledPreps:', {
-        totalCount: updatedScheduledPreps.length,
-        todayCount: updatedTodayPreps.length,
-        todayCompletedCount: updatedTodayCompleted.length,
-        updatedItem: {
-          id: scheduledPrepId,
-          name: prepToUpdate.name,
-          completed: newCompletedStatus,
-          scheduledDate: prepToUpdate.scheduledDate
-        }
-      });
-
       // Update state immediately for UI responsiveness
       setScheduledPreps(() => updatedScheduledPreps);
 
-      // CRITICAL: Save to Firebase immediately with detailed logging - INSTANT SYNC
-      console.log('🚀 INSTANT SYNC: Saving prep completion for instant multi-device sync...');
-      const saveSuccess = await quickSaveImmediate('scheduledPreps', updatedScheduledPreps);
-
-      if (saveSuccess) {
-        console.log('✅ Prep completion saved successfully - sync enabled for instant multi-device updates');
-        
-        // INSTANT SYNC: No delay for multi-device sync - verification is optional and non-blocking
-        setTimeout(async () => {
-          console.log('🔄 Background verification (non-blocking)');
-          
-          try {
-            const verifyResponse = await fetch('https://hamptown-panel-default-rtdb.firebaseio.com/scheduledPreps.json');
-            const firebaseData = await verifyResponse.json();
-            
-            if (firebaseData) {
-              const firebaseUpdatedItem = firebaseData.find((prep: any) => prep.id === scheduledPrepId);
-              
-              if (!firebaseUpdatedItem || firebaseUpdatedItem.completed !== newCompletedStatus) {
-                console.warn('⚠️ Background verification: Save status mismatch detected');
-              } else {
-                console.log('✅ Background verification: Save confirmed');
-              }
-            }
-          } catch (error) {
-            console.log('ℹ️ Background verification skipped:', error instanceof Error ? error.message : String(error));
-          }
-        }, 500); // Quick background check only
-        
-      } else {
-        console.error('❌ Failed to save prep completion to Firebase');
-        // Revert the state change if save failed
-        setScheduledPreps(() => scheduledPreps);
-      }
-
+      // Save to Firebase - SIMPLE PATTERN LIKE TODAYVIEW
+      await quickSaveImmediate('scheduledPreps', updatedScheduledPreps);
+      console.log('✅ PrepListPrototype: Completion toggle finished for prep:', scheduledPrepId);
     } catch (error) {
       console.error('❌ Error toggling prep completion:', error);
       // Revert the state change if there was an error
       setScheduledPreps(() => scheduledPreps);
     } finally {
-      setIsSaving(false);
+      setSavingPreps(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(scheduledPrepId);
+        return newSet;
+      });
     }
   };
 
@@ -400,22 +354,20 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
     setShowRecipeModal(true);
   };
 
-  // Toggle prep selection with instant sync (same pattern as togglePrepCompletion)
+  // Toggle prep selection with simple sync pattern - COPIED FROM TODAYVIEW
   const togglePrepSelection = async (prep: PrepItem): Promise<void> => {
     const selectionKey = getSelectionKey(selectedDate, prep.id);
     const isSelected = prepSelections[selectionKey]?.selected;
 
-    // Prevent concurrent saves
-    if (isSaving) {
-      console.log('⏳ Save in progress, skipping prep selection toggle...');
-      return;
+    if (savingPreps.has(prep.id)) {
+      console.log('⏳ Prep selection toggle already in progress for prep:', prep.id);
+      return; // Prevent double-clicks while saving
     }
 
-    setIsSaving(true);
+    setSavingPreps(prev => new Set(prev).add(prep.id));
 
     try {
       console.log(`🔄 Toggling prep selection for: ${prep.name} (${isSelected ? 'SELECTED' : 'UNSELECTED'} → ${!isSelected ? 'SELECTED' : 'UNSELECTED'})`);
-      console.log('🛡️ SYNC PAUSED during save operation');
 
       let updatedPrepSelections: PrepSelections;
       let updatedScheduledPreps: ScheduledPrep[];
@@ -471,79 +423,27 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
         }
       }
 
-      // ENHANCED: Log what we're about to save
-      console.log('📤 About to save prep selections and scheduled preps:', {
-        prepSelectionsCount: Object.keys(updatedPrepSelections).length,
-        scheduledPrepsCount: updatedScheduledPreps.length,
-        selectedDatePrepsCount: updatedScheduledPreps.filter(p => p.scheduledDate === getDateString(selectedDate)).length,
-        updatedPrep: {
-          name: prep.name,
-          selected: !isSelected,
-          scheduledDate: getDateString(selectedDate)
-        }
-      });
-
       // Update state immediately for UI responsiveness
       setPrepSelections(() => updatedPrepSelections);
       setScheduledPreps(() => updatedScheduledPreps);
 
-      // CRITICAL: Save to Firebase immediately with detailed logging - INSTANT SYNC
-      console.log('🚀 INSTANT SYNC: Saving prep selection for instant multi-device sync...');
-      
-      const [selectionsSuccess, scheduledSuccess] = await Promise.all([
+      // Save to Firebase - SIMPLE PATTERN LIKE TODAYVIEW
+      await Promise.all([
         quickSaveImmediate('prepSelections', updatedPrepSelections),
         quickSaveImmediate('scheduledPreps', updatedScheduledPreps)
       ]);
-
-      if (selectionsSuccess && scheduledSuccess) {
-        console.log('✅ Prep selection saved successfully - sync enabled for instant multi-device updates');
-        
-        // INSTANT SYNC: No delay for multi-device sync - verification is optional and non-blocking
-        setTimeout(async () => {
-          console.log('🔄 Background verification (non-blocking)');
-          
-          try {
-            const [selectionsResponse, scheduledResponse] = await Promise.all([
-              fetch('https://hamptown-panel-default-rtdb.firebaseio.com/prepSelections.json'),
-              fetch('https://hamptown-panel-default-rtdb.firebaseio.com/scheduledPreps.json')
-            ]);
-            
-            const [firebasePrepSelections, firebaseScheduledPreps] = await Promise.all([
-              selectionsResponse.json(),
-              scheduledResponse.json()
-            ]);
-            
-            if (firebasePrepSelections && firebaseScheduledPreps) {
-              const firebaseHasSelection = firebasePrepSelections[selectionKey]?.selected === !isSelected;
-              const firebaseHasScheduled = isSelected ? 
-                !firebaseScheduledPreps?.some((p: any) => p.prepId === prep.id && p.scheduledDate === getDateString(selectedDate)) :
-                firebaseScheduledPreps?.some((p: any) => p.prepId === prep.id && p.scheduledDate === getDateString(selectedDate));
-              
-              if (!firebaseHasSelection || !firebaseHasScheduled) {
-                console.warn('⚠️ Background verification: Save status mismatch detected');
-              } else {
-                console.log('✅ Background verification: Save confirmed');
-              }
-            }
-          } catch (error) {
-            console.log('ℹ️ Background verification skipped:', error instanceof Error ? error.message : String(error));
-          }
-        }, 500); // Quick background check only
-        
-      } else {
-        console.error('❌ Failed to save prep selection to Firebase');
-        // Revert the state changes if save failed
-        setPrepSelections(() => prepSelections);
-        setScheduledPreps(() => scheduledPreps);
-      }
-
+      console.log('✅ PrepListPrototype: Prep selection toggle finished for prep:', prep.id);
     } catch (error) {
       console.error('❌ Error toggling prep selection:', error);
       // Revert the state changes if there was an error
       setPrepSelections(() => prepSelections);
       setScheduledPreps(() => scheduledPreps);
     } finally {
-      setIsSaving(false);
+      setSavingPreps(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(prep.id);
+        return newSet;
+      });
     }
   };
 
@@ -895,6 +795,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
                     console.log('Save clicked for prep:', prep, selection);
                   }}
                   context="main"
+                  isSaving={savingPreps.has(prep.id)} // ADDED FOR TODAYVIEW PATTERN
                 />
               ))}
             </div>
