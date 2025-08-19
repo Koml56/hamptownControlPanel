@@ -28,6 +28,7 @@ import { initializeApp } from 'firebase/app';
 import { FIREBASE_CONFIG } from './constants';
 import { applyTaskOperation } from './taskOperations';
 import { checkInventoryChanges } from './inventory/notificationService';
+import { getTotalPointsEarned } from './storeFunctions';
 
 // Migration functions
 const migrateEmployeeData = (employees: any[]): Employee[] => {
@@ -773,6 +774,35 @@ export const useFirebaseData = () => {
     syncServiceRef.current = syncService;
   }, []);
 
+  // CRITICAL FIX: Update employee points based on completed tasks in dailyData
+  const updateEmployeePoints = useCallback(() => {
+    setEmployees(prevEmployees => {
+      const updatedEmployees = prevEmployees.map(emp => {
+        const calculatedPoints = getTotalPointsEarned(emp.id, dailyData, 30);
+        return {
+          ...emp,
+          points: calculatedPoints
+        };
+      });
+      
+      // Sync updated employee points via sync service
+      if (syncServiceRef.current) {
+        syncServiceRef.current.syncData('employees', updatedEmployees).catch(error => {
+          console.warn('⚠️ Failed to sync updated employee points:', error);
+        });
+      }
+      
+      return updatedEmployees;
+    });
+  }, [dailyData]);
+
+  // Update employee points whenever dailyData changes
+  useEffect(() => {
+    if (employees.length > 0 && Object.keys(dailyData).length > 0) {
+      updateEmployeePoints();
+    }
+  }, [dailyData, employees.length, updateEmployeePoints]);
+
   return {
     // State
     isLoading,
@@ -825,6 +855,7 @@ export const useFirebaseData = () => {
     quickSave,
     quickSaveImmediate,
     setSyncService,
+    updateEmployeePoints,
 
     // Додаємо applyTaskOperation для застосування операцій до задач
     applyTaskSyncOperation
