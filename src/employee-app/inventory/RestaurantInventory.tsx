@@ -1,7 +1,8 @@
-import React from 'react';
-import { ChefHat, AlertTriangle, TrendingDown, CheckCircle, Database, Package } from 'lucide-react';
+import React, { useState } from 'react';
+import { ChefHat, AlertTriangle, TrendingDown, CheckCircle, Database, Package, Search } from 'lucide-react';
 import { InventoryProvider, useInventory } from './InventoryContext';
 import { InventoryTabProps } from './types';
+import { InventoryFrequency } from '../types';
 import { getStockStatus } from './stockUtils';
 import DatabaseView from './components/DatabaseView';
 import DailyView from './components/DailyView';
@@ -11,10 +12,18 @@ import OutOfStockView from './components/OutOfStockView';
 import TabNavigation from './components/TabNavigation';
 import ToastContainer from './components/ToastContainer';
 import ReportsView from './components/ReportsView'; // Import our new analytics dashboard
+import GlobalSearchModal from './components/GlobalSearchModal';
+import CountModal from './components/CountModal';
+import WasteModal from './components/WasteModal';
 
 // Simple Header Component - No background wrapper
 const InventoryHeader: React.FC = () => {
   const { dailyItems, weeklyItems, monthlyItems, databaseItems } = useInventory();
+  const [showGlobalSearch, setShowGlobalSearch] = useState(false);
+  const [showCountModal, setShowCountModal] = useState(false);
+  const [showWasteModal, setShowWasteModal] = useState(false);
+  const [selectedItemId, setSelectedItemId] = useState<number | string | null>(null);
+  const [selectedFrequency, setSelectedFrequency] = useState<InventoryFrequency>('daily');
 
   // Calculate stock statistics
   const allItems = [...dailyItems, ...weeklyItems, ...monthlyItems];
@@ -22,6 +31,18 @@ const InventoryHeader: React.FC = () => {
   const lowStockCount = allItems.filter(item => getStockStatus(item.currentStock, item.minLevel) === 'low').length;
   const wellStockedCount = allItems.filter(item => getStockStatus(item.currentStock, item.minLevel) === 'ok').length;
   const databaseCount = databaseItems.length;
+
+  const handleGlobalUpdateCount = (itemId: number | string, frequency: InventoryFrequency) => {
+    setSelectedItemId(itemId);
+    setSelectedFrequency(frequency);
+    setShowCountModal(true);
+  };
+
+  const handleGlobalReportWaste = (itemId: number | string, frequency: InventoryFrequency) => {
+    setSelectedItemId(itemId);
+    setSelectedFrequency(frequency);
+    setShowWasteModal(true);
+  };
 
   return (
     <div className="bg-white rounded-xl shadow-sm mb-6 p-4 md:p-6">
@@ -35,6 +56,17 @@ const InventoryHeader: React.FC = () => {
             <h1 className="text-xl md:text-2xl font-bold text-gray-800">Restaurant Inventory</h1>
             <p className="text-sm md:text-base text-gray-600">Track usage, waste, and consumption patterns</p>
           </div>
+        </div>
+        
+        {/* Global Search Button */}
+        <div className="flex-shrink-0">
+          <button
+            onClick={() => setShowGlobalSearch(true)}
+            className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors flex items-center text-sm md:text-base"
+          >
+            <Search className="w-4 h-4 md:w-5 md:h-5 mr-2" />
+            Global Search
+          </button>
         </div>
       </div>
 
@@ -99,6 +131,38 @@ const InventoryHeader: React.FC = () => {
           </div>
         </div>
       </div>
+      
+      {/* Global Search Modal */}
+      <GlobalSearchModal
+        isOpen={showGlobalSearch}
+        onClose={() => setShowGlobalSearch(false)}
+        onUpdateCount={handleGlobalUpdateCount}
+        onReportWaste={handleGlobalReportWaste}
+      />
+
+      {/* Count Modal for Global Search */}
+      {showCountModal && (
+        <CountModal
+          frequency={selectedFrequency}
+          selectedItemId={selectedItemId}
+          onClose={() => {
+            setShowCountModal(false);
+            setSelectedItemId(null);
+          }}
+        />
+      )}
+
+      {/* Waste Modal for Global Search */}
+      {showWasteModal && (
+        <WasteModal
+          frequency={selectedFrequency}
+          selectedItemId={selectedItemId}
+          onClose={() => {
+            setShowWasteModal(false);
+            setSelectedItemId(null);
+          }}
+        />
+      )}
     </div>
   );
 };
