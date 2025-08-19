@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     
     <!-- PWA Configuration -->
     <meta name="theme-color" content="#3B82F6" />
@@ -112,6 +112,32 @@
           width: 0px;
           background: transparent;
         }
+      }
+      
+      /* Prevent zoom on input fields - iOS specific fix */
+      input, textarea, select {
+        font-size: 16px !important;
+        transform-origin: left top;
+        -webkit-user-select: text;
+        user-select: text;
+      }
+      
+      /* Additional zoom prevention for all input types */
+      input[type="text"],
+      input[type="email"],
+      input[type="password"],
+      input[type="number"],
+      input[type="tel"],
+      input[type="url"],
+      input[type="search"],
+      input[type="date"],
+      input[type="time"],
+      input[type="datetime-local"],
+      textarea,
+      select {
+        font-size: 16px !important;
+        -webkit-appearance: none;
+        border-radius: 0;
       }
       
       /* Hide scrollbars for horizontal scroll containers */
