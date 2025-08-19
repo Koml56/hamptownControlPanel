@@ -776,14 +776,37 @@ export const useFirebaseData = () => {
 
   // CRITICAL FIX: Update employee points based on completed tasks in dailyData
   const updateEmployeePoints = useCallback(() => {
+    console.log('🔧 updateEmployeePoints called, dailyData keys:', Object.keys(dailyData));
+    
+    // Debug dailyData content for today
+    const todayStr = getFormattedDate(new Date());
+    const todayData = dailyData[todayStr];
+    console.log('🔧 Today\'s data:', todayStr, todayData);
+    if (todayData?.completedTasks) {
+      console.log('🔧 Today\'s completed tasks:', todayData.completedTasks);
+    }
+    
     setEmployees(prevEmployees => {
+      console.log('🔧 Processing employees:', prevEmployees.map(e => ({ id: e.id, name: e.name, currentPoints: e.points })));
+      
       const updatedEmployees = prevEmployees.map(emp => {
         const calculatedPoints = getTotalPointsEarned(emp.id, dailyData, 30);
+        console.log(`🔧 Employee ${emp.name} (ID: ${emp.id}): current ${emp.points} pts → calculated ${calculatedPoints} pts`);
+        
+        // Additional debugging for Luka specifically
+        if (emp.id === 1) {
+          console.log('🔧 Debugging Luka\'s points calculation...');
+          const todayTasks = todayData?.completedTasks?.filter(task => task.employeeId === 1) || [];
+          console.log('🔧 Luka\'s today tasks:', todayTasks);
+        }
+        
         return {
           ...emp,
           points: calculatedPoints
         };
       });
+      
+      console.log('🔧 Updated employees:', updatedEmployees.map(e => ({ id: e.id, name: e.name, points: e.points })));
       
       // Sync updated employee points via sync service
       if (syncServiceRef.current) {
@@ -798,8 +821,20 @@ export const useFirebaseData = () => {
 
   // Update employee points whenever dailyData changes
   useEffect(() => {
+    console.log('🔧 Points update effect triggered:', {
+      employeesCount: employees.length,
+      dailyDataKeys: Object.keys(dailyData).length,
+      dailyDataEntries: Object.keys(dailyData)
+    });
+    
     if (employees.length > 0 && Object.keys(dailyData).length > 0) {
+      console.log('🔧 Calling updateEmployeePoints...');
       updateEmployeePoints();
+    } else {
+      console.log('🔧 Skipping updateEmployeePoints:', { 
+        hasEmployees: employees.length > 0, 
+        hasDailyData: Object.keys(dailyData).length > 0 
+      });
     }
   }, [dailyData, employees.length, updateEmployeePoints]);
 
