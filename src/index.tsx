@@ -120,13 +120,15 @@ window.addEventListener('offline', () => {
   // You can show an offline indicator
 });
 
-// Prevent zoom on iOS devices in standalone mode
+// Prevent zoom on iOS devices in standalone mode and all touch interactions
 document.addEventListener('touchstart', (event) => {
+  // Prevent multi-touch zoom
   if (event.touches.length > 1) {
     event.preventDefault();
   }
-});
+}, { passive: false });
 
+// Prevent double-tap zoom with improved timing
 let lastTouchEnd = 0;
 document.addEventListener('touchend', (event) => {
   const now = (new Date()).getTime();
@@ -134,7 +136,34 @@ document.addEventListener('touchend', (event) => {
     event.preventDefault();
   }
   lastTouchEnd = now;
-}, false);
+}, { passive: false });
+
+// Prevent pinch-to-zoom gestures
+document.addEventListener('gesturestart', (event) => {
+  event.preventDefault();
+}, { passive: false });
+
+document.addEventListener('gesturechange', (event) => {
+  event.preventDefault();
+}, { passive: false });
+
+document.addEventListener('gestureend', (event) => {
+  event.preventDefault();
+}, { passive: false });
+
+// Prevent zoom on wheel events (desktop)
+document.addEventListener('wheel', (event) => {
+  if (event.ctrlKey) {
+    event.preventDefault();
+  }
+}, { passive: false });
+
+// Prevent zoom on keydown events (Ctrl+Plus, Ctrl+Minus)
+document.addEventListener('keydown', (event) => {
+  if (event.ctrlKey && (event.key === '+' || event.key === '-' || event.key === '0')) {
+    event.preventDefault();
+  }
+}, { passive: false });
 
 // Add viewport height fix for mobile browsers
 function setViewportHeight() {
