@@ -16,6 +16,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { useInventory } from '../InventoryContext';
+import { getCategoryNameOnly } from '../utils';
 import DraggableItemCard from './DraggableItemCard';
 import CountModal from './CountModal';
 import WasteModal from './WasteModal';
@@ -166,7 +167,7 @@ const WeeklyView: React.FC = () => {
                 <option value="all">All Categories</option>
                 {categories.map(category => (
                   <option key={category} value={category} className="capitalize">
-                    {category}
+                    {getCategoryNameOnly(category, customCategories)}
                   </option>
                 ))}
               </select>
@@ -189,7 +190,7 @@ const WeeklyView: React.FC = () => {
             <div className="mt-4 text-sm text-gray-600">
               Showing {filteredItems.length} of {totalItems} weekly items
               {searchQuery && ` matching "${searchQuery}"`}
-              {categoryFilter !== 'all' && ` in ${categoryFilter} category`}
+              {categoryFilter !== 'all' && ` in ${getCategoryNameOnly(categoryFilter, customCategories)} category`}
             </div>
           )}
         </div>

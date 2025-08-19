@@ -24,7 +24,7 @@ import DailyReports from './DailyReports';
 import PrepListPrototype from './PrepListPrototype';
 import RestaurantInventory from './inventory/RestaurantInventory'; // NEW: Inventory component
 import SyncStatusIndicator from './SyncStatusIndicator';
-import CrossTabDebugPanel from './CrossTabDebugPanel';
+// import CrossTabDebugPanel from './CrossTabDebugPanel'; // Hidden per user request
 
 // Hooks and Functions
 import { useFirebaseData, useAuth, useTaskRealtimeSync } from './hooks';
@@ -858,8 +858,8 @@ const EmployeeApp: React.FC = () => {
           isUsingFallback={isUsingFallback}
         />
 
-        {/* Cross-Tab Debug Panel for monitoring rapid click coordination */}
-        <CrossTabDebugPanel isVisible={true} />
+        {/* Cross-Tab Debug Panel for monitoring rapid click coordination - Hidden per user request */}
+        {/* <CrossTabDebugPanel isVisible={true} /> */}
 
         {/* Tab Content */}
         {activeTab === 'mood' && (
