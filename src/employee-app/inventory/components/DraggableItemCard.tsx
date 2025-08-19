@@ -4,6 +4,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import ItemCard from './ItemCard';
 import { InventoryItem, CustomCategory } from '../../types';
+import { useInventory } from '../InventoryContext';
 
 interface DraggableItemCardProps {
   item: InventoryItem;
@@ -20,6 +21,9 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
   showQuickActions = true,
   customCategories = []
 }) => {
+  // Get admin state from inventory context
+  const { isAdmin } = useInventory();
+  
   const {
     attributes,
     listeners,
@@ -27,7 +31,10 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: item.id.toString() });
+  } = useSortable({ 
+    id: item.id.toString(),
+    disabled: !isAdmin // Only allow dragging when user is admin
+  });
 
   const [touchHoldActive, setTouchHoldActive] = useState(false);
   const touchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -110,12 +117,12 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
   }, []);
 
   // Create custom listeners that include our touch handling
-  const customListeners = {
+  const customListeners = isAdmin ? {
     ...listeners,
     onTouchStart: handleTouchStart,
     onTouchMove: handleTouchMove,
     onTouchEnd: handleTouchEnd,
-  };
+  } : {}; // No drag listeners when not admin
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -128,7 +135,7 @@ const DraggableItemCard: React.FC<DraggableItemCardProps> = ({
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes}
+      {...(isAdmin ? attributes : {})} // Only apply drag attributes when admin
     >
       <ItemCard
         item={item}
