@@ -24,6 +24,7 @@ import DailyReports from './DailyReports';
 import PrepListPrototype from './PrepListPrototype';
 import RestaurantInventory from './inventory/RestaurantInventory'; // NEW: Inventory component
 import SyncStatusIndicator from './SyncStatusIndicator';
+import CrossTabDebugPanel from './CrossTabDebugPanel';
 
 // Hooks and Functions
 import { useFirebaseData, useAuth, useTaskRealtimeSync } from './hooks';
@@ -842,6 +843,9 @@ const EmployeeApp: React.FC = () => {
           syncMode={syncMode}
           isUsingFallback={isUsingFallback}
         />
+
+        {/* Cross-Tab Debug Panel for monitoring rapid click coordination */}
+        <CrossTabDebugPanel isVisible={true} />
 
         {/* Tab Content */}
         {activeTab === 'mood' && (
