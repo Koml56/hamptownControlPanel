@@ -29,15 +29,7 @@ const CrossTabDebugPanel: React.FC<CrossTabDebugPanelProps> = ({ isVisible = fal
   const deviceId = getCrossTabDeviceId();
 
   if (!isExpanded) {
-    return (
-      <div 
-        onClick={() => setIsExpanded(true)}
-        className="fixed bottom-4 right-4 bg-blue-600 text-white px-3 py-2 rounded-lg shadow-lg cursor-pointer hover:bg-blue-700 transition-colors z-50"
-        title="Click to expand sync debug panel"
-      >
-        🔄 Sync Debug ({status.pendingCount})
-      </div>
-    );
+    return null; // Hide the sync debug panel
   }
 
   return (
