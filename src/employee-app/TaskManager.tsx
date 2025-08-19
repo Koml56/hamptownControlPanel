@@ -132,11 +132,15 @@ const TaskManager: React.FC<TaskManagerProps> = ({
             const isCompleted = completedTasks.has(task.id);
             
             return (
-              <div key={task.id} className={`border rounded-lg p-4 ${getPriorityColor(task.priority)} ${isCompleted ? 'bg-green-50' : 'bg-white'}`}>
+              <div key={task.id} className={`border rounded-lg p-4 transition-all duration-300 ease-in-out ${getPriorityColor(task.priority)} ${
+                isCompleted 
+                  ? 'bg-green-50 border-green-200 shadow-sm transform scale-[0.98]' 
+                  : 'bg-white hover:shadow-md hover:-translate-y-0.5'
+              }`}>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center justify-between mb-2">
-                      <div className={`font-medium ${isCompleted ? 'line-through text-gray-500' : 'text-gray-800'}`}>
+                      <div className={`font-medium transition-all duration-200 ${isCompleted ? 'line-through text-gray-500' : 'text-gray-800'}`}>
                         {task.task}
                       </div>
                       <div className="flex items-center bg-purple-100 text-purple-700 px-2 py-1 rounded-full text-sm font-medium">
@@ -160,11 +164,13 @@ const TaskManager: React.FC<TaskManagerProps> = ({
                   </div>
                   <button
                     onClick={() => handleTaskToggle(task.id)}
-                    className={`ml-3 p-2 rounded-full ${
-                      isCompleted ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                    className={`ml-3 p-2 rounded-full transition-all duration-200 ease-in-out transform hover:scale-110 ${
+                      isCompleted 
+                        ? 'bg-green-500 text-white shadow-lg scale-105' 
+                        : 'bg-gray-200 text-gray-600 hover:bg-gray-300 hover:shadow-md'
                     }`}
                   >
-                    <Check className="w-4 h-4" />
+                    <Check className={`w-4 h-4 transition-transform duration-200 ${isCompleted ? 'scale-110' : ''}`} />
                   </button>
                 </div>
                 
