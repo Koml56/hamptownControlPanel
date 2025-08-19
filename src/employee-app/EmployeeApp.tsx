@@ -99,6 +99,7 @@ const EmployeeApp: React.FC = () => {
     saveToFirebase,
     quickSave,
     quickSaveImmediate,
+    setSyncService,
     applyTaskSyncOperation
   } = useFirebaseData();
 
@@ -289,6 +290,9 @@ const EmployeeApp: React.FC = () => {
       // Connect the service
       syncServiceRef.current.connect().catch(console.error);
       
+      // FIXED: Connect sync service to hooks for prep data cross-tab sync
+      setSyncService(syncServiceRef.current);
+      
       // Periodic sync stats update to track fallback mode
       const updateSyncStats = () => {
         if (syncServiceRef.current) {
@@ -315,7 +319,7 @@ const EmployeeApp: React.FC = () => {
         syncServiceRef.current = null;
       }
     };
-  }, [currentUser, setCompletedTasks, setDailyData, setEmployees, setTaskAssignments, setTasks, setPrepSelections, setScheduledPreps, setPrepItems]);
+  }, [currentUser, setCompletedTasks, setDailyData, setEmployees, setTaskAssignments, setTasks, setPrepSelections, setScheduledPreps, setPrepItems, setSyncService]);
 
   // Set up periodic auto-save (every 5 minutes)
   // Set up periodic auto-save (every 5 minutes) with logging for cleaning tasks
