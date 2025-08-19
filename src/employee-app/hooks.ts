@@ -379,21 +379,33 @@ export const useFirebaseData = () => {
     connectionStatus, firebaseService
   ]);
 
-  // PERFORMANCE: Longer debounce for main saves
+  // PERFORMANCE: Longer debounce for main saves with localStorage fallback
   const saveToFirebase = useCallback(() => {
-    // Prevent save if offline
-    if (connectionStatus !== 'connected') {
-      console.warn('⛔ Not saving to Firebase: offline or error connection');
-      return;
-    }
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
 
     saveTimeoutRef.current = setTimeout(() => {
-      debouncedSave();
+      if (connectionStatus === 'connected') {
+        // Firebase is available - use normal save
+        debouncedSave();
+      } else {
+        // Firebase unavailable - use localStorage fallback via MultiDeviceSyncService
+        console.warn('⛔ Firebase unavailable, saving to localStorage via sync service');
+        
+        if (syncServiceRef.current && syncServiceRef.current.syncData) {
+          // Sync all the critical data that would normally go to Firebase
+          syncServiceRef.current.syncData('completedTasks', completedTasks);
+          syncServiceRef.current.syncData('taskAssignments', taskAssignments);
+          syncServiceRef.current.syncData('employees', employees);
+          syncServiceRef.current.syncData('dailyData', dailyData);
+          console.log('✅ Data saved to localStorage via sync service');
+        } else {
+          console.error('❌ MultiDeviceSyncService not available for localStorage fallback');
+        }
+      }
     }, 2000); // Increased debounce to reduce save frequency
-  }, [debouncedSave, connectionStatus]);
+  }, [debouncedSave, connectionStatus, completedTasks, taskAssignments, employees, dailyData]);
 
   // PERFORMANCE: Fast, non-blocking load with enhanced prep data handling and retry logic
   const loadFromFirebase = useCallback(async (retryCount: number = 0) => {

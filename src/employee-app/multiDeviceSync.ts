@@ -48,6 +48,7 @@ export class MultiDeviceSyncService {
   private deviceInfo: DeviceInfo;
   private presenceRef: string;
   private syncCallbacks: Map<string, (data: any) => void> = new Map();
+  private currentFieldState: Map<string, any> = new Map(); // Track current state for merging
   private isConnected = false;
   private heartbeatInterval: NodeJS.Timeout | null = null;
   private onDeviceCountChange?: (count: number, devices: DeviceInfo[]) => void;
@@ -228,11 +229,43 @@ export class MultiDeviceSyncService {
           console.log(`📥 Received localStorage update for ${field}`);
           
           try {
-            const data = JSON.parse(e.newValue);
-            let processedData = data;
+            const incomingData = JSON.parse(e.newValue);
+            let processedData = incomingData;
             
-            if (field === 'completedTasks' && Array.isArray(data)) {
-              processedData = new Set(data);
+            // FIXED: Implement proper state merging for completedTasks
+            if (field === 'completedTasks' && Array.isArray(incomingData)) {
+              // Get current local state
+              let currentLocalState: Set<number> = new Set();
+              
+              // Try to get current state from the app (if available)
+              if (this.currentFieldState?.has(field)) {
+                currentLocalState = this.currentFieldState.get(field) as Set<number>;
+              }
+              
+              // Merge: Union of current local tasks + incoming tasks
+              const incomingSet = new Set(incomingData);
+              const mergedSet = new Set([...currentLocalState, ...incomingSet]);
+              
+              console.log(`🔀 Merging completedTasks - Local: [${Array.from(currentLocalState)}], Incoming: [${incomingData}], Merged: [${Array.from(mergedSet)}]`);
+              
+              // Only update if the merged state is different from current
+              if (mergedSet.size !== currentLocalState.size || !Array.from(mergedSet).every(task => currentLocalState.has(task))) {
+                processedData = mergedSet;
+                
+                // Save the merged state back to localStorage to ensure consistency
+                localStorage.setItem(
+                  this.localStoragePrefix + field, 
+                  JSON.stringify(Array.from(mergedSet))
+                );
+                
+                console.log(`✅ Updated localStorage with merged completedTasks: [${Array.from(mergedSet)}]`);
+              } else {
+                console.log(`🔄 No changes needed - local state already includes all tasks`);
+                return; // No callback needed since nothing changed
+              }
+            } else if (Array.isArray(incomingData) && field === 'completedTasks') {
+              // Fallback: convert to Set for other array fields if needed
+              processedData = new Set(incomingData);
             }
             
             const callback = this.syncCallbacks.get(field)!;
@@ -857,6 +890,11 @@ export class MultiDeviceSyncService {
   // Subscribe to field changes
   onFieldChange(field: string, callback: (data: any) => void): void {
     this.syncCallbacks.set(field, callback);
+  }
+  
+  // Update current field state (called by the app when state changes)
+  updateFieldState(field: string, data: any): void {
+    this.currentFieldState.set(field, data);
   }
 
   offFieldChange(field: string): void {
