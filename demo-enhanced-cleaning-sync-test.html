@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Cleaning Tasks Multi-Device Sync Demo - WorkVibe</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            margin: 0 0 10px 0;
+            font-size: 2.5rem;
+            font-weight: 700;
+        }
+        
+        .subtitle {
+            margin: 0;
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+        
+        .demo-section {
+            padding: 20px;
+        }
+        
+        .demo-instructions {
+            background: #fef3c7;
+            border: 2px solid #f59e0b;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .demo-instructions h2 {
+            margin: 0 0 15px 0;
+            color: #92400e;
+            font-size: 1.3rem;
+        }
+        
+        .demo-instructions ol {
+            margin: 0;
+            padding-left: 20px;
+        }
+        
+        .demo-instructions li {
+            margin-bottom: 8px;
+            line-height: 1.5;
+        }
+        
+        .status-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .status-card {
+            background: #fef3c7;
+            border: 2px solid #f59e0b;
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+        }
+        
+        .status-card h4 {
+            margin: 0 0 10px 0;
+            color: #92400e;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .status-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #d97706;
+            margin-bottom: 5px;
+        }
+        
+        .device-id {
+            font-size: 0.8rem;
+            color: #92400e;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .tasks-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 15px;
+        }
+        
+        .task-item {
+            background: white;
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .task-item:hover {
+            border-color: #f59e0b;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(245, 158, 11, 0.15);
+        }
+        
+        .task-item.completed {
+            background: #f0fdf4;
+            border-color: #10b981;
+        }
+        
+        .task-item.highlight {
+            animation: pulse 1s ease-in-out;
+            border-color: #ef4444;
+            background: #fef2f2;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+        }
+        
+        .task-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .task-checkbox {
+            width: 28px;
+            height: 28px;
+            border: 3px solid #d1d5db;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+        
+        .task-checkbox.checked {
+            background: #10b981;
+            border-color: #10b981;
+        }
+        
+        .task-checkbox.checked::after {
+            content: '✓';
+            color: white;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        
+        .task-content {
+            flex: 1;
+        }
+        
+        .task-title {
+            margin: 0 0 5px 0;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #1e293b;
+            line-height: 1.3;
+        }
+        
+        .task-location {
+            font-size: 0.9rem;
+            color: #64748b;
+            margin-bottom: 10px;
+            font-style: italic;
+        }
+        
+        .task-details {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        
+        .task-detail {
+            font-size: 0.8rem;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+        
+        .priority-high {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+        
+        .priority-medium {
+            background: #fef3c7;
+            color: #d97706;
+        }
+        
+        .priority-low {
+            background: #e0e7ff;
+            color: #3730a3;
+        }
+        
+        .time-badge {
+            background: #f3f4f6;
+            color: #374151;
+        }
+        
+        .points-badge {
+            background: #ecfdf5;
+            color: #059669;
+            font-weight: 600;
+        }
+        
+        .sync-indicator {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #f59e0b;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 50px;
+            font-size: 0.9rem;
+            box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
+            z-index: 1000;
+        }
+        
+        .tab-id {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #1e293b;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-family: 'Courier New', monospace;
+            z-index: 1000;
+        }
+        
+        .sync-performance {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: #1e293b;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 10px;
+            font-size: 0.8rem;
+            font-family: 'Courier New', monospace;
+            z-index: 1000;
+            max-width: 200px;
+        }
+        
+        .stress-test-section {
+            background: #fef2f2;
+            border: 2px solid #ef4444;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .stress-test-section h3 {
+            margin: 0 0 15px 0;
+            color: #dc2626;
+            font-size: 1.2rem;
+        }
+        
+        .stress-test-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+        
+        .stress-test-btn {
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+        
+        .stress-test-btn:hover {
+            background: #dc2626;
+        }
+        
+        .stress-test-btn:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="tab-id" id="tabId">Tab Loading...</div>
+    <div class="sync-indicator">🧹 Enhanced Sync Active</div>
+    <div class="sync-performance" id="syncPerformance">
+        <div>Sync Ops: <span id="syncOpsCount">0</span></div>
+        <div>Avg Latency: <span id="avgLatency">--</span></div>
+        <div>Peak Latency: <span id="peakLatency">--</span></div>
+    </div>
+    
+    <div class="container">
+        <div class="header">
+            <h1>🧹 Enhanced Cleaning Tasks Sync</h1>
+            <p class="subtitle">Advanced Multi-Device Synchronization Testing with Performance Monitoring</p>
+        </div>
+        
+        <div class="demo-section">
+            <div class="demo-instructions">
+                <h2>🚀 Enhanced Multi-Tab Sync Testing</h2>
+                <ol>
+                    <li><strong>Open 2-3 browser tabs</strong> with this page</li>
+                    <li><strong>Try rapid clicking</strong> on different tasks simultaneously</li>
+                    <li><strong>Use stress test buttons</strong> below to test sync performance</li>
+                    <li><strong>Monitor sync latency</strong> in real-time (bottom left corner)</li>
+                    <li><strong>Watch console logs</strong> for detailed sync debugging</li>
+                    <li><strong>Test edge cases</strong> like rapid clicking same task in multiple tabs</li>
+                </ol>
+            </div>
+            
+            <div class="stress-test-section">
+                <h3>⚡ Sync Stress Testing</h3>
+                <div class="stress-test-buttons">
+                    <button class="stress-test-btn" onclick="stressTest.rapidToggleTest()">Rapid Toggle (10 tasks)</button>
+                    <button class="stress-test-btn" onclick="stressTest.completeAllTest()">Complete All Tasks</button>
+                    <button class="stress-test-btn" onclick="stressTest.resetAllTest()">Reset All Tasks</button>
+                    <button class="stress-test-btn" onclick="stressTest.randomBatchTest()">Random Batch (5 tasks)</button>
+                </div>
+                <div style="font-size: 0.85rem; color: #7f1d1d;">
+                    These tests help identify sync bottlenecks and race conditions.
+                </div>
+            </div>
+            
+            <div class="status-bar">
+                <div class="status-card">
+                    <h4>Completed Tasks</h4>
+                    <div class="status-value" id="completedCount">0</div>
+                    <div class="device-id" id="deviceId">Device ID: Loading...</div>
+                </div>
+                <div class="status-card">
+                    <h4>Total Tasks</h4>
+                    <div class="status-value" id="totalCount">25</div>
+                    <div class="device-id">Last Sync: <span id="lastSync">Never</span></div>
+                </div>
+                <div class="status-card">
+                    <h4>Current Latency</h4>
+                    <div class="status-value"><span id="syncLatency">--</span></div>
+                    <div class="device-id">Sync Time: <span id="syncTime">--</span></div>
+                </div>
+                <div class="status-card">
+                    <h4>Active Tabs</h4>
+                    <div class="status-value" id="activeTabCount">1</div>
+                    <div class="device-id" id="activeTabsList">This tab only</div>
+                </div>
+                <div class="status-card">
+                    <h4>Total Points</h4>
+                    <div class="status-value" id="totalPoints">0</div>
+                    <div class="device-id">Max: <span id="maxPoints">248</span> pts</div>
+                </div>
+            </div>
+            
+            <div class="tasks-grid" id="tasksGrid">
+                <!-- Cleaning tasks will be dynamically generated here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Enhanced cleaning tasks data with more variety
+        const cleaningTasks = [
+            { id: 1, task: 'Water all plants', location: 'Dining Area', priority: 'medium', estimatedTime: '10 min', points: 5 },
+            { id: 2, task: 'Refill toilet paper', location: 'Restroom', priority: 'high', estimatedTime: '5 min', points: 8 },
+            { id: 3, task: 'Sweep kitchen floors', location: 'Kitchen', priority: 'high', estimatedTime: '15 min', points: 10 },
+            { id: 4, task: 'Wipe refrigerator surfaces', location: 'Kitchen', priority: 'medium', estimatedTime: '10 min', points: 7 },
+            { id: 5, task: 'Clean glass display cases', location: 'Kitchen (kylmävitrini)', priority: 'low', estimatedTime: '5 min', points: 3 },
+            { id: 6, task: 'Refill takeaway containers', location: 'Kitchen', priority: 'medium', estimatedTime: '10 min', points: 6 },
+            { id: 7, task: 'Stock napkins & utensils', location: 'Kitchen', priority: 'medium', estimatedTime: '5 min', points: 4 },
+            { id: 8, task: 'Sanitize dining tables', location: 'Dining Area', priority: 'high', estimatedTime: '20 min', points: 12 },
+            { id: 9, task: 'Clean table legs & supports', location: 'Dining Area', priority: 'low', estimatedTime: '15 min', points: 8 },
+            { id: 10, task: 'Vacuum dining area floors', location: 'Dining Area', priority: 'high', estimatedTime: '20 min', points: 15 },
+            { id: 11, task: 'Clean restroom mirrors', location: 'Restroom', priority: 'high', estimatedTime: '10 min', points: 9 },
+            { id: 12, task: 'Deep clean toilet bowls', location: 'Restroom', priority: 'high', estimatedTime: '15 min', points: 12 },
+            { id: 13, task: 'Replace paper towels', location: 'Restroom', priority: 'medium', estimatedTime: '5 min', points: 4 },
+            { id: 14, task: 'Disinfect POS terminals', location: 'POS / Front', priority: 'high', estimatedTime: '10 min', points: 10 },
+            { id: 15, task: 'Sweep & mop kitchen floors', location: 'Kitchen (Floor)', priority: 'high', estimatedTime: '15 min', points: 10 },
+            { id: 16, task: 'Deep mop all floors (2-day cycle)', location: 'Kitchen (Floor)', priority: 'high', estimatedTime: '20 min', points: 15 },
+            { id: 17, task: 'Complete grill deep clean', location: 'Kitchen', priority: 'high', estimatedTime: '45 min', points: 25 },
+            { id: 18, task: 'Sanitize all prep surfaces', location: 'Kitchen', priority: 'high', estimatedTime: '25 min', points: 18 },
+            { id: 19, task: 'Clean dishwasher exterior', location: 'Apu-Kitchen', priority: 'medium', estimatedTime: '10 min', points: 6 },
+            { id: 20, task: 'Replace exhaust hood filters', location: 'Kitchen', priority: 'medium', estimatedTime: '15 min', points: 8 },
+            { id: 21, task: 'Cover food containers properly', location: 'Storage', priority: 'high', estimatedTime: '10 min', points: 7 },
+            { id: 22, task: 'Organize storage containers', location: 'Apu-Kitchen', priority: 'low', estimatedTime: '15 min', points: 5 },
+            { id: 23, task: 'Empty all trash bins', location: 'All Areas', priority: 'high', estimatedTime: '12 min', points: 8 },
+            { id: 24, task: 'Clean staff break area', location: 'Break Room', priority: 'medium', estimatedTime: '18 min', points: 11 },
+            { id: 25, task: 'Final safety inspection', location: 'All Areas', priority: 'high', estimatedTime: '20 min', points: 15 }
+        ];
+
+        // Enhanced multi-tab sync system with performance monitoring
+        class EnhancedCleaningTasksSync {
+            constructor() {
+                this.deviceId = this.generateDeviceId();
+                this.completedTasks = new Set();
+                this.syncOperations = 0;
+                this.latencyRecords = [];
+                this.maxLatencyRecords = 50; // Keep last 50 records
+                
+                // Listen for storage changes
+                window.addEventListener('storage', (e) => {
+                    if (e.key === 'demo_completedCleaningTasks') {
+                        this.handleRemoteUpdate(e.newValue);
+                    } else if (e.key === 'demo_activeTabs') {
+                        this.updateActiveTabsDisplay();
+                    }
+                });
+                
+                // Load existing data
+                this.loadData();
+                
+                // Register this tab as active
+                this.registerTab();
+                
+                // Update UI
+                this.updateUI();
+                this.updateDeviceInfo();
+                this.updatePerformanceMetrics();
+                
+                // Set up heartbeat to maintain active tab list
+                setInterval(() => this.heartbeat(), 1000);
+                
+                // Performance metrics update
+                setInterval(() => this.updatePerformanceMetrics(), 500);
+                
+                // Clean up on page unload
+                window.addEventListener('beforeunload', () => this.cleanup());
+                
+                console.log('🧹 Enhanced Cleaning Tasks Sync initialized for device:', this.deviceId);
+            }
+            
+            generateDeviceId() {
+                // Use sessionStorage for unique tab IDs (fixed from PR #125)
+                let deviceId = sessionStorage.getItem('demo_cleaningTasks_deviceId');
+                if (!deviceId) {
+                    deviceId = 'CLEAN-' + Math.random().toString(36).substr(2, 8).toUpperCase();
+                    sessionStorage.setItem('demo_cleaningTasks_deviceId', deviceId);
+                }
+                return deviceId;
+            }
+            
+            loadData() {
+                const stored = localStorage.getItem('demo_completedCleaningTasks');
+                if (stored) {
+                    this.completedTasks = new Set(JSON.parse(stored));
+                }
+            }
+            
+            saveData() {
+                const startTime = performance.now();
+                localStorage.setItem('demo_completedCleaningTasks', JSON.stringify([...this.completedTasks]));
+                this.updateSyncTime();
+                
+                const latency = performance.now() - startTime;
+                this.recordLatency(latency);
+                this.syncOperations++;
+            }
+            
+            recordLatency(latency) {
+                this.latencyRecords.push(latency);
+                if (this.latencyRecords.length > this.maxLatencyRecords) {
+                    this.latencyRecords.shift(); // Remove oldest record
+                }
+            }
+            
+            getAverageLatency() {
+                if (this.latencyRecords.length === 0) return 0;
+                const sum = this.latencyRecords.reduce((a, b) => a + b, 0);
+                return sum / this.latencyRecords.length;
+            }
+            
+            getPeakLatency() {
+                if (this.latencyRecords.length === 0) return 0;
+                return Math.max(...this.latencyRecords);
+            }
+            
+            handleRemoteUpdate(newValue) {
+                if (newValue) {
+                    const startTime = performance.now();
+                    this.completedTasks = new Set(JSON.parse(newValue));
+                    this.updateUI();
+                    
+                    // Show sync latency
+                    const latency = (performance.now() - startTime).toFixed(2);
+                    document.getElementById('syncLatency').textContent = `${latency}ms`;
+                    this.recordLatency(parseFloat(latency));
+                    
+                    console.log('📥 Cleaning tasks sync received from remote tab:', {
+                        completedTasks: [...this.completedTasks],
+                        latency: `${latency}ms`,
+                        timestamp: new Date().toLocaleTimeString()
+                    });
+                }
+            }
+            
+            toggleTaskCompletion(taskId) {
+                const startTime = performance.now();
+                console.log(`🔄 Toggling cleaning task completion for ID: ${taskId}`);
+                
+                if (this.completedTasks.has(taskId)) {
+                    this.completedTasks.delete(taskId);
+                    console.log(`❌ Cleaning task ${taskId} marked incomplete`);
+                } else {
+                    this.completedTasks.add(taskId);
+                    console.log(`✅ Cleaning task ${taskId} completed`);
+                }
+                
+                // Immediate local update
+                this.updateUI();
+                
+                // Immediate sync to other tabs (no delay!)
+                this.saveData();
+                
+                const syncTime = (performance.now() - startTime).toFixed(2);
+                console.log(`🚀 Cleaning task sync completed in ${syncTime}ms`);
+                
+                // Highlight the synced task
+                this.highlightTask(taskId);
+            }
+            
+            highlightTask(taskId) {
+                const taskElement = document.querySelector(`[data-task-id="${taskId}"]`);
+                if (taskElement) {
+                    taskElement.classList.add('highlight');
+                    setTimeout(() => {
+                        taskElement.classList.remove('highlight');
+                    }, 2000);
+                }
+            }
+            
+            updateUI() {
+                const completedCount = this.completedTasks.size;
+                document.getElementById('completedCount').textContent = completedCount;
+                
+                // Calculate total points
+                const totalPoints = cleaningTasks
+                    .filter(task => this.completedTasks.has(task.id))
+                    .reduce((sum, task) => sum + task.points, 0);
+                document.getElementById('totalPoints').textContent = totalPoints;
+                
+                // Update task checkboxes and completion status
+                cleaningTasks.forEach(task => {
+                    const checkbox = document.querySelector(`[data-task-id="${task.id}"] .task-checkbox`);
+                    const taskItem = document.querySelector(`[data-task-id="${task.id}"]`);
+                    
+                    if (checkbox && taskItem) {
+                        const isCompleted = this.completedTasks.has(task.id);
+                        checkbox.classList.toggle('checked', isCompleted);
+                        taskItem.classList.toggle('completed', isCompleted);
+                    }
+                });
+            }
+            
+            updateDeviceInfo() {
+                document.getElementById('deviceId').textContent = `Device ID: ${this.deviceId}`;
+                document.getElementById('tabId').textContent = this.deviceId;
+            }
+            
+            updateSyncTime() {
+                const now = new Date();
+                document.getElementById('lastSync').textContent = now.toLocaleTimeString();
+                document.getElementById('syncTime').textContent = now.toLocaleTimeString();
+            }
+            
+            updatePerformanceMetrics() {
+                document.getElementById('syncOpsCount').textContent = this.syncOperations;
+                document.getElementById('avgLatency').textContent = this.getAverageLatency().toFixed(2) + 'ms';
+                document.getElementById('peakLatency').textContent = this.getPeakLatency().toFixed(2) + 'ms';
+            }
+            
+            registerTab() {
+                const tabs = this.getActiveTabs();
+                tabs.add(this.deviceId);
+                localStorage.setItem('demo_activeTabs', JSON.stringify([...tabs]));
+                this.updateActiveTabsDisplay();
+            }
+            
+            getActiveTabs() {
+                const stored = localStorage.getItem('demo_activeTabs');
+                return new Set(stored ? JSON.parse(stored) : []);
+            }
+            
+            updateActiveTabsDisplay() {
+                const tabs = this.getActiveTabs();
+                document.getElementById('activeTabCount').textContent = tabs.size;
+                document.getElementById('activeTabsList').textContent = 
+                    tabs.size === 1 ? 'This tab only' : `${tabs.size} tabs: ${[...tabs].join(', ')}`;
+            }
+            
+            heartbeat() {
+                // Keep this tab registered as active
+                this.registerTab();
+            }
+            
+            cleanup() {
+                // Remove this tab from active list
+                const tabs = this.getActiveTabs();
+                tabs.delete(this.deviceId);
+                localStorage.setItem('demo_activeTabs', JSON.stringify([...tabs]));
+                console.log(`🧹 Tab ${this.deviceId} cleaned up`);
+            }
+        }
+
+        // Stress testing functionality
+        const stressTest = {
+            rapidToggleTest() {
+                console.log('🔥 Starting rapid toggle stress test...');
+                const randomTasks = cleaningTasks.slice().sort(() => 0.5 - Math.random()).slice(0, 10);
+                
+                randomTasks.forEach((task, index) => {
+                    setTimeout(() => {
+                        window.syncSystem.toggleTaskCompletion(task.id);
+                    }, index * 100); // 100ms between each toggle
+                });
+                
+                console.log('🔥 Rapid toggle test completed - check sync performance!');
+            },
+            
+            completeAllTest() {
+                console.log('🔥 Completing all tasks stress test...');
+                cleaningTasks.forEach((task, index) => {
+                    if (!window.syncSystem.completedTasks.has(task.id)) {
+                        setTimeout(() => {
+                            window.syncSystem.toggleTaskCompletion(task.id);
+                        }, index * 50); // 50ms between each completion
+                    }
+                });
+            },
+            
+            resetAllTest() {
+                console.log('🔥 Resetting all tasks stress test...');
+                const completedTasks = [...window.syncSystem.completedTasks];
+                completedTasks.forEach((taskId, index) => {
+                    setTimeout(() => {
+                        window.syncSystem.toggleTaskCompletion(taskId);
+                    }, index * 30); // 30ms between each reset
+                });
+            },
+            
+            randomBatchTest() {
+                console.log('🔥 Random batch toggle stress test...');
+                const randomTasks = cleaningTasks.slice().sort(() => 0.5 - Math.random()).slice(0, 5);
+                
+                randomTasks.forEach((task, index) => {
+                    setTimeout(() => {
+                        window.syncSystem.toggleTaskCompletion(task.id);
+                        // Toggle again after 200ms
+                        setTimeout(() => {
+                            window.syncSystem.toggleTaskCompletion(task.id);
+                        }, 200);
+                    }, index * 150);
+                });
+            }
+        };
+
+        // Render cleaning tasks
+        function renderCleaningTasks() {
+            const grid = document.getElementById('tasksGrid');
+            const maxPoints = cleaningTasks.reduce((sum, task) => sum + task.points, 0);
+            document.getElementById('maxPoints').textContent = maxPoints;
+            
+            grid.innerHTML = cleaningTasks.map(task => `
+                <div class="task-item" data-task-id="${task.id}" onclick="syncSystem.toggleTaskCompletion(${task.id})">
+                    <div class="task-header">
+                        <div class="task-checkbox"></div>
+                        <div class="task-content">
+                            <h4 class="task-title">${task.task}</h4>
+                            <div class="task-location">📍 ${task.location}</div>
+                            <div class="task-details">
+                                <span class="task-detail priority-${task.priority}">🎯 ${task.priority.toUpperCase()}</span>
+                                <span class="task-detail time-badge">⏱️ ${task.estimatedTime}</span>
+                                <span class="task-detail points-badge">⭐ ${task.points} pts</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Initialize the demo
+        document.addEventListener('DOMContentLoaded', () => {
+            renderCleaningTasks();
+            window.syncSystem = new EnhancedCleaningTasksSync();
+        });
+    </script>
+</body>
+</html>
