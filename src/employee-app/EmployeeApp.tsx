@@ -281,6 +281,11 @@ const EmployeeApp: React.FC = () => {
       syncServiceRef.current.onFieldChange('tasks', setTasks);
       syncServiceRef.current.onFieldChange('dailyData', setDailyData);
       
+      // FIXED: Add prep fields to multi-device sync
+      syncServiceRef.current.onFieldChange('prepSelections', setPrepSelections);
+      syncServiceRef.current.onFieldChange('scheduledPreps', setScheduledPreps);
+      syncServiceRef.current.onFieldChange('prepItems', setPrepItems);
+      
       // Connect the service
       syncServiceRef.current.connect().catch(console.error);
       
@@ -310,7 +315,7 @@ const EmployeeApp: React.FC = () => {
         syncServiceRef.current = null;
       }
     };
-  }, [currentUser, setCompletedTasks, setDailyData, setEmployees, setTaskAssignments, setTasks]);
+  }, [currentUser, setCompletedTasks, setDailyData, setEmployees, setTaskAssignments, setTasks, setPrepSelections, setScheduledPreps, setPrepItems]);
 
   // Set up periodic auto-save (every 5 minutes)
   // Set up periodic auto-save (every 5 minutes) with logging for cleaning tasks
@@ -601,6 +606,11 @@ const EmployeeApp: React.FC = () => {
         }
         if (syncData.taskAssignments) setTaskAssignments(syncData.taskAssignments);
         
+        // FIXED: Apply prep data from sync
+        if (syncData.prepSelections) setPrepSelections(syncData.prepSelections);
+        if (syncData.scheduledPreps) setScheduledPreps(syncData.scheduledPreps);
+        if (syncData.prepItems) setPrepItems(syncData.prepItems);
+        
         console.log('✅ Data refreshed from all devices');
       } catch (error) {
         console.error('❌ Failed to refresh from all devices:', error);
@@ -609,7 +619,7 @@ const EmployeeApp: React.FC = () => {
       // Fallback to regular Firebase refresh
       await loadFromFirebase();
     }
-  }, [loadFromFirebase, setEmployees, setTasks, setDailyData, setCompletedTasks, setTaskAssignments]);
+  }, [loadFromFirebase, setEmployees, setTasks, setDailyData, setCompletedTasks, setTaskAssignments, setPrepSelections, setScheduledPreps, setPrepItems]);
 
   // Simple daily reset - only checks on app startup
 

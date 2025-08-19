@@ -100,12 +100,13 @@ export class MultiDeviceSyncService {
   }
 
   private generateDeviceId(): string {
-    let deviceId = localStorage.getItem('workVibe_deviceId');
+    // FIXED: Use sessionStorage instead of localStorage to ensure each tab has unique device ID
+    let deviceId = sessionStorage.getItem('workVibe_deviceId');
     if (!deviceId) {
       const timestamp = Date.now().toString(36);
       const random = Math.random().toString(36).substr(2, 6); // Shorter for performance
       deviceId = `device_${timestamp}_${random}`;
-      localStorage.setItem('workVibe_deviceId', deviceId);
+      sessionStorage.setItem('workVibe_deviceId', deviceId);
     }
     return deviceId;
   }
