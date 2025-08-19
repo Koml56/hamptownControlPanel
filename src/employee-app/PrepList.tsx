@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import type { PrepItem, ScheduledPrep, PrepSelections } from './types';
-import { Check, Loader2 } from 'lucide-react';
 
 interface PrepListProps {
   loadFromFirebase: () => Promise<void>;
@@ -22,12 +21,10 @@ const PrepList: React.FC<PrepListProps> = ({
     return tomorrow;
   };
 
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState(getTomorrowDate());
-  const [allPreps, setAllPreps] = useState<PrepItem[]>([]);
+  const [selectedDate] = useState(getTomorrowDate());
+  const [allPreps] = useState<PrepItem[]>([]);
   const [scheduledPreps, setScheduledPreps] = useState<ScheduledPrep[]>([]);
   const [prepSelections, setPrepSelections] = useState<PrepSelections>({});
-  const [shownRecipe, setShownRecipe] = useState<number | null>(null);
   // Track which prep items are currently being saved - COPIED FROM TODAYVIEW
   const [savingPreps, setSavingPreps] = useState<Set<number>>(new Set());
 
