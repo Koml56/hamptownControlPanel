@@ -1,6 +1,6 @@
 // PrepItemCard.tsx - Component for individual prep item cards
 import React from 'react';
-import { Check } from 'lucide-react';
+import { Check, Loader2 } from 'lucide-react';
 import type { PrepItem, Recipe, Priority } from './prep-types';
 import { priorities, timeSlots } from './prep-constants';
 
@@ -21,6 +21,7 @@ interface PrepItemCardProps {
   onShowRecipe: (recipe: Recipe, name: string) => void;
   onSave: (prep: PrepItem, selection: { priority: Priority; timeSlot: string; selected: boolean }) => void;
   context?: string;
+  isSaving?: boolean; // ADDED FOR TODAYVIEW PATTERN
 }
 
 const PrepItemCard: React.FC<PrepItemCardProps> = ({
@@ -35,25 +36,34 @@ const PrepItemCard: React.FC<PrepItemCardProps> = ({
   onShowPriorityOptions,
   onShowRecipe,
   onSave,
-  context = 'main'
+  context = 'main',
+  isSaving = false // ADDED FOR TODAYVIEW PATTERN
 }) => {
   const contextId = context === 'suggested' ? `suggested-${prep.id}` : prep.id;
 
   return (
     <div className={`border rounded-lg p-4 transition-colors ${
-      isSelected ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+      isSaving ? 'border-blue-500 bg-blue-50' : isSelected ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
     }`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3 flex-1">
           <button
             onClick={() => onToggleSelection(prep)}
+            disabled={isSaving}
             className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
-              isSelected 
+              isSaving
+                ? 'border-blue-400 bg-blue-50 cursor-wait'
+                : isSelected 
                 ? 'bg-blue-500 border-blue-500' 
                 : 'border-gray-300 hover:border-blue-500'
-            }`}
+            } disabled:cursor-wait`}
+            title={isSaving ? 'Saving...' : isSelected ? 'Remove from schedule' : 'Add to schedule'}
           >
-            {isSelected && <Check className="w-4 h-4 text-white" />}
+            {isSaving ? (
+              <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
+            ) : isSelected ? (
+              <Check className="w-4 h-4 text-white" />
+            ) : null}
           </button>
           <div className="flex-1">
             <div className="flex items-center space-x-2">
