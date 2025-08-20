@@ -164,14 +164,18 @@ const TaskManager: React.FC<TaskManagerProps> = ({
                   </div>
                   <button
                     onClick={() => handleTaskToggle(task.id)}
-                    className={`ml-3 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
+                    className={`ml-3 w-5 h-5 border-2 rounded-md relative transition-all ${
                       isCompleted 
-                        ? 'bg-green-500 border-green-500' 
-                        : 'border-gray-300 hover:border-blue-500'
+                        ? 'bg-indigo-500 border-indigo-500' 
+                        : 'border-gray-400 hover:border-indigo-500'
                     } disabled:cursor-wait`}
                     title={isCompleted ? 'Mark as incomplete' : 'Mark as complete'}
                   >
-                    {isCompleted && <Check className="w-4 h-4 text-white" />}
+                    {isCompleted && (
+                      <span className="absolute text-white font-bold text-sm" style={{left: '2px', top: '-2px'}}>
+                        ✓
+                      </span>
+                    )}
                   </button>
                 </div>
                 
