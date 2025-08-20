@@ -26,7 +26,12 @@ const mockTodayPreps: ScheduledPrep[] = [
     priority: 'high',
     timeSlot: 'morning',
     scheduledDate: getTodayDateString(),
-    prepItemId: 1
+    prepId: 1,
+    isCustom: false,
+    hasRecipe: false,
+    recipe: null,
+    assignedTo: null,
+    notes: ''
   },
   {
     id: 2,
@@ -37,7 +42,12 @@ const mockTodayPreps: ScheduledPrep[] = [
     priority: 'high',
     timeSlot: 'morning',
     scheduledDate: getTodayDateString(),
-    prepItemId: 2
+    prepId: 2,
+    isCustom: false,
+    hasRecipe: false,
+    recipe: null,
+    assignedTo: null,
+    notes: ''
   },
   {
     id: 3,
@@ -48,7 +58,12 @@ const mockTodayPreps: ScheduledPrep[] = [
     priority: 'high',
     timeSlot: 'morning',
     scheduledDate: getTodayDateString(),
-    prepItemId: 3
+    prepId: 3,
+    isCustom: false,
+    hasRecipe: false,
+    recipe: null,
+    assignedTo: null,
+    notes: ''
   }
 ];
 
@@ -62,7 +77,12 @@ const mockYesterdayPreps: ScheduledPrep[] = [
     priority: 'low',
     timeSlot: 'morning',
     scheduledDate: '2024-01-01', // Past date
-    prepItemId: 4
+    prepId: 4,
+    isCustom: false,
+    hasRecipe: false,
+    recipe: null,
+    assignedTo: null,
+    notes: ''
   }
 ];
 
@@ -258,7 +278,12 @@ describe('TodayView Multi-Device Sync', () => {
         priority: 'low',
         timeSlot: 'morning',
         scheduledDate: futureDate,
-        prepItemId: 5
+        prepId: 5,
+        isCustom: false,
+        hasRecipe: false,
+        recipe: null,
+        assignedTo: null,
+        notes: ''
       }
     ];
 

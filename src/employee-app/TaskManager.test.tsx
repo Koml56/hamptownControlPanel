@@ -23,14 +23,13 @@ jest.mock('./taskFunctions', () => ({
 // Sample test data
 const mockCurrentUser: CurrentUser = {
   id: 1,
-  name: 'Test User',
-  role: 'admin'
+  name: 'Test User'
 };
 
 const mockEmployees: Employee[] = [
-  { id: 1, name: 'Alice', role: 'server', points: 10, isActive: true },
-  { id: 2, name: 'Bob', role: 'kitchen', points: 15, isActive: true },
-  { id: 3, name: 'Charlie', role: 'bartender', points: 8, isActive: true }
+  { id: 1, name: 'Alice', role: 'server', points: 10, mood: 5, lastUpdated: '2024-01-15', lastMoodDate: '2024-01-15' },
+  { id: 2, name: 'Bob', role: 'kitchen', points: 15, mood: 4, lastUpdated: '2024-01-15', lastMoodDate: '2024-01-15' },
+  { id: 3, name: 'Charlie', role: 'bartender', points: 8, mood: 3, lastUpdated: '2024-01-15', lastMoodDate: '2024-01-15' }
 ];
 
 const mockTasks: Task[] = [
@@ -67,12 +66,26 @@ const mockTaskAssignments: TaskAssignments = {
 
 const mockDailyData: DailyDataMap = {
   '2024-01-15': {
-    date: '2024-01-15',
-    employeeData: {
-      1: { points: 10, completedTasks: [] },
-      2: { points: 15, completedTasks: [1] },
-      3: { points: 8, completedTasks: [] }
-    }
+    completedTasks: [
+      {
+        taskId: 1,
+        employeeId: 2,
+        completedAt: '2024-01-15T10:00:00Z',
+        taskName: 'Clean tables',
+        date: '2024-01-15',
+        pointsEarned: 5
+      }
+    ],
+    employeeMoods: [
+      { employeeId: 1, mood: 5, updatedAt: '2024-01-15T09:00:00Z' },
+      { employeeId: 2, mood: 4, updatedAt: '2024-01-15T09:00:00Z' },
+      { employeeId: 3, mood: 3, updatedAt: '2024-01-15T09:00:00Z' }
+    ],
+    purchases: [],
+    totalTasks: 1,
+    completionRate: 0.33,
+    totalPointsEarned: 5,
+    totalPointsSpent: 0
   }
 };
 
