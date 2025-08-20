@@ -5,6 +5,7 @@ import { getPriorityColor, getFormattedDate } from './utils';
 import { toggleTaskComplete, assignTask, getAssignedEmployee, reassignCompletedTask } from './taskFunctions';
 import type { Task, Employee, TaskAssignments, DailyDataMap, CurrentUser } from './types';
 import CrossTabDebugPanel from './CrossTabDebugPanel';
+import CheckboxButton from './components/CheckboxButton';
 
 interface TaskManagerProps {
   currentUser: CurrentUser;
@@ -162,21 +163,14 @@ const TaskManager: React.FC<TaskManagerProps> = ({
                       </div>
                     </div>
                   </div>
-                  <button
+                  <CheckboxButton
+                    checked={isCompleted}
                     onClick={() => handleTaskToggle(task.id)}
-                    className={`ml-3 w-5 h-5 border-2 rounded-md relative transition-all ${
-                      isCompleted 
-                        ? 'bg-indigo-500 border-indigo-500' 
-                        : 'border-gray-400 hover:border-indigo-500'
-                    } disabled:cursor-wait`}
                     title={isCompleted ? 'Mark as incomplete' : 'Mark as complete'}
-                  >
-                    {isCompleted && (
-                      <span className="absolute text-white font-bold text-sm" style={{left: '2px', top: '-2px'}}>
-                        ✓
-                      </span>
-                    )}
-                  </button>
+                    className="ml-3"
+                    variant="blue"
+                    size="medium"
+                  />
                 </div>
                 
                 <div className="mt-3">

@@ -4,6 +4,7 @@ import { ChefHat, Loader2 } from 'lucide-react';
 import type { ScheduledPrep, Recipe } from './prep-types';
 import { timeSlots, priorities } from './prep-constants';
 import { getDateString } from './prep-utils';
+import CheckboxButton from './components/CheckboxButton';
 
 interface TodayViewProps {
   scheduledPreps: ScheduledPrep[];
@@ -79,29 +80,20 @@ const TodayView: React.FC<TodayViewProps> = ({
         isSaving ? 'bg-blue-50 border-blue-200' : 'hover:bg-gray-50'
       }`}>
         <div className="flex items-center space-x-3 select-none">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleToggleCompletion(prep.id);
-            }}
-            disabled={isSaving}
-            className={`w-5 h-5 border-2 rounded-md relative transition-all ${
-              prep.completed 
-                ? 'bg-indigo-500 border-indigo-500' 
-                : isSaving
-                ? 'border-blue-400 bg-blue-50'
-                : 'border-gray-400 hover:border-indigo-500'
-            } ${isSaving ? 'cursor-wait' : 'cursor-pointer'} disabled:cursor-wait`}
-            title={isSaving ? 'Saving...' : prep.completed ? 'Mark as incomplete' : 'Mark as complete'}
-          >
-            {isSaving ? (
-              <Loader2 className="w-4 h-4 text-blue-500 animate-spin absolute left-0.5 top-0.5" />
-            ) : prep.completed ? (
-              <span className="absolute text-white font-bold text-sm" style={{left: '2px', top: '-2px'}}>
-                ✓
-              </span>
-            ) : null}
-          </button>
+          {isSaving ? (
+            <div className="flex items-center justify-center w-6 h-6 border-2 border-blue-300 rounded-full">
+              <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
+            </div>
+          ) : (
+            <CheckboxButton
+              checked={prep.completed}
+              onClick={() => handleToggleCompletion(prep.id)}
+              disabled={isSaving}
+              title={isSaving ? 'Saving...' : prep.completed ? 'Mark as incomplete' : 'Mark as complete'}
+              variant="blue"
+              size="medium"
+            />
+          )}
           
           <div className="flex-1">
             <div className={`font-medium flex items-center space-x-2 transition-all ${

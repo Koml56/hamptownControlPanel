@@ -7,6 +7,7 @@ import { generateOrderExcel } from '../excelExport';
 import { EnhancedInventoryItem, HolidayAlert as HolidayAlertType } from '../../types';
 import { showToast } from '../utils';
 import { getStockStatus, markAsOrdered } from '../stockUtils';
+import CheckboxButton from '../../components/CheckboxButton';
 import { 
   getNotificationSettings, 
   setNotificationEnabled, 
@@ -452,11 +453,12 @@ const StockCard: React.FC<{
       {/* Header with checkbox, title, and badge in one row */}
       <div className="flex items-start gap-2 mb-3">
         {!isOrdered && (
-          <input 
-            type="checkbox" 
+          <CheckboxButton
             checked={isSelected}
-            onChange={onToggleSelection}
-            className="w-5 h-5 md:w-4 md:h-4 mt-1 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0"
+            onClick={onToggleSelection}
+            variant="blue"
+            size="small"
+            className="mt-1 flex-shrink-0"
           />
         )}
         
