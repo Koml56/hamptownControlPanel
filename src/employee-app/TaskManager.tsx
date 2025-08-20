@@ -1,6 +1,6 @@
 // TaskManager.tsx - Updated to handle point transfers on reassignment with debugging
 import React, { useEffect } from 'react';
-import { CheckSquare, Check, Users, Star } from 'lucide-react';
+import { CheckSquare, Users, Star } from 'lucide-react';
 import { getPriorityColor, getFormattedDate } from './utils';
 import { toggleTaskComplete, assignTask, getAssignedEmployee, reassignCompletedTask } from './taskFunctions';
 import type { Task, Employee, TaskAssignments, DailyDataMap, CurrentUser } from './types';

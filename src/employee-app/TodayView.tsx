@@ -1,6 +1,6 @@
 // TodayView.tsx - FIXED: Enhanced UI for prep completions with loading states
 import React, { useState } from 'react';
-import { Check, ChefHat, Loader2 } from 'lucide-react';
+import { ChefHat, Loader2 } from 'lucide-react';
 import type { ScheduledPrep, Recipe } from './prep-types';
 import { timeSlots, priorities } from './prep-constants';
 import { getDateString } from './prep-utils';
