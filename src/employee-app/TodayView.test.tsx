@@ -2,7 +2,6 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import TodayView from './TodayView';
-import { MultiDeviceSyncService } from './multiDeviceSync';
 import type { ScheduledPrep } from './prep-types';
 
 // Mock the MultiDeviceSyncService
@@ -70,8 +69,6 @@ const mockYesterdayPreps: ScheduledPrep[] = [
 describe('TodayView Multi-Device Sync', () => {
   let mockOnToggleCompletion: jest.Mock;
   let mockOnShowRecipe: jest.Mock;
-  let mockSyncService1: jest.Mocked<MultiDeviceSyncService>;
-  let mockSyncService2: jest.Mocked<MultiDeviceSyncService>;
 
   beforeEach(() => {
     mockOnToggleCompletion = jest.fn().mockResolvedValue(undefined);
@@ -79,29 +76,6 @@ describe('TodayView Multi-Device Sync', () => {
     
     // Clear console spy
     consoleSpy.mockClear();
-    
-    // Mock sync services for two "devices/tabs"
-    mockSyncService1 = {
-      connect: jest.fn().mockResolvedValue(undefined),
-      disconnect: jest.fn().mockResolvedValue(undefined),
-      syncData: jest.fn().mockResolvedValue(undefined),
-      onFieldChange: jest.fn(),
-      updateFieldState: jest.fn(),
-      isConnected: jest.fn().mockReturnValue(true),
-      getDeviceId: jest.fn().mockReturnValue('tab1-device'),
-      getConnectedDevices: jest.fn().mockReturnValue(['tab1-device', 'tab2-device'])
-    } as any;
-    
-    mockSyncService2 = {
-      connect: jest.fn().mockResolvedValue(undefined),
-      disconnect: jest.fn().mockResolvedValue(undefined),
-      syncData: jest.fn().mockResolvedValue(undefined),
-      onFieldChange: jest.fn(),
-      updateFieldState: jest.fn(),
-      isConnected: jest.fn().mockReturnValue(true),
-      getDeviceId: jest.fn().mockReturnValue('tab2-device'),
-      getConnectedDevices: jest.fn().mockReturnValue(['tab1-device', 'tab2-device'])
-    } as any;
   });
 
   afterEach(() => {

@@ -2,7 +2,6 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import TaskManager from './TaskManager';
-import { MultiDeviceSyncService } from './multiDeviceSync';
 import type { Task, Employee, TaskAssignments, DailyDataMap, CurrentUser } from './types';
 
 // Mock the MultiDeviceSyncService and related modules
@@ -83,7 +82,6 @@ describe('TaskManager Multi-Device Sync', () => {
   let mockSetDailyData: jest.Mock;
   let mockSetEmployees: jest.Mock;
   let mockSaveToFirebase: jest.Mock;
-  let mockSyncService: jest.Mocked<MultiDeviceSyncService>;
 
   beforeEach(() => {
     mockSetCompletedTasks = jest.fn();
@@ -91,18 +89,6 @@ describe('TaskManager Multi-Device Sync', () => {
     mockSetDailyData = jest.fn();
     mockSetEmployees = jest.fn();
     mockSaveToFirebase = jest.fn();
-    
-    // Mock sync service
-    mockSyncService = {
-      connect: jest.fn().mockResolvedValue(undefined),
-      disconnect: jest.fn().mockResolvedValue(undefined),
-      syncData: jest.fn().mockResolvedValue(undefined),
-      onFieldChange: jest.fn(),
-      updateFieldState: jest.fn(),
-      isConnected: jest.fn().mockReturnValue(true),
-      getDeviceId: jest.fn().mockReturnValue('task-test-device'),
-      getConnectedDevices: jest.fn().mockReturnValue(['task-test-device', 'task-device-2'])
-    } as any;
 
     // Mock console.log to capture debug logs
     jest.spyOn(console, 'log').mockImplementation();

@@ -1,9 +1,7 @@
 // PrepList.test.tsx - Multi-device sync testing for prep list functionality
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import PrepList from './PrepList';
-import { MultiDeviceSyncService } from './multiDeviceSync';
-import type { PrepItem, ScheduledPrep, PrepSelections } from './types';
 
 // Mock the MultiDeviceSyncService
 jest.mock('./multiDeviceSync');
@@ -17,59 +15,15 @@ jest.mock('./firebaseService', () => ({
   }))
 }));
 
-// Sample prep items for testing
-const mockPrepItems: PrepItem[] = [
-  {
-    id: 1,
-    name: 'Dice Onions',
-    category: 'Vegetables',
-    estimatedTime: '15 min',
-    isCustom: false,
-    hasRecipe: false,
-    frequency: 1
-  },
-  {
-    id: 2,
-    name: 'Prep Salad Mix',
-    category: 'Vegetables',
-    estimatedTime: '20 min',
-    isCustom: false,
-    hasRecipe: true,
-    frequency: 1
-  },
-  {
-    id: 3,
-    name: 'Marinate Chicken',
-    category: 'Proteins',
-    estimatedTime: '30 min',
-    isCustom: false,
-    hasRecipe: true,
-    frequency: 2
-  }
-];
-
 describe('PrepList Multi-Device Sync', () => {
   let mockLoadFromFirebase: jest.Mock;
   let mockSaveToFirebase: jest.Mock;
   let mockQuickSave: jest.Mock;
-  let mockSyncService: jest.Mocked<MultiDeviceSyncService>;
 
   beforeEach(() => {
     mockLoadFromFirebase = jest.fn().mockResolvedValue(undefined);
     mockSaveToFirebase = jest.fn();
     mockQuickSave = jest.fn().mockResolvedValue(undefined);
-    
-    // Mock sync service
-    mockSyncService = {
-      connect: jest.fn().mockResolvedValue(undefined),
-      disconnect: jest.fn().mockResolvedValue(undefined),
-      syncData: jest.fn().mockResolvedValue(undefined),
-      onFieldChange: jest.fn(),
-      updateFieldState: jest.fn(),
-      isConnected: jest.fn().mockReturnValue(true),
-      getDeviceId: jest.fn().mockReturnValue('prep-test-device'),
-      getConnectedDevices: jest.fn().mockReturnValue(['prep-test-device'])
-    } as any;
 
     // Mock localStorage
     const localStorageMock = {
@@ -163,7 +117,7 @@ describe('PrepList Multi-Device Sync', () => {
     };
     Object.defineProperty(window, 'localStorage', { value: localStorageMock });
 
-    const { container } = render(
+    render(
       <PrepList
         loadFromFirebase={mockLoadFromFirebase}
         saveToFirebase={mockSaveToFirebase}
@@ -224,7 +178,7 @@ describe('PrepList Multi-Device Sync', () => {
     // Component should default to tomorrow's date
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowString = tomorrow.toISOString().split('T')[0];
+    // Component uses this date internally for scheduling
 
     // The PrepList component should be showing tomorrow's date by default
     // This would need to be tested based on the actual UI implementation
@@ -235,7 +189,7 @@ describe('PrepList Multi-Device Sync', () => {
   });
 
   test('should prevent saving conflicts during rapid multi-tab usage', async () => {
-    const { container } = render(
+    render(
       <PrepList
         loadFromFirebase={mockLoadFromFirebase}
         saveToFirebase={mockSaveToFirebase}
@@ -259,7 +213,7 @@ describe('PrepList Multi-Device Sync', () => {
   });
 
   test('should sync prepSelections across browser tabs', async () => {
-    const mockPrepSelections: PrepSelections = {
+    const mockPrepSelections = {
       1: { quantity: 2, priority: 'high', timeSlot: 'morning' },
       2: { quantity: 1, priority: 'medium', timeSlot: 'midday' }
     };
