@@ -1,6 +1,7 @@
 // PrepListManager.tsx - Simplified prep list component for existing employee app
 import React, { useState, useEffect } from 'react';
 import { Calendar, Check, ChefHat, Plus, Search, Users, X } from 'lucide-react';
+import CheckboxButton from './components/CheckboxButton';
 
 // Types
 interface PrepItem {
@@ -374,16 +375,12 @@ const PrepListManager: React.FC = () => {
                   return (
                     <div key={prep.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
                       <div className="flex items-center space-x-3">
-                        <button
+                        <CheckboxButton
+                          checked={prep.completed}
                           onClick={() => togglePrepCompletion(prep.id)}
-                          className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
-                            prep.completed 
-                              ? 'bg-green-500 border-green-500' 
-                              : 'border-gray-300 hover:border-green-500'
-                          }`}
-                        >
-                          {prep.completed && <Check className="w-4 h-4 text-white" />}
-                        </button>
+                          variant="blue"
+                          size="medium"
+                        />
                         <div className="flex-1">
                           <div className={`font-medium flex items-center space-x-2 ${prep.completed ? 'line-through text-gray-500' : 'text-gray-800'}`}>
                             <span>{prep.name}</span>
@@ -501,16 +498,12 @@ const PrepListManager: React.FC = () => {
                   }`}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-3 flex-1">
-                        <button
+                        <CheckboxButton
+                          checked={isSelected}
                           onClick={() => togglePrepSelection(prep)}
-                          className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
-                            isSelected 
-                              ? 'bg-blue-500 border-blue-500' 
-                              : 'border-gray-300 hover:border-blue-500'
-                          }`}
-                        >
-                          {isSelected && <Check className="w-4 h-4 text-white" />}
-                        </button>
+                          variant="blue"
+                          size="medium"
+                        />
                         <div className="flex-1">
                           <div className="flex items-center space-x-2">
                             <h4 className={`font-medium ${isSelected ? 'text-blue-900' : 'text-gray-800'}`}>
