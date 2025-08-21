@@ -107,7 +107,7 @@ export function useSimpleSync({
     });
 
     console.log('✅ Simple sync initialized');
-  }, [setCompletedTasks, setTaskAssignments, setEmployees, setDailyData]); // Add dependencies
+  }, [setCompletedTasks, setTaskAssignments, setEmployees, setDailyData, completedTasks]); // Add dependencies
 
   // Function to mark task as completed with sync
   const markTaskCompleted = useCallback((taskId: number, employeeId: number) => {

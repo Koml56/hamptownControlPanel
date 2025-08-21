@@ -856,6 +856,7 @@ export const useFirebaseData = () => {
     quickSaveImmediate,
     setSyncService,
     updateEmployeePoints,
+    setConnectionStatus,
 
     // Додаємо applyTaskOperation для застосування операцій до задач
     applyTaskSyncOperation

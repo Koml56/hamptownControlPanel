@@ -100,7 +100,8 @@ const EmployeeApp: React.FC = () => {
     quickSave,
     quickSaveImmediate,
     setSyncService,
-    applyTaskSyncOperation
+    applyTaskSyncOperation,
+    setConnectionStatus
   } = useFirebaseData();
 
   // Real-time cleaning tasks sync with debouncing to prevent oscillation
@@ -293,12 +294,19 @@ const EmployeeApp: React.FC = () => {
       // FIXED: Connect sync service to hooks for prep data cross-tab sync
       setSyncService(syncServiceRef.current);
       
-      // Periodic sync stats update to track fallback mode
+      // Periodic sync stats update to track fallback mode and connection status
       const updateSyncStats = () => {
         if (syncServiceRef.current) {
           const stats = syncServiceRef.current.getSyncStats();
           setSyncMode(stats.syncMode);
           setIsUsingFallback(stats.isUsingFallback);
+          
+          // FIXED: Update connection status based on sync service status
+          if (stats.isConnected) {
+            setConnectionStatus('connected');
+          } else {
+            setConnectionStatus('error');
+          }
         }
       };
       
@@ -319,7 +327,7 @@ const EmployeeApp: React.FC = () => {
         syncServiceRef.current = null;
       }
     };
-  }, [currentUser, setCompletedTasks, setDailyData, setEmployees, setTaskAssignments, setTasks, setPrepSelections, setScheduledPreps, setPrepItems, setSyncService]);
+  }, [currentUser, setCompletedTasks, setDailyData, setEmployees, setTaskAssignments, setTasks, setPrepSelections, setScheduledPreps, setPrepItems, setSyncService, setConnectionStatus]);
 
   // Set up periodic auto-save (every 5 minutes)
   // Set up periodic auto-save (every 5 minutes) with logging for cleaning tasks
