@@ -1,11 +1,12 @@
-// TaskManager.tsx - Updated to handle point transfers on reassignment with debugging
+// TaskManager.tsx - Updated to use SimpleCrossTabSync for reliable cross-tab synchronization
 import React, { useEffect } from 'react';
 import { CheckSquare, Users, Star } from 'lucide-react';
 import { getPriorityColor, getFormattedDate } from './utils';
-import { toggleTaskComplete, assignTask, getAssignedEmployee, reassignCompletedTask } from './taskFunctions';
+import { getAssignedEmployee } from './taskFunctions';
 import type { Task, Employee, TaskAssignments, DailyDataMap, CurrentUser } from './types';
 import CrossTabDebugPanel from './CrossTabDebugPanel';
 import CheckboxButton from './components/CheckboxButton';
+import { useSimpleSync } from './useSimpleSync';
 
 interface TaskManagerProps {
   currentUser: CurrentUser;
@@ -34,53 +35,72 @@ const TaskManager: React.FC<TaskManagerProps> = ({
   setEmployees,
   saveToFirebase
 }) => {
+  // Initialize simple cross-tab sync
+  const { markTaskCompleted, markTaskUncompleted, deviceId } = useSimpleSync({
+    completedTasks,
+    taskAssignments,
+    employees,
+    dailyData,
+    tasks,
+    setCompletedTasks,
+    setTaskAssignments,
+    setEmployees,
+    setDailyData
+  });
+
   // Debug logging
   useEffect(() => {
     console.log('📋 TaskManager - completedTasks updated:', {
       size: completedTasks.size,
       tasks: Array.from(completedTasks),
-      timestamp: new Date().toLocaleTimeString()
+      timestamp: new Date().toLocaleTimeString(),
+      deviceId
     });
-  }, [completedTasks]);
+  }, [completedTasks, deviceId]);
 
   const handleTaskToggle = (taskId: number, assignToEmployeeId?: number) => {
-    toggleTaskComplete(
-      taskId,
-      assignToEmployeeId,
-      currentUser.id,
-      completedTasks,
-      taskAssignments,
-      tasks,
-      employees,
-      setCompletedTasks,
-      setTaskAssignments,
-      setDailyData,
-      setEmployees,
-      saveToFirebase
-    );
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    const isCurrentlyCompleted = completedTasks.has(taskId);
+    const employeeId = assignToEmployeeId || currentUser.id;
+
+    console.log(`🔄 TaskManager - handling task ${taskId} toggle:`, {
+      isCurrentlyCompleted,
+      employeeId,
+      taskName: task.task
+    });
+
+    if (isCurrentlyCompleted) {
+      // Task is completed, mark as uncompleted
+      markTaskUncompleted(taskId);
+    } else {
+      // Task is not completed, mark as completed
+      markTaskCompleted(taskId, employeeId);
+    }
   };
 
   const handleAssignTask = (taskId: number, employeeId: number) => {
     const isCompleted = completedTasks.has(taskId);
     
+    console.log(`🔄 TaskManager - assigning task ${taskId} to employee ${employeeId}:`, {
+      isCompleted,
+      currentAssignment: taskAssignments[taskId]
+    });
+    
     if (isCompleted) {
-      // Task is completed - use reassignment function to transfer points
-      reassignCompletedTask(
-        taskId,
-        employeeId,
-        completedTasks,
-        taskAssignments,
-        tasks,
-        employees,
-        setTaskAssignments,
-        setDailyData,
-        setEmployees,
-        saveToFirebase
-      );
-    } else {
-      // Task is not completed - normal assignment
-      assignTask(taskId, employeeId, setTaskAssignments);
-    }
+      // Task is completed - need to transfer points to new employee
+      const currentAssignedEmployee = taskAssignments[taskId];
+      if (currentAssignedEmployee && currentAssignedEmployee !== employeeId) {
+        // Remove task from current employee and add to new employee
+        markTaskUncompleted(taskId); // This removes from current employee
+        markTaskCompleted(taskId, employeeId); // This adds to new employee
+        console.log(`🔄 Task ${taskId} reassigned from ${currentAssignedEmployee} to ${employeeId}`);
+      }
+      } else {
+        // Task is not completed, just update assignment without points
+        setTaskAssignments(prev => ({ ...prev, [taskId]: employeeId }));
+      }
   };
 
   const currentEmployee = employees.find(emp => emp.id === currentUser.id);
