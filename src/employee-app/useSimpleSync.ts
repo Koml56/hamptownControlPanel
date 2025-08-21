@@ -31,6 +31,8 @@ export function useSimpleSync({
 }: UseSimplesyncProps) {
   const initializationRef = useRef(false);
   const lastSyncRef = useRef<number>(0);
+  const explicitSyncRef = useRef<boolean>(false); // Track when we're doing explicit sync
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Track auto-save timeout
 
   // Initialize sync and load existing data
   useEffect(() => {
@@ -111,13 +113,24 @@ export function useSimpleSync({
   const markTaskCompleted = useCallback((taskId: number, employeeId: number) => {
     console.log(`🔄 Marking task ${taskId} as completed for employee ${employeeId}`);
     
+    // Set explicit sync flag and clear any pending auto-save
+    explicitSyncRef.current = true;
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+      autoSaveTimeoutRef.current = null;
+      console.log('🛑 Cleared pending auto-save during explicit sync');
+    }
+    
     // Find the task to get its points
     const task = tasks.find(t => t.id === taskId);
     const taskPoints = task?.points || 5; // Fallback to 5 points if not found
     
     // Update local state immediately for responsive UI
-    setCompletedTasks(new Set([...completedTasks, taskId]));
-    setTaskAssignments(prev => ({ ...prev, [taskId]: employeeId }));
+    const newCompletedTasks = new Set([...completedTasks, taskId]);
+    const newTaskAssignments = { ...taskAssignments, [taskId]: employeeId };
+    
+    setCompletedTasks(newCompletedTasks);
+    setTaskAssignments(() => newTaskAssignments);
     
     // Update employee points in dailyData
     setDailyData((prev: any) => {
@@ -147,14 +160,38 @@ export function useSimpleSync({
         : emp
     ));
 
-    // Sync to other tabs
+    // Sync to other tabs using the updated data
     simpleCrossTabSync.markTaskCompleted(taskId, employeeId);
+    
+    // Also save the complete state to ensure localStorage is up to date
+    const updatedData = {
+      completedTasks: Array.from(newCompletedTasks),
+      taskAssignments: newTaskAssignments,
+      lastUpdated: Date.now()
+    };
+    simpleCrossTabSync.saveData(updatedData);
+    
     lastSyncRef.current = Date.now();
-  }, [setCompletedTasks, setTaskAssignments, setDailyData, setEmployees, tasks, completedTasks]);
+    console.log('✅ Task completed, local state updated, and synced to other tabs');
+    
+    // Clear explicit sync flag after a short delay
+    setTimeout(() => {
+      explicitSyncRef.current = false;
+      console.log('🔓 Explicit sync operation completed');
+    }, 1000); // Longer delay to ensure auto-save doesn't interfere
+  }, [setCompletedTasks, setTaskAssignments, setDailyData, setEmployees, tasks, completedTasks, taskAssignments]);
 
   // Function to mark task as uncompleted with sync
   const markTaskUncompleted = useCallback((taskId: number) => {
     console.log(`🔄 Marking task ${taskId} as uncompleted`);
+    
+    // Set explicit sync flag and clear any pending auto-save
+    explicitSyncRef.current = true;
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+      autoSaveTimeoutRef.current = null;
+      console.log('🛑 Cleared pending auto-save during explicit sync');
+    }
     
     // Get the employee who was assigned to this task
     const assignedEmployeeId = taskAssignments[taskId];
@@ -166,13 +203,11 @@ export function useSimpleSync({
     // Update local state immediately
     const newCompletedTasks = new Set(completedTasks);
     newCompletedTasks.delete(taskId);
-    setCompletedTasks(newCompletedTasks);
+    const newTaskAssignments = { ...taskAssignments };
+    delete newTaskAssignments[taskId];
     
-    setTaskAssignments(prev => {
-      const newAssignments = { ...prev };
-      delete newAssignments[taskId];
-      return newAssignments;
-    });
+    setCompletedTasks(newCompletedTasks);
+    setTaskAssignments(() => newTaskAssignments);
 
     // Update dailyData to remove points
     if (assignedEmployeeId) {
@@ -197,9 +232,25 @@ export function useSimpleSync({
       ));
     }
 
-    // Sync to other tabs
+    // Sync to other tabs using the updated data
     simpleCrossTabSync.markTaskUncompleted(taskId);
+    
+    // Also save the complete state to ensure localStorage is up to date
+    const updatedData = {
+      completedTasks: Array.from(newCompletedTasks),
+      taskAssignments: newTaskAssignments,
+      lastUpdated: Date.now()
+    };
+    simpleCrossTabSync.saveData(updatedData);
+    
     lastSyncRef.current = Date.now();
+    console.log('✅ Task uncompleted, local state updated, and synced to other tabs');
+    
+    // Clear explicit sync flag after a short delay
+    setTimeout(() => {
+      explicitSyncRef.current = false;
+      console.log('🔓 Explicit sync operation completed');
+    }, 1000); // Longer delay to ensure auto-save doesn't interfere
   }, [taskAssignments, tasks, completedTasks, setCompletedTasks, setTaskAssignments, setDailyData, setEmployees]);
 
   // Function to save current state to sync
@@ -217,15 +268,29 @@ export function useSimpleSync({
     console.log('💾 Current state saved to sync');
   }, [completedTasks, taskAssignments, employees, dailyData]);
 
-  // Auto-save state changes (debounced)
+  // Auto-save state changes (debounced) - but not during explicit sync operations
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (initializationRef.current) {
+    // Clear any existing timeout
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+
+    autoSaveTimeoutRef.current = setTimeout(() => {
+      if (initializationRef.current && !explicitSyncRef.current) {
+        console.log('💾 Auto-saving current state (not during explicit sync)');
         saveCurrentState();
+      } else if (explicitSyncRef.current) {
+        console.log('⏸️ Skipping auto-save during explicit sync operation');
       }
+      autoSaveTimeoutRef.current = null;
     }, 500); // Debounce saves by 500ms
 
-    return () => clearTimeout(timeoutId);
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+        autoSaveTimeoutRef.current = null;
+      }
+    };
   }, [completedTasks, taskAssignments, employees, dailyData, saveCurrentState, tasks]);
 
   return {
