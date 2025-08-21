@@ -250,7 +250,8 @@ const EmployeeApp: React.FC = () => {
         delete (window as any).__snapshotAutomation;
       }
     };
-  }, [loadFromFirebase]); // FIXED: Remove employees.length dependency to prevent race condition
+  }, []); // FIXED: Remove loadFromFirebase dependency to prevent infinite retry loop
+  // eslint-disable-next-line react-hooks/exhaustive-deps
 
   // Initialize Multi-Device Sync Service
   useEffect(() => {
