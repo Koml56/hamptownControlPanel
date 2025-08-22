@@ -1,4 +1,4 @@
-// TaskManager.tsx - Updated to use SimpleCrossTabSync for reliable cross-tab synchronization
+// TaskManager.tsx - Updated to use RealTimeSync for reliable cross-tab synchronization
 import React, { useEffect } from 'react';
 import { CheckSquare, Users, Star } from 'lucide-react';
 import { getPriorityColor, getFormattedDate } from './utils';
@@ -6,16 +6,14 @@ import { getAssignedEmployee } from './taskFunctions';
 import type { Task, Employee, TaskAssignments, DailyDataMap, CurrentUser } from './types';
 import CrossTabDebugPanel from './CrossTabDebugPanel';
 import CheckboxButton from './components/CheckboxButton';
-import { useSimpleSync } from './useSimpleSync';
+import { useCompletedTasksSync, useTaskAssignmentsSync } from './useRealTimeSync';
 
 interface TaskManagerProps {
   currentUser: CurrentUser;
   tasks: Task[];
   employees: Employee[];
-  completedTasks: Set<number>;
   taskAssignments: TaskAssignments;
   dailyData: DailyDataMap;
-  setCompletedTasks: (tasks: Set<number>) => void;
   setTaskAssignments: (updater: (prev: TaskAssignments) => TaskAssignments) => void;
   setDailyData: (updater: (prev: DailyDataMap) => DailyDataMap) => void;
   setEmployees: (updater: (prev: Employee[]) => Employee[]) => void;
@@ -26,43 +24,47 @@ const TaskManager: React.FC<TaskManagerProps> = ({
   currentUser,
   tasks,
   employees,
-  completedTasks,
   taskAssignments,
   dailyData,
-  setCompletedTasks,
   setTaskAssignments,
   setDailyData,
   setEmployees,
   saveToFirebase
 }) => {
-  // Initialize simple cross-tab sync
-  const { markTaskCompleted, markTaskUncompleted, deviceId } = useSimpleSync({
-    completedTasks,
-    taskAssignments,
-    employees,
-    dailyData,
-    tasks,
-    setCompletedTasks,
-    setTaskAssignments,
-    setEmployees,
-    setDailyData
-  });
+  // Use new real-time sync hooks
+  const { 
+    completedTasks, 
+    toggleTask, 
+    connectedDevices,
+    isConnected 
+  } = useCompletedTasksSync([]);
+  
+  const { 
+    taskAssignments: syncedTaskAssignments, 
+    assignTask,
+    unassignTask 
+  } = useTaskAssignmentsSync(taskAssignments);
+
+  // Sync task assignments changes back to parent
+  useEffect(() => {
+    setTaskAssignments(() => syncedTaskAssignments);
+  }, [syncedTaskAssignments, setTaskAssignments]);
 
   // Debug logging
   useEffect(() => {
     console.log('📋 TaskManager - completedTasks updated:', {
-      size: completedTasks.size,
-      tasks: Array.from(completedTasks),
+      count: completedTasks.length,
+      tasks: completedTasks,
       timestamp: new Date().toLocaleTimeString(),
-      deviceId
+      connectedDevices
     });
-  }, [completedTasks, deviceId]);
+  }, [completedTasks, connectedDevices]);
 
   const handleTaskToggle = (taskId: number, assignToEmployeeId?: number) => {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
 
-    const isCurrentlyCompleted = completedTasks.has(taskId);
+    const isCurrentlyCompleted = completedTasks.includes(taskId);
     const employeeId = assignToEmployeeId || currentUser.id;
 
     console.log(`🔄 TaskManager - handling task ${taskId} toggle:`, {
@@ -73,34 +75,114 @@ const TaskManager: React.FC<TaskManagerProps> = ({
 
     if (isCurrentlyCompleted) {
       // Task is completed, mark as uncompleted
-      markTaskUncompleted(taskId);
+      toggleTask(taskId);
+      
+      // Update daily data to remove completion
+      const todayStr = getFormattedDate(new Date());
+      setDailyData(prev => {
+        const newData = { ...prev };
+        if (newData[todayStr]) {
+          newData[todayStr] = {
+            ...newData[todayStr],
+            completedTasks: newData[todayStr].completedTasks.filter(
+              (completion: any) => completion.taskId !== taskId
+            )
+          };
+        }
+        return newData;
+      });
     } else {
       // Task is not completed, mark as completed
-      markTaskCompleted(taskId, employeeId);
+      toggleTask(taskId);
+      
+      // Assign task if not already assigned
+      if (!syncedTaskAssignments[taskId]) {
+        assignTask(taskId, employeeId);
+      }
+      
+      // Update employee points and daily data
+      const todayStr = getFormattedDate(new Date());
+      setEmployees(prev => prev.map(emp => 
+        emp.id === employeeId 
+          ? { ...emp, points: emp.points + task.points }
+          : emp
+      ));
+      
+      setDailyData(prev => ({
+        ...prev,
+        [todayStr]: {
+          ...(prev[todayStr] || { completedTasks: [], employeeMoods: [], purchases: [], totalTasks: 0, completionRate: 0 }),
+          completedTasks: [
+            ...(prev[todayStr]?.completedTasks || []),
+            {
+              taskId,
+              employeeId,
+              completedAt: new Date().toISOString(),
+              taskName: task.task,
+              date: todayStr,
+              pointsEarned: task.points
+            }
+          ]
+        }
+      }));
+    }
+
+    // Save to Firebase if needed
+    if (saveToFirebase) {
+      saveToFirebase();
     }
   };
 
   const handleAssignTask = (taskId: number, employeeId: number) => {
-    const isCompleted = completedTasks.has(taskId);
+    const isCompleted = completedTasks.includes(taskId);
     
     console.log(`🔄 TaskManager - assigning task ${taskId} to employee ${employeeId}:`, {
       isCompleted,
-      currentAssignment: taskAssignments[taskId]
+      currentAssignment: syncedTaskAssignments[taskId]
     });
     
     if (isCompleted) {
       // Task is completed - need to transfer points to new employee
-      const currentAssignedEmployee = taskAssignments[taskId];
+      const currentAssignedEmployee = syncedTaskAssignments[taskId];
       if (currentAssignedEmployee && currentAssignedEmployee !== employeeId) {
-        // Remove task from current employee and add to new employee
-        markTaskUncompleted(taskId); // This removes from current employee
-        markTaskCompleted(taskId, employeeId); // This adds to new employee
-        console.log(`🔄 Task ${taskId} reassigned from ${currentAssignedEmployee} to ${employeeId}`);
+        // Handle reassignment for completed task
+        const task = tasks.find(t => t.id === taskId);
+        if (task) {
+          // Remove points from current employee and add to new employee
+          setEmployees(prev => prev.map(emp => 
+            emp.id === currentAssignedEmployee 
+              ? { ...emp, points: emp.points - task.points }
+              : emp.id === employeeId
+              ? { ...emp, points: emp.points + task.points }
+              : emp
+          ));
+          
+          // Update daily data
+          const todayStr = getFormattedDate(new Date());
+          setDailyData(prev => {
+            const newData = { ...prev };
+            if (newData[todayStr]) {
+              newData[todayStr] = {
+                ...newData[todayStr],
+                completedTasks: newData[todayStr].completedTasks.map((completion: any) => 
+                  completion.taskId === taskId 
+                    ? { ...completion, employeeId }
+                    : completion
+                )
+              };
+            }
+            return newData;
+          });
+        }
       }
-      } else {
-        // Task is not completed, just update assignment without points
-        setTaskAssignments(prev => ({ ...prev, [taskId]: employeeId }));
-      }
+    }
+    
+    // Update task assignment
+    assignTask(taskId, employeeId);
+    
+    if (saveToFirebase) {
+      saveToFirebase();
+    }
   };
 
   const currentEmployee = employees.find(emp => emp.id === currentUser.id);
@@ -117,11 +199,11 @@ const TaskManager: React.FC<TaskManagerProps> = ({
       {/* Task Stats */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4 text-center border border-green-200">
-          <div className="text-3xl font-bold text-green-600 mb-1">{completedTasks.size}</div>
+          <div className="text-3xl font-bold text-green-600 mb-1">{completedTasks.length}</div>
           <div className="text-sm font-medium text-green-700">Completed</div>
         </div>
         <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-4 text-center border border-orange-200">
-          <div className="text-3xl font-bold text-orange-600 mb-1">{tasks.length - completedTasks.size}</div>
+          <div className="text-3xl font-bold text-orange-600 mb-1">{tasks.length - completedTasks.length}</div>
           <div className="text-sm font-medium text-orange-700">Pending</div>
         </div>
         <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 text-center border border-purple-200">
@@ -129,6 +211,16 @@ const TaskManager: React.FC<TaskManagerProps> = ({
           <div className="text-sm font-medium text-purple-700">Your Points</div>
         </div>
       </div>
+
+      {/* Sync Status */}
+      {connectedDevices > 1 && (
+        <div className="bg-gradient-to-r from-green-500 to-blue-600 rounded-xl p-3 mb-4 text-white">
+          <div className="flex items-center justify-center gap-2 text-sm">
+            <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+            <span>Real-time sync active • {connectedDevices} devices connected</span>
+          </div>
+        </div>
+      )}
 
       {/* Points Summary */}
       <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl p-4 mb-6 text-white">
@@ -149,8 +241,8 @@ const TaskManager: React.FC<TaskManagerProps> = ({
         </h3>
         <div className="space-y-4">
           {tasks.map(task => {
-            const assignedEmp = getAssignedEmployee(task.id, taskAssignments, employees);
-            const isCompleted = completedTasks.has(task.id);
+            const assignedEmp = getAssignedEmployee(task.id, syncedTaskAssignments, employees);
+            const isCompleted = completedTasks.includes(task.id);
             
             return (
               <div key={task.id} className={`border rounded-lg p-4 transition-all duration-300 ease-in-out ${getPriorityColor(task.priority)} ${

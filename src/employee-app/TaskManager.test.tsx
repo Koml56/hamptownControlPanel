@@ -4,6 +4,31 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import TaskManager from './TaskManager';
 import type { Task, Employee, TaskAssignments, DailyDataMap, CurrentUser } from './types';
 
+// Mock the new sync hooks
+jest.mock('./useRealTimeSync', () => ({
+  useCompletedTasksSync: jest.fn(() => ({
+    completedTasks: [],
+    toggleTask: jest.fn(),
+    connectedDevices: 1,
+    isConnected: true,
+    addCompletedTask: jest.fn(),
+    removeCompletedTask: jest.fn(),
+    updateData: jest.fn(),
+    isLoading: false,
+    error: null
+  })),
+  useTaskAssignmentsSync: jest.fn(() => ({
+    taskAssignments: {},
+    assignTask: jest.fn(),
+    unassignTask: jest.fn(),
+    updateData: jest.fn(),
+    connectedDevices: 1,
+    isConnected: true,
+    isLoading: false,
+    error: null
+  }))
+}));
+
 // Mock the MultiDeviceSyncService and related modules
 jest.mock('./multiDeviceSync');
 jest.mock('./CrossTabDebugPanel', () => {
@@ -117,10 +142,8 @@ describe('TaskManager Multi-Device Sync', () => {
         currentUser={mockCurrentUser}
         tasks={mockTasks}
         employees={mockEmployees}
-        completedTasks={new Set()}
         taskAssignments={mockTaskAssignments}
         dailyData={mockDailyData}
-        setCompletedTasks={mockSetCompletedTasks}
         setTaskAssignments={mockSetTaskAssignments}
         setDailyData={mockSetDailyData}
         setEmployees={mockSetEmployees}
@@ -145,10 +168,8 @@ describe('TaskManager Multi-Device Sync', () => {
         currentUser={mockCurrentUser}
         tasks={mockTasks}
         employees={mockEmployees}
-        completedTasks={new Set([1])}
         taskAssignments={mockTaskAssignments}
         dailyData={mockDailyData}
-        setCompletedTasks={mockSetCompletedTasks}
         setTaskAssignments={mockSetTaskAssignments}
         setDailyData={mockSetDailyData}
         setEmployees={mockSetEmployees}
@@ -162,10 +183,8 @@ describe('TaskManager Multi-Device Sync', () => {
         currentUser={mockCurrentUser}
         tasks={mockTasks}
         employees={mockEmployees}
-        completedTasks={new Set([1, 2])}
         taskAssignments={mockTaskAssignments}
         dailyData={mockDailyData}
-        setCompletedTasks={mockSetCompletedTasks}
         setTaskAssignments={mockSetTaskAssignments}
         setDailyData={mockSetDailyData}
         setEmployees={mockSetEmployees}
@@ -190,10 +209,8 @@ describe('TaskManager Multi-Device Sync', () => {
         currentUser={mockCurrentUser}
         tasks={mockTasks}
         employees={mockEmployees}
-        completedTasks={new Set()}
         taskAssignments={mockTaskAssignments}
         dailyData={mockDailyData}
-        setCompletedTasks={mockSetCompletedTasks}
         setTaskAssignments={mockSetTaskAssignments}
         setDailyData={mockSetDailyData}
         setEmployees={mockSetEmployees}
@@ -208,10 +225,8 @@ describe('TaskManager Multi-Device Sync', () => {
         currentUser={mockCurrentUser}
         tasks={mockTasks}
         employees={mockEmployees}
-        completedTasks={completedFromDevice1}
         taskAssignments={mockTaskAssignments}
         dailyData={mockDailyData}
-        setCompletedTasks={mockSetCompletedTasks}
         setTaskAssignments={mockSetTaskAssignments}
         setDailyData={mockSetDailyData}
         setEmployees={mockSetEmployees}
@@ -235,10 +250,8 @@ describe('TaskManager Multi-Device Sync', () => {
         currentUser={mockCurrentUser}
         tasks={mockTasks}
         employees={mockEmployees}
-        completedTasks={completedFromDevice2}
         taskAssignments={mockTaskAssignments}
         dailyData={mockDailyData}
-        setCompletedTasks={mockSetCompletedTasks}
         setTaskAssignments={mockSetTaskAssignments}
         setDailyData={mockSetDailyData}
         setEmployees={mockSetEmployees}
@@ -262,10 +275,8 @@ describe('TaskManager Multi-Device Sync', () => {
         currentUser={mockCurrentUser}
         tasks={mockTasks}
         employees={mockEmployees}
-        completedTasks={new Set()}
         taskAssignments={mockTaskAssignments}
         dailyData={mockDailyData}
-        setCompletedTasks={mockSetCompletedTasks}
         setTaskAssignments={mockSetTaskAssignments}
         setDailyData={mockSetDailyData}
         setEmployees={mockSetEmployees}
@@ -300,10 +311,8 @@ describe('TaskManager Multi-Device Sync', () => {
         currentUser={mockCurrentUser}
         tasks={mockTasks}
         employees={mockEmployees}
-        completedTasks={new Set([1, 2])}
         taskAssignments={mockTaskAssignments}
         dailyData={mockDailyData}
-        setCompletedTasks={mockSetCompletedTasks}
         setTaskAssignments={mockSetTaskAssignments}
         setDailyData={mockSetDailyData}
         setEmployees={mockSetEmployees}
@@ -321,10 +330,8 @@ describe('TaskManager Multi-Device Sync', () => {
         currentUser={mockCurrentUser}
         tasks={mockTasks}
         employees={mockEmployees}
-        completedTasks={new Set()}
         taskAssignments={mockTaskAssignments}
         dailyData={mockDailyData}
-        setCompletedTasks={mockSetCompletedTasks}
         setTaskAssignments={mockSetTaskAssignments}
         setDailyData={mockSetDailyData}
         setEmployees={mockSetEmployees}
@@ -339,10 +346,8 @@ describe('TaskManager Multi-Device Sync', () => {
         currentUser={mockCurrentUser}
         tasks={mockTasks}
         employees={mockEmployees}
-        completedTasks={new Set()}
         taskAssignments={updatedAssignments}
         dailyData={mockDailyData}
-        setCompletedTasks={mockSetCompletedTasks}
         setTaskAssignments={mockSetTaskAssignments}
         setDailyData={mockSetDailyData}
         setEmployees={mockSetEmployees}
@@ -361,10 +366,8 @@ describe('TaskManager Multi-Device Sync', () => {
         currentUser={mockCurrentUser}
         tasks={mockTasks}
         employees={mockEmployees}
-        completedTasks={new Set()}
         taskAssignments={mockTaskAssignments}
         dailyData={mockDailyData}
-        setCompletedTasks={mockSetCompletedTasks}
         setTaskAssignments={mockSetTaskAssignments}
         setDailyData={mockSetDailyData}
         setEmployees={mockSetEmployees}
@@ -382,10 +385,8 @@ describe('TaskManager Multi-Device Sync', () => {
         currentUser={mockCurrentUser}
         tasks={mockTasks}
         employees={updatedEmployees}
-        completedTasks={new Set([1])}
         taskAssignments={mockTaskAssignments}
         dailyData={mockDailyData}
-        setCompletedTasks={mockSetCompletedTasks}
         setTaskAssignments={mockSetTaskAssignments}
         setDailyData={mockSetDailyData}
         setEmployees={mockSetEmployees}
@@ -405,10 +406,8 @@ describe('TaskManager Multi-Device Sync', () => {
         currentUser={mockCurrentUser}
         tasks={mockTasks}
         employees={mockEmployees}
-        completedTasks={new Set()}
         taskAssignments={mockTaskAssignments}
         dailyData={mockDailyData}
-        setCompletedTasks={mockSetCompletedTasks}
         setTaskAssignments={mockSetTaskAssignments}
         setDailyData={mockSetDailyData}
         setEmployees={mockSetEmployees}
@@ -430,10 +429,8 @@ describe('TaskManager Multi-Device Sync', () => {
         currentUser={mockCurrentUser}
         tasks={mockTasks}
         employees={mockEmployees}
-        completedTasks={new Set()}
         taskAssignments={mockTaskAssignments}
         dailyData={mockDailyData}
-        setCompletedTasks={mockSetCompletedTasks}
         setTaskAssignments={mockSetTaskAssignments}
         setDailyData={mockSetDailyData}
         setEmployees={mockSetEmployees}
@@ -449,10 +446,8 @@ describe('TaskManager Multi-Device Sync', () => {
         currentUser={mockCurrentUser}
         tasks={mockTasks}
         employees={mockEmployees}
-        completedTasks={deviceACompletion}
         taskAssignments={mockTaskAssignments}
         dailyData={mockDailyData}
-        setCompletedTasks={mockSetCompletedTasks}
         setTaskAssignments={mockSetTaskAssignments}
         setDailyData={mockSetDailyData}
         setEmployees={mockSetEmployees}
@@ -467,10 +462,8 @@ describe('TaskManager Multi-Device Sync', () => {
         currentUser={mockCurrentUser}
         tasks={mockTasks}
         employees={mockEmployees}
-        completedTasks={deviceBCompletion}
         taskAssignments={mockTaskAssignments}
         dailyData={mockDailyData}
-        setCompletedTasks={mockSetCompletedTasks}
         setTaskAssignments={mockSetTaskAssignments}
         setDailyData={mockSetDailyData}
         setEmployees={mockSetEmployees}
@@ -485,10 +478,8 @@ describe('TaskManager Multi-Device Sync', () => {
         currentUser={mockCurrentUser}
         tasks={mockTasks}
         employees={mockEmployees}
-        completedTasks={mergedCompletion}
         taskAssignments={mockTaskAssignments}
         dailyData={mockDailyData}
-        setCompletedTasks={mockSetCompletedTasks}
         setTaskAssignments={mockSetTaskAssignments}
         setDailyData={mockSetDailyData}
         setEmployees={mockSetEmployees}
