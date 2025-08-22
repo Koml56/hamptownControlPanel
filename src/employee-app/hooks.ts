@@ -122,6 +122,7 @@ export const useFirebaseData = () => {
   const lastSaveDataRef = useRef<string>('');
   const isInitializedRef = useRef<boolean>(false);
   const isSavingRef = useRef<boolean>(false);
+  const isRetryingRef = useRef<boolean>(false);
 
   // FIXED: Enhanced quickSave with better error handling and completion status logging
   const quickSave = useCallback(async (field: string, data: any): Promise<boolean> => {
@@ -410,7 +411,8 @@ export const useFirebaseData = () => {
 
   // PERFORMANCE: Fast, non-blocking load with enhanced prep data handling and retry logic
   const loadFromFirebase = useCallback(async (retryCount: number = 0) => {
-    if (isLoading) return;
+    // Prevent multiple simultaneous retry attempts
+    if (isLoading || isRetryingRef.current) return;
 
     setIsLoading(true);
     setConnectionStatus('connecting');
@@ -534,15 +536,24 @@ export const useFirebaseData = () => {
         const delay = Math.min(1000 * Math.pow(2, retryCount), 5000); // Exponential backoff, max 5s
         console.log(`🔄 Retrying load in ${delay}ms (attempt ${retryCount + 1}/${maxRetries})`);
         
+        // Set retry flag to prevent new calls
+        isRetryingRef.current = true;
+        
         setTimeout(() => {
+          isRetryingRef.current = false;
           loadFromFirebase(retryCount + 1);
         }, delay);
         return; // Don't set loading to false yet
       } else if (retryCount >= maxRetries) {
         console.error(`❌ Load failed after ${maxRetries} retries, giving up`);
+        // Clear retry flag when giving up
+        isRetryingRef.current = false;
       }
     } finally {
-      setIsLoading(false);
+      // Only set loading to false if we're not retrying
+      if (!isRetryingRef.current) {
+        setIsLoading(false);
+      }
     }
   }, [isLoading, firebaseService]);
 
