@@ -1,5 +1,5 @@
 // useRealTimeSync.ts - React hook for the new sync system
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { realTimeSync } from './RealTimeSync';
 
 interface SyncHookReturn<T> {
@@ -107,31 +107,55 @@ export function useRealTimeSync<T>(
 export function useCompletedTasksSync(initialTasks: number[] = []) {
   const { data, updateData, ...rest } = useRealTimeSync<number[]>('completedTasks', initialTasks);
   
+  // FIXED: Ensure data is always an array, handle corrupted object format from sync
+  const normalizedData = useMemo(() => {
+    if (!data) return [];
+    if (Array.isArray(data)) return data;
+    
+    // Handle corrupted object format: {"0": 1, "timestamp": ..., "deviceId": ...}
+    if (typeof data === 'object' && data !== null) {
+      console.warn('🔧 [SYNC-FIX] Converting corrupted completedTasks object to array:', data);
+      
+      // Extract numeric keys and their values, ignore metadata
+      const tasks: number[] = [];
+      Object.keys(data).forEach(key => {
+        const numKey = parseInt(key, 10);
+        if (!isNaN(numKey) && typeof (data as any)[key] === 'number') {
+          tasks.push((data as any)[key]);
+        }
+      });
+      return tasks;
+    }
+    
+    console.warn('🔧 [SYNC-FIX] Unknown completedTasks format, using empty array:', data);
+    return [];
+  }, [data]);
+  
   const addCompletedTask = useCallback((taskId: number) => {
-    const currentTasks = data || [];
+    const currentTasks = normalizedData || [];
     if (!currentTasks.includes(taskId)) {
       const newTasks = [...currentTasks, taskId];
       updateData(newTasks);
     }
-  }, [data, updateData]);
+  }, [normalizedData, updateData]);
   
   const removeCompletedTask = useCallback((taskId: number) => {
-    const currentTasks = data || [];
+    const currentTasks = normalizedData || [];
     const newTasks = currentTasks.filter(id => id !== taskId);
     updateData(newTasks);
-  }, [data, updateData]);
+  }, [normalizedData, updateData]);
   
   const toggleTask = useCallback((taskId: number) => {
-    const currentTasks = data || [];
+    const currentTasks = normalizedData || [];
     if (currentTasks.includes(taskId)) {
       removeCompletedTask(taskId);
     } else {
       addCompletedTask(taskId);
     }
-  }, [data, addCompletedTask, removeCompletedTask]);
+  }, [normalizedData, addCompletedTask, removeCompletedTask]);
   
   return {
-    completedTasks: data || [],
+    completedTasks: normalizedData || [],
     addCompletedTask,
     removeCompletedTask,
     toggleTask,
