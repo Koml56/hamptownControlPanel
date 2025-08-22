@@ -35,14 +35,12 @@ const TaskManager: React.FC<TaskManagerProps> = ({
   const { 
     completedTasks, 
     toggleTask, 
-    connectedDevices,
-    isConnected 
+    connectedDevices
   } = useCompletedTasksSync([]);
   
   const { 
     taskAssignments: syncedTaskAssignments, 
-    assignTask,
-    unassignTask 
+    assignTask
   } = useTaskAssignmentsSync(taskAssignments);
 
   // Sync task assignments changes back to parent

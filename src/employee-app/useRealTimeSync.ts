@@ -204,8 +204,32 @@ export function usePrepSelectionsSync(initialSelections: any = {}) {
 export function useScheduledPrepsSync(initialPreps: any[] = []) {
   const { data, updateData, ...rest } = useRealTimeSync<any[]>('scheduledPreps', initialPreps);
   
+  // FIXED: Ensure data is always an array, handle corrupted object format from sync
+  const normalizedData = useMemo(() => {
+    if (!data) return [];
+    if (Array.isArray(data)) return data;
+    
+    // Handle corrupted object format: {"0": prep, "timestamp": ..., "deviceId": ...}
+    if (typeof data === 'object' && data !== null) {
+      console.warn('🔧 [SYNC-FIX] Converting corrupted scheduledPreps object to array:', data);
+      
+      // Extract numeric keys and their values, ignore metadata
+      const preps: any[] = [];
+      Object.keys(data).forEach(key => {
+        const numKey = parseInt(key, 10);
+        if (!isNaN(numKey) && typeof (data as any)[key] === 'object' && (data as any)[key] !== null) {
+          preps.push((data as any)[key]);
+        }
+      });
+      return preps;
+    }
+    
+    console.warn('🔧 [SYNC-FIX] Unknown scheduledPreps format, using empty array:', data);
+    return [];
+  }, [data]);
+  
   const addScheduledPrep = useCallback((prep: any) => {
-    const currentPreps = data || [];
+    const currentPreps = normalizedData || [];
     const newPrep = {
       ...prep,
       timestamp: Date.now(),
@@ -217,26 +241,26 @@ export function useScheduledPrepsSync(initialPreps: any[] = []) {
     newPreps.push(newPrep);
     
     updateData(newPreps);
-  }, [data, updateData]);
+  }, [normalizedData, updateData]);
   
   const updateScheduledPrep = useCallback((prepId: number, updates: any) => {
-    const currentPreps = data || [];
+    const currentPreps = normalizedData || [];
     const newPreps = currentPreps.map(prep => 
       prep.id === prepId 
         ? { ...prep, ...updates, timestamp: Date.now() }
         : prep
     );
     updateData(newPreps);
-  }, [data, updateData]);
+  }, [normalizedData, updateData]);
   
   const removeScheduledPrep = useCallback((prepId: number) => {
-    const currentPreps = data || [];
+    const currentPreps = normalizedData || [];
     const newPreps = currentPreps.filter(prep => prep.id !== prepId);
     updateData(newPreps);
-  }, [data, updateData]);
+  }, [normalizedData, updateData]);
   
   return {
-    scheduledPreps: data || [],
+    scheduledPreps: normalizedData || [],
     addScheduledPrep,
     updateScheduledPrep,
     removeScheduledPrep,
