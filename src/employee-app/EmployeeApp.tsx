@@ -24,6 +24,7 @@ import DailyReports from './DailyReports';
 import PrepListPrototype from './PrepListPrototype';
 import RestaurantInventory from './inventory/RestaurantInventory'; // NEW: Inventory component
 import SyncStatusIndicator from './SyncStatusIndicator';
+import RealTimeSyncIndicator from './RealTimeSyncIndicator'; // NEW: Real-time sync indicator
 // import CrossTabDebugPanel from './CrossTabDebugPanel'; // Hidden per user request
 
 // Hooks and Functions
@@ -895,10 +896,8 @@ const EmployeeApp: React.FC = () => {
             currentUser={currentUser}
             tasks={tasks}
             employees={employees}
-            completedTasks={completedTasks}
             taskAssignments={taskAssignments}
             dailyData={dailyData}
-            setCompletedTasks={setCompletedTasksWithSave}
             setTaskAssignments={setTaskAssignmentsWithSave}
             setDailyData={setDailyDataWithSave}
             setEmployees={setEmployeesWithSave}
@@ -910,12 +909,6 @@ const EmployeeApp: React.FC = () => {
           <PrepListPrototype
             currentUser={currentUser}
             connectionStatus={connectionStatus}
-            prepItems={prepItems}
-            scheduledPreps={scheduledPreps}
-            prepSelections={prepSelections}
-            setPrepItems={setPrepItems}
-            setScheduledPreps={setScheduledPreps}
-            setPrepSelections={setPrepSelections}
             quickSave={quickSave}
             quickSaveImmediate={quickSaveImmediate}
           />
@@ -1042,6 +1035,9 @@ const EmployeeApp: React.FC = () => {
           }}
         />
       )}
+      
+      {/* Real-time sync indicator */}
+      <RealTimeSyncIndicator />
     </div>
   );
 };

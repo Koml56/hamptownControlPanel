@@ -1,4 +1,4 @@
-// PrepListPrototype.tsx - FIXED: Proper Firebase save for prep completions (Updated with Week View)
+// PrepListPrototype.tsx - Updated to use RealTimeSync for prep items and selections
 import React, { useState, useEffect } from 'react';
 import { Calendar, Check, ChefHat, Plus, Search, Users, X } from 'lucide-react';
 
@@ -20,6 +20,9 @@ import {
   generateUniqueId
 } from './prep-utils';
 
+// New sync hooks
+import { usePrepSelectionsSync, useScheduledPrepsSync, useRealTimeSync } from './useRealTimeSync';
+
 // Components
 import TodayView from './TodayView';
 import WeekView from './WeekView';
@@ -30,15 +33,30 @@ import SmartPrepSuggestions from './SmartPrepSuggestions';
 const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
   currentUser,
   connectionStatus,
-  prepItems,
-  scheduledPreps,
-  prepSelections,
-  setPrepItems,
-  setScheduledPreps,
-  setPrepSelections,
   quickSave,
   quickSaveImmediate
 }) => {
+  // Use new real-time sync hooks
+  const { 
+    data: prepItems, 
+    updateData: updatePrepItems,
+    connectedDevices: prepItemsDevices 
+  } = useRealTimeSync<PrepItem[]>('prepItems', getDefaultPrepItems());
+  
+  const { 
+    prepSelections, 
+    updatePrepSelection,
+    removePrepSelection,
+    connectedDevices: prepSelectionsDevices 
+  } = usePrepSelectionsSync({});
+  
+  const { 
+    scheduledPreps, 
+    addScheduledPrep,
+    updateScheduledPrep,
+    removeScheduledPrep,
+    connectedDevices: scheduledPrepsDevices 
+  } = useScheduledPrepsSync([]);
   // UI State
   const [activeView, setActiveView] = useState('today');
   const [selectedDate, setSelectedDate] = useState(() => {
@@ -108,32 +126,11 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
 
   // Initialize with default prep items if empty
   useEffect(() => {
-    if (prepItems.length === 0) {
+    if (prepItems && prepItems.length === 0) {
       const defaultPreps = getDefaultPrepItems();
-      setPrepItems(() => defaultPreps);
-      quickSave('prepItems', defaultPreps);
+      updatePrepItems(defaultPreps);
     }
-  }, [prepItems.length, setPrepItems, quickSave]);
-
-  // FIXED: Auto-save scheduledPreps whenever they change (but not during save operation)
-  useEffect(() => {
-    if (scheduledPreps.length > 0 && savingPreps.size === 0) {
-      console.log('🔄 Auto-saving scheduledPreps due to state change');
-      
-      // Add a small delay to ensure state is fully updated
-      const saveTimer = setTimeout(() => {
-        quickSave('scheduledPreps', scheduledPreps)
-          .then(() => {
-            console.log('✅ ScheduledPreps auto-save completed');
-          })
-          .catch((error) => {
-            console.error('❌ ScheduledPreps auto-save failed:', error);
-          });
-      }, 300);
-
-      return () => clearTimeout(saveTimer);
-    }
-  }, [scheduledPreps, quickSave, savingPreps.size]);
+  }, [prepItems, updatePrepItems]);
 
   // Move incomplete preps from yesterday to today
   useEffect(() => {
@@ -160,35 +157,33 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
           scheduledDate: todayStr
         }));
         
-        setScheduledPreps(prev => [
-          ...prev.filter(prep => 
-            !(prep.scheduledDate === yesterdayStr && !prep.completed)
-          ),
-          ...movedPreps
-        ]);
+        // Add moved preps to scheduled preps
+        movedPreps.forEach(prep => addScheduledPrep(prep));
         
-        const newSelections: PrepSelections = {};
+        // Remove old preps
+        incompletePreps.forEach(prep => removeScheduledPrep(prep.id));
+        
+        // Add new prep selections
         incompletePreps.forEach(prep => {
           const selectionKey = getSelectionKey(today, prep.prepId);
-          newSelections[selectionKey] = {
+          const newSelection = {
             priority: prep.priority,
             timeSlot: prep.timeSlot,
             selected: true
           };
+          updatePrepSelection(selectionKey, newSelection);
         });
-        
-        setPrepSelections(prev => ({ ...prev, ...newSelections }));
       }
     };
 
     const lastMoveCheck = localStorage.getItem('lastPrepMoveCheck');
     const todayStr = getDateString(new Date());
 
-    if (lastMoveCheck !== todayStr) {
+    if (lastMoveCheck !== todayStr && scheduledPreps.length > 0) {
       moveIncompletePreps();
       localStorage.setItem('lastPrepMoveCheck', todayStr);
     }
-  }, [scheduledPreps, setPrepSelections, setScheduledPreps]);
+  }, [scheduledPreps, addScheduledPrep, removeScheduledPrep, updatePrepSelection]);
 
   // FIXED: Proper prep completion toggle with sync protection - COPIED TODAYVIEW PATTERN
   const togglePrepCompletion = async (scheduledPrepId: number): Promise<void> => {
@@ -212,23 +207,12 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
       const newCompletedStatus = !prepToUpdate.completed;
       console.log(`📋 ${prepToUpdate.name}: ${prepToUpdate.completed ? 'COMPLETED' : 'PENDING'} → ${newCompletedStatus ? 'COMPLETED' : 'PENDING'}`);
 
-      // Update the state
-      const updatedScheduledPreps = scheduledPreps.map(prep =>
-        prep.id === scheduledPrepId
-          ? { ...prep, completed: newCompletedStatus }
-          : prep
-      );
-
-      // Update state immediately for UI responsiveness
-      setScheduledPreps(() => updatedScheduledPreps);
-
-      // Save to Firebase - SIMPLE PATTERN LIKE TODAYVIEW
-      await quickSaveImmediate('scheduledPreps', updatedScheduledPreps);
+      // Update using sync method
+      updateScheduledPrep(scheduledPrepId, { completed: newCompletedStatus });
+      
       console.log('✅ PrepListPrototype: Completion toggle finished for prep:', scheduledPrepId);
     } catch (error) {
       console.error('❌ Error toggling prep completion:', error);
-      // Revert the state change if there was an error
-      setScheduledPreps(() => scheduledPreps);
     } finally {
       setSavingPreps(prev => {
         const newSet = new Set(prev);
@@ -251,7 +235,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
   };
 
   // Update prep selection with smart workflow
-  const updatePrepSelection = (
+  const handlePrepSelection = (
     prep: PrepItem,
     field: 'priority' | 'timeSlot',
     value: string,
@@ -261,14 +245,12 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
     const currentSelection = prepSelections[selectionKey] || { priority: 'medium' as Priority, timeSlot: '', selected: false };
 
     if (field === 'priority') {
-      setPrepSelections(prev => ({
-        ...prev,
-        [selectionKey]: { 
-          ...prev[selectionKey], 
-          priority: value as Priority,
-          selected: currentSelection.selected
-        }
-      }));
+      const newSelection = { 
+        ...currentSelection, 
+        priority: value as Priority,
+        selected: currentSelection.selected
+      };
+      updatePrepSelection(selectionKey, newSelection);
       
       setAssignmentStep(prev => ({ ...prev, [prep.id]: 'timeSlot' }));
       setShowPriorityOptions(null);
@@ -283,21 +265,17 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
         selected: true
       };
       
-      setPrepSelections(prev => ({
-        ...prev,
-        [selectionKey]: updatedSelection
-      }));
+      updatePrepSelection(selectionKey, updatedSelection);
       
       const existingScheduledPrep = scheduledPreps.find(p => 
         p.prepId === prep.id && p.scheduledDate === getDateString(selectedDate)
       );
       
       if (existingScheduledPrep) {
-        setScheduledPreps(prev => prev.map(p => 
-          p.prepId === prep.id && p.scheduledDate === getDateString(selectedDate)
-            ? { ...p, priority: updatedSelection.priority, timeSlot: value }
-            : p
-        ));
+        updateScheduledPrep(existingScheduledPrep.id, {
+          priority: updatedSelection.priority, 
+          timeSlot: value
+        });
       } else {
         const newScheduledPrep: ScheduledPrep = {
           id: generateUniqueId(),
@@ -315,7 +293,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
           assignedTo: null,
           notes: ''
         };
-        setScheduledPreps(prev => [...prev, newScheduledPrep]);
+        addScheduledPrep(newScheduledPrep);
       }
       
       setAssignmentStep(prev => ({ ...prev, [prep.id]: null }));
@@ -369,17 +347,17 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
     try {
       console.log(`🔄 Toggling prep selection for: ${prep.name} (${isSelected ? 'SELECTED' : 'UNSELECTED'} → ${!isSelected ? 'SELECTED' : 'UNSELECTED'})`);
 
-      let updatedPrepSelections: PrepSelections;
-      let updatedScheduledPreps: ScheduledPrep[];
-
       if (isSelected) {
         // Deselecting prep
-        updatedPrepSelections = { ...prepSelections };
-        delete updatedPrepSelections[selectionKey];
+        removePrepSelection(selectionKey);
         
-        updatedScheduledPreps = scheduledPreps.filter(p => 
-          !(p.prepId === prep.id && p.scheduledDate === getDateString(selectedDate))
+        // Remove scheduled prep
+        const scheduledPrepToRemove = scheduledPreps.find(p => 
+          p.prepId === prep.id && p.scheduledDate === getDateString(selectedDate)
         );
+        if (scheduledPrepToRemove) {
+          removeScheduledPrep(scheduledPrepToRemove.id);
+        }
       } else {
         // Selecting prep
         const existingScheduledPrep = scheduledPreps.find(p => 
@@ -387,21 +365,15 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
         );
         
         if (existingScheduledPrep) {
-          updatedPrepSelections = {
-            ...prepSelections,
-            [selectionKey]: { 
-              priority: existingScheduledPrep.priority, 
-              timeSlot: existingScheduledPrep.timeSlot, 
-              selected: true 
-            }
+          const newSelection = { 
+            priority: existingScheduledPrep.priority, 
+            timeSlot: existingScheduledPrep.timeSlot, 
+            selected: true 
           };
-          updatedScheduledPreps = scheduledPreps;
+          updatePrepSelection(selectionKey, newSelection);
         } else {
           const newSelection = { priority: 'medium' as Priority, timeSlot: '', selected: true };
-          updatedPrepSelections = {
-            ...prepSelections,
-            [selectionKey]: newSelection
-          };
+          updatePrepSelection(selectionKey, newSelection);
           
           const newScheduledPrep: ScheduledPrep = {
             id: generateUniqueId(),
@@ -419,25 +391,13 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
             assignedTo: null,
             notes: ''
           };
-          updatedScheduledPreps = [...scheduledPreps, newScheduledPrep];
+          addScheduledPrep(newScheduledPrep);
         }
       }
 
-      // Update state immediately for UI responsiveness
-      setPrepSelections(() => updatedPrepSelections);
-      setScheduledPreps(() => updatedScheduledPreps);
-
-      // Save to Firebase - SIMPLE PATTERN LIKE TODAYVIEW
-      await Promise.all([
-        quickSaveImmediate('prepSelections', updatedPrepSelections),
-        quickSaveImmediate('scheduledPreps', updatedScheduledPreps)
-      ]);
       console.log('✅ PrepListPrototype: Prep selection toggle finished for prep:', prep.id);
     } catch (error) {
       console.error('❌ Error toggling prep selection:', error);
-      // Revert the state changes if there was an error
-      setPrepSelections(() => prepSelections);
-      setScheduledPreps(() => scheduledPreps);
     } finally {
       setSavingPreps(prev => {
         const newSet = new Set(prev);
@@ -465,7 +425,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
       } : null
     };
 
-    setPrepItems(prev => [...prev, customPrep]);
+    updatePrepItems([...(prepItems || []), customPrep]);
     setNewPrepName('');
     setShowAddCustom(false);
     setShowRecipeForm(false);
@@ -476,7 +436,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
   };
 
   // Filter preps
-  const filteredPreps = prepItems.filter(prep => {
+  const filteredPreps = (prepItems || []).filter(prep => {
     const matchesCategory = selectedCategory === 'all' || prep.category === selectedCategory;
     const matchesSearch = searchQuery === '' ||
       prep.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -760,13 +720,13 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
             <SmartPrepSuggestions
               currentDate={currentDate}
               selectedDate={selectedDate}
-              prepItems={prepItems}
+              prepItems={prepItems || []}
               scheduledPreps={scheduledPreps}
               prepSelections={prepSelections}
               selectedCategory={selectedCategory}
               searchQuery={searchQuery}
               onToggleSelection={togglePrepSelection}
-              onUpdateSelection={updatePrepSelection}
+              onUpdateSelection={handlePrepSelection}
               onShowRecipe={showRecipe}
               showPriorityOptions={showPriorityOptions}
               showTimeOptions={showTimeOptions}
@@ -787,7 +747,7 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
                   showTimeOptions={showTimeOptions}
                   assignmentStep={assignmentStep}
                   onToggleSelection={togglePrepSelection}
-                  onUpdateSelection={updatePrepSelection}
+                  onUpdateSelection={handlePrepSelection}
                   onShowPriorityOptions={setShowPriorityOptions}
                   onShowRecipe={showRecipe}
                   onSave={(prep, selection) => {

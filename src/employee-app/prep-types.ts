@@ -70,14 +70,6 @@ export type ConnectionStatus = 'connecting' | 'connected' | 'error';
 export interface PrepListPrototypeProps {
   currentUser: CurrentUser;
   connectionStatus: ConnectionStatus;
-  // Firebase data from main hooks
-  prepItems: PrepItem[];
-  scheduledPreps: ScheduledPrep[];
-  prepSelections: PrepSelections;
-  // Firebase setters from main hooks
-  setPrepItems: (updater: (prev: PrepItem[]) => PrepItem[]) => void;
-  setScheduledPreps: (updater: (prev: ScheduledPrep[]) => ScheduledPrep[]) => void;
-  setPrepSelections: (updater: (prev: PrepSelections) => PrepSelections) => void;
   // Firebase actions - FIXED: Changed return type from Promise<void> to Promise<boolean>
   quickSave: (field: string, data: any) => Promise<boolean>;
   quickSaveImmediate: (field: string, data: any) => Promise<boolean>;
