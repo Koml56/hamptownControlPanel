@@ -8,8 +8,7 @@ import type {
   PrepItem,
   ScheduledPrep,
   Recipe,
-  Priority,
-  PrepSelections
+  Priority
 } from './prep-types';
 import { categories, PREP_STYLES } from './prep-constants';
 import { getDefaultPrepItems } from './prep-default-data';
@@ -39,23 +38,20 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
   // Use new real-time sync hooks
   const { 
     data: prepItems, 
-    updateData: updatePrepItems,
-    connectedDevices: prepItemsDevices 
+    updateData: updatePrepItems
   } = useRealTimeSync<PrepItem[]>('prepItems', getDefaultPrepItems());
   
   const { 
     prepSelections, 
     updatePrepSelection,
-    removePrepSelection,
-    connectedDevices: prepSelectionsDevices 
+    removePrepSelection
   } = usePrepSelectionsSync({});
   
   const { 
     scheduledPreps, 
     addScheduledPrep,
     updateScheduledPrep,
-    removeScheduledPrep,
-    connectedDevices: scheduledPrepsDevices 
+    removeScheduledPrep
   } = useScheduledPrepsSync([]);
   // UI State
   const [activeView, setActiveView] = useState('today');
