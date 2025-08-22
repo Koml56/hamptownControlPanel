@@ -36,12 +36,14 @@ const TaskManager: React.FC<TaskManagerProps> = ({
     completedTasks, 
     toggleTask, 
     connectedDevices,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     isConnected 
   } = useCompletedTasksSync([]);
   
   const { 
     taskAssignments: syncedTaskAssignments, 
     assignTask,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     unassignTask 
   } = useTaskAssignmentsSync(taskAssignments);
 

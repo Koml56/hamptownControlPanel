@@ -64,9 +64,11 @@ const EmployeeApp: React.FC = () => {
     completedTasks,
     taskAssignments,
     customRoles,
-    prepItems,
-    scheduledPreps,
-    prepSelections,
+    prepItems: _prepItems,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    scheduledPreps: _scheduledPreps,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    prepSelections: _prepSelections,
     storeItems: firebaseStoreItems,
     inventoryDailyItems,
     inventoryWeeklyItems,
@@ -251,8 +253,9 @@ const EmployeeApp: React.FC = () => {
         delete (window as any).__snapshotAutomation;
       }
     };
-  }, []); // FIXED: Remove loadFromFirebase dependency to prevent infinite retry loop
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // FIXED: Remove loadFromFirebase dependency to prevent infinite retry loop
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Initialize Multi-Device Sync Service
   useEffect(() => {
@@ -513,6 +516,7 @@ const EmployeeApp: React.FC = () => {
 
   // Enhanced setters for cleaning tasks with logging and verification
   // Critical QuickSave flow for completedTasks (instant, confirmed, verified)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const setCompletedTasksWithSave = useCallback(async (tasks: Set<number>) => {
     console.log('🔥 [CRITICAL-SAVE] Cleaning tasks: About to save completedTasks:', Array.from(tasks));
     try {
@@ -962,7 +966,7 @@ const EmployeeApp: React.FC = () => {
             tasks={tasks}
             customRoles={customRoles}
             storeItems={storeItems}
-            prepItems={prepItems}
+            prepItems={_prepItems}
             setEmployees={setEmployeesWithSave}
             setTasks={setTasksWithSave}
             setCustomRoles={setCustomRolesWithSave}
