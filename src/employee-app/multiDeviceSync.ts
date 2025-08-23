@@ -295,9 +295,7 @@ export class MultiDeviceSyncService {
     
     // CRITICAL FIX: After setting up localStorage sync, check for any already-registered callbacks
     // and load their initial data immediately
-    console.log(`🔄 Checking ${this.syncCallbacks.size} already-registered callbacks for initial data load`);
-    for (const [field, callback] of this.syncCallbacks.entries()) {
-      console.log(`🔄 Loading initial data for pre-registered field: ${field}`);
+    for (const [field] of this.syncCallbacks.entries()) {
       this.loadInitialDataForField(field);
     }
   }
@@ -307,7 +305,6 @@ export class MultiDeviceSyncService {
     try {
       const key = this.localStoragePrefix + field;
       const stored = localStorage.getItem(key);
-      console.log(`🔍 Checking localStorage for ${field}: key="${key}" value="${stored}"`);
       
       if (stored && this.syncCallbacks.has(field)) {
         const data = JSON.parse(stored);
@@ -326,8 +323,6 @@ export class MultiDeviceSyncService {
         callback(processedData);
         
         console.log(`📂 Loaded ${field} from localStorage on callback registration`);
-      } else {
-        console.log(`📂 No data found for ${field} in localStorage (stored=${!!stored}, hasCallback=${this.syncCallbacks.has(field)})`);
       }
     } catch (error) {
       console.warn(`⚠️ Error loading ${field} from localStorage:`, error);
@@ -830,7 +825,7 @@ export class MultiDeviceSyncService {
         const value = JSON.stringify(processedData);
         localStorage.setItem(key, value);
         
-        console.log(`✅ Synced ${field} to localStorage with key="${key}" value="${value}"`);
+        console.log(`✅ Synced ${field} to localStorage`);
         
         // Emit sync event
         this.emitSyncEvent({
