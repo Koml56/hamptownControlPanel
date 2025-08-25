@@ -292,9 +292,44 @@ export class MultiDeviceSyncService {
     
     // Load initial data from localStorage
     this.loadInitialLocalData();
+    
+    // CRITICAL FIX: After setting up localStorage sync, check for any already-registered callbacks
+    // and load their initial data immediately
+    for (const [field] of this.syncCallbacks.entries()) {
+      this.loadInitialDataForField(field);
+    }
   }
 
-  // Load initial data from localStorage
+  // Load initial data from localStorage for a specific field
+  private loadInitialDataForField(field: string): void {
+    try {
+      const key = this.localStoragePrefix + field;
+      const stored = localStorage.getItem(key);
+      
+      if (stored && this.syncCallbacks.has(field)) {
+        const data = JSON.parse(stored);
+        let processedData = data;
+        
+        if (field === 'completedTasks' && Array.isArray(data)) {
+          processedData = new Set(data);
+          // Update our current field state for proper merging
+          this.currentFieldState.set(field, processedData);
+        } else {
+          // Update current field state for other data types too
+          this.currentFieldState.set(field, processedData);
+        }
+        
+        const callback = this.syncCallbacks.get(field)!;
+        callback(processedData);
+        
+        console.log(`📂 Loaded ${field} from localStorage on callback registration`);
+      }
+    } catch (error) {
+      console.warn(`⚠️ Error loading ${field} from localStorage:`, error);
+    }
+  }
+
+  // Load initial data from localStorage (legacy method, now calls individual field loader)
   private loadInitialLocalData(): void {
     const relevantFields = [
       'employees', 
@@ -314,26 +349,8 @@ export class MultiDeviceSyncService {
       'inventoryActivityLog'
     ];
 
-    for (const field of relevantFields) {
-      try {
-        const stored = localStorage.getItem(this.localStoragePrefix + field);
-        if (stored && this.syncCallbacks.has(field)) {
-          const data = JSON.parse(stored);
-          let processedData = data;
-          
-          if (field === 'completedTasks' && Array.isArray(data)) {
-            processedData = new Set(data);
-          }
-          
-          const callback = this.syncCallbacks.get(field)!;
-          callback(processedData);
-          
-          console.log(`📂 Loaded ${field} from localStorage`);
-        }
-      } catch (error) {
-        console.warn(`⚠️ Error loading ${field} from localStorage:`, error);
-      }
-    }
+    // NOTE: This is now mainly for logging, actual loading happens when callbacks are registered
+    console.log(`📂 Ready to load ${relevantFields.length} fields from localStorage when callbacks are registered`);
   }
 
   // PERFORMANCE: Fast disconnect
@@ -804,10 +821,9 @@ export class MultiDeviceSyncService {
         let processedData = data instanceof Set ? Array.from(data) : data;
         
         // Save to localStorage
-        localStorage.setItem(
-          this.localStoragePrefix + field, 
-          JSON.stringify(processedData)
-        );
+        const key = this.localStoragePrefix + field;
+        const value = JSON.stringify(processedData);
+        localStorage.setItem(key, value);
         
         console.log(`✅ Synced ${field} to localStorage`);
         
@@ -890,6 +906,12 @@ export class MultiDeviceSyncService {
   // Subscribe to field changes
   onFieldChange(field: string, callback: (data: any) => void): void {
     this.syncCallbacks.set(field, callback);
+    
+    // CRITICAL FIX: Load initial data from localStorage if we're in fallback mode
+    // This ensures new tabs inherit existing data when they register callbacks
+    if (this.useLocalStorageFallback && this.isConnected) {
+      this.loadInitialDataForField(field);
+    }
   }
   
   // Update current field state (called by the app when state changes)
