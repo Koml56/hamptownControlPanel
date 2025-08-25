@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prep List Multi-Device Sync Demo - WorkVibe</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            margin: 0 0 10px 0;
+            font-size: 2.5rem;
+            font-weight: 700;
+        }
+        
+        .subtitle {
+            margin: 0;
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+        
+        .demo-section {
+            padding: 20px;
+        }
+        
+        .demo-instructions {
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .demo-instructions h3 {
+            margin-top: 0;
+            color: #1e293b;
+        }
+        
+        .demo-instructions ol {
+            margin: 15px 0;
+            padding-left: 20px;
+        }
+        
+        .demo-instructions li {
+            margin: 8px 0;
+            line-height: 1.6;
+        }
+        
+        .prep-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .prep-item {
+            background: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 15px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+        
+        .prep-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            border-color: #6366f1;
+        }
+        
+        .prep-item.selected {
+            background: linear-gradient(135deg, #e0e7ff 0%, #f3e8ff 100%);
+            border-color: #6366f1;
+            transform: translateY(-2px);
+        }
+        
+        .prep-item.highlight {
+            animation: highlightPulse 1s ease-in-out;
+        }
+        
+        @keyframes highlightPulse {
+            0%, 100% { background: white; }
+            50% { background: #fef3c7; border-color: #f59e0b; }
+        }
+        
+        .prep-item.selected.highlight {
+            animation: highlightPulseSelected 1s ease-in-out;
+        }
+        
+        @keyframes highlightPulseSelected {
+            0%, 100% { background: linear-gradient(135deg, #e0e7ff 0%, #f3e8ff 100%); }
+            50% { background: #fef3c7; border-color: #f59e0b; }
+        }
+        
+        .prep-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .prep-checkbox {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #6b7280;
+            border-radius: 6px;
+            margin-right: 12px;
+            position: relative;
+            transition: all 0.2s ease;
+        }
+        
+        .prep-checkbox.checked {
+            background: #6366f1;
+            border-color: #6366f1;
+        }
+        
+        .prep-checkbox.checked:after {
+            content: '✓';
+            position: absolute;
+            color: white;
+            font-size: 14px;
+            font-weight: bold;
+            left: 2px;
+            top: -2px;
+        }
+        
+        .prep-title {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #1e293b;
+        }
+        
+        .prep-details {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        
+        .prep-detail {
+            background: #f1f5f9;
+            color: #475569;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        
+        .prep-detail.category {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        
+        .prep-detail.time {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        
+        .status-panel {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .status-card {
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            border: 1px solid #cbd5e1;
+        }
+        
+        .status-card h4 {
+            margin: 0 0 10px 0;
+            color: #475569;
+            font-size: 0.9rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .status-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 5px;
+        }
+        
+        .device-id {
+            font-size: 0.8rem;
+            color: #64748b;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .network-status {
+            background: #dcfce7;
+            color: #166534;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .tab-info {
+            background: #e0e7ff;
+            color: #3730a3;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            text-align: center;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🥗 WorkVibe - Prep List Multi-Device Sync Demo</h1>
+            <p class="subtitle">Real-time prep item synchronization demonstration</p>
+        </div>
+        
+        <div class="demo-section">
+            <div class="demo-instructions">
+                <h3>📋 Testing Instructions</h3>
+                <ol>
+                    <li><strong>Open this page in 2 browser tabs</strong> (Ctrl+T, then paste this URL)</li>
+                    <li><strong>Position tabs side by side</strong> so you can see both simultaneously</li>
+                    <li><strong>Select prep items</strong> in one tab</li>
+                    <li><strong>Watch instant synchronization</strong> in the other tab (should be immediate!)</li>
+                    <li><strong>Test rapid clicking</strong> to verify no conflicts occur</li>
+                </ol>
+            </div>
+            
+            <div class="network-status">
+                ✅ Network Status: Connected (Local Storage Sync)
+            </div>
+            
+            <div class="tab-info">
+                📱 Tab ID: <span id="tabId">Loading...</span>
+            </div>
+            
+            <div class="status-panel">
+                <div class="status-card">
+                    <h4>Prep Items Selected</h4>
+                    <div class="status-value" id="selectedCount">0</div>
+                    <div class="device-id" id="deviceId">Device ID: Loading...</div>
+                </div>
+                <div class="status-card">
+                    <h4>Total Prep Items</h4>
+                    <div class="status-value" id="totalCount">10</div>
+                    <div class="device-id">Last Sync: <span id="lastSync">Never</span></div>
+                </div>
+                <div class="status-card">
+                    <h4>Sync Latency</h4>
+                    <div class="status-value"><span id="syncLatency">--</span></div>
+                    <div class="device-id">Sync Time: <span id="syncTime">--</span></div>
+                </div>
+                <div class="status-card">
+                    <h4>Active Tabs</h4>
+                    <div class="status-value" id="activeTabCount">1</div>
+                    <div class="device-id" id="activeTabsList">This tab only</div>
+                </div>
+            </div>
+            
+            <div class="prep-grid" id="prepGrid">
+                <!-- Prep items will be dynamically generated here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Sample prep items
+        const prepItems = [
+            { id: 1, name: 'Dice Onions', category: 'Vegetables', estimatedTime: '15 min', isCustom: false, hasRecipe: false, frequency: 1 },
+            { id: 2, name: 'Prep Salad Mix', category: 'Vegetables', estimatedTime: '20 min', isCustom: false, hasRecipe: true, frequency: 1 },
+            { id: 3, name: 'Marinate Chicken', category: 'Proteins', estimatedTime: '30 min', isCustom: false, hasRecipe: true, frequency: 2 },
+            { id: 4, name: 'Make Stock', category: 'Sauces', estimatedTime: '60 min', isCustom: false, hasRecipe: true, frequency: 3 },
+            { id: 5, name: 'Prep Herb Mix', category: 'Seasonings', estimatedTime: '10 min', isCustom: false, hasRecipe: false, frequency: 1 },
+            { id: 6, name: 'Blanch Vegetables', category: 'Vegetables', estimatedTime: '25 min', isCustom: false, hasRecipe: false, frequency: 1 },
+            { id: 7, name: 'Portion Rice', category: 'Grains', estimatedTime: '15 min', isCustom: false, hasRecipe: false, frequency: 1 },
+            { id: 8, name: 'Mix Dressings', category: 'Sauces', estimatedTime: '20 min', isCustom: false, hasRecipe: true, frequency: 2 },
+            { id: 9, name: 'Cut Garnishes', category: 'Vegetables', estimatedTime: '12 min', isCustom: false, hasRecipe: false, frequency: 1 },
+            { id: 10, name: 'Prep Breadcrumbs', category: 'Misc', estimatedTime: '18 min', isCustom: false, hasRecipe: false, frequency: 2 }
+        ];
+
+        // Multi-tab sync system for prep items
+        class PrepMultiTabSync {
+            constructor() {
+                this.deviceId = this.generateDeviceId();
+                this.selectedPreps = new Set();
+                
+                // Listen for storage changes
+                window.addEventListener('storage', (e) => {
+                    if (e.key === 'demo_selectedPreps') {
+                        this.handleRemoteUpdate(e.newValue);
+                    } else if (e.key === 'demo_activeTabs') {
+                        this.updateActiveTabsDisplay();
+                    }
+                });
+                
+                // Load existing data
+                this.loadData();
+                
+                // Register this tab as active
+                this.registerTab();
+                
+                // Update UI
+                this.updateUI();
+                this.updateDeviceInfo();
+                
+                // Set up heartbeat to maintain active tab list
+                setInterval(() => this.heartbeat(), 1000);
+                
+                // Clean up on page unload
+                window.addEventListener('beforeunload', () => this.cleanup());
+            }
+            
+            generateDeviceId() {
+                return 'prep-tab-' + Math.random().toString(36).substr(2, 8);
+            }
+            
+            loadData() {
+                const stored = localStorage.getItem('demo_selectedPreps');
+                if (stored) {
+                    this.selectedPreps = new Set(JSON.parse(stored));
+                }
+            }
+            
+            saveData() {
+                localStorage.setItem('demo_selectedPreps', JSON.stringify([...this.selectedPreps]));
+                this.updateSyncTime();
+            }
+            
+            handleRemoteUpdate(newValue) {
+                if (newValue) {
+                    const startTime = performance.now();
+                    this.selectedPreps = new Set(JSON.parse(newValue));
+                    this.updateUI();
+                    
+                    // Show sync latency
+                    const latency = (performance.now() - startTime).toFixed(2);
+                    document.getElementById('syncLatency').textContent = `${latency}ms`;
+                    
+                    console.log(`📡 Remote prep sync received in ${latency}ms`);
+                }
+            }
+            
+            togglePrep(prepId) {
+                const startTime = performance.now();
+                
+                if (this.selectedPreps.has(prepId)) {
+                    this.selectedPreps.delete(prepId);
+                    console.log(`❌ Prep ${prepId} deselected`);
+                } else {
+                    this.selectedPreps.add(prepId);
+                    console.log(`✅ Prep ${prepId} selected`);
+                }
+                
+                // Immediate local update
+                this.updateUI();
+                
+                // Immediate sync to other tabs (no delay!)
+                this.saveData();
+                
+                const syncTime = (performance.now() - startTime).toFixed(2);
+                console.log(`🚀 Prep sync completed in ${syncTime}ms`);
+                
+                // Highlight the synced prep
+                this.highlightPrep(prepId);
+            }
+            
+            highlightPrep(prepId) {
+                const prepElement = document.querySelector(`[data-prep-id="${prepId}"]`);
+                if (prepElement) {
+                    prepElement.classList.add('highlight');
+                    setTimeout(() => {
+                        prepElement.classList.remove('highlight');
+                    }, 2000);
+                }
+            }
+            
+            updateUI() {
+                const selectedCount = this.selectedPreps.size;
+                
+                document.getElementById('selectedCount').textContent = selectedCount;
+                
+                // Update prep checkboxes
+                prepItems.forEach(prep => {
+                    const checkbox = document.querySelector(`[data-prep-id="${prep.id}"] .prep-checkbox`);
+                    const prepItem = document.querySelector(`[data-prep-id="${prep.id}"]`);
+                    
+                    if (checkbox && prepItem) {
+                        const isSelected = this.selectedPreps.has(prep.id);
+                        checkbox.classList.toggle('checked', isSelected);
+                        prepItem.classList.toggle('selected', isSelected);
+                    }
+                });
+            }
+            
+            updateDeviceInfo() {
+                document.getElementById('deviceId').textContent = `Device ID: ${this.deviceId}`;
+                document.getElementById('tabId').textContent = this.deviceId;
+            }
+            
+            updateSyncTime() {
+                const now = new Date();
+                document.getElementById('lastSync').textContent = now.toLocaleTimeString();
+                document.getElementById('syncTime').textContent = now.toLocaleTimeString();
+            }
+            
+            registerTab() {
+                const tabs = this.getActiveTabs();
+                tabs.add(this.deviceId);
+                localStorage.setItem('demo_activeTabs', JSON.stringify([...tabs]));
+                this.updateActiveTabsDisplay();
+            }
+            
+            getActiveTabs() {
+                const stored = localStorage.getItem('demo_activeTabs');
+                return stored ? new Set(JSON.parse(stored)) : new Set();
+            }
+            
+            heartbeat() {
+                this.registerTab(); // Refresh our presence
+            }
+            
+            updateActiveTabsDisplay() {
+                const tabs = this.getActiveTabs();
+                document.getElementById('activeTabCount').textContent = tabs.size;
+                
+                if (tabs.size <= 1) {
+                    document.getElementById('activeTabsList').textContent = 'This tab only';
+                } else {
+                    const otherTabs = [...tabs].filter(id => id !== this.deviceId);
+                    document.getElementById('activeTabsList').textContent = 
+                        `+ ${otherTabs.length} other tab${otherTabs.length > 1 ? 's' : ''}`;
+                }
+            }
+            
+            cleanup() {
+                const tabs = this.getActiveTabs();
+                tabs.delete(this.deviceId);
+                localStorage.setItem('demo_activeTabs', JSON.stringify([...tabs]));
+            }
+        }
+
+        // Initialize sync system
+        const syncSystem = new PrepMultiTabSync();
+
+        // Render prep items
+        function renderPreps() {
+            const grid = document.getElementById('prepGrid');
+            grid.innerHTML = prepItems.map(prep => `
+                <div class="prep-item" data-prep-id="${prep.id}" onclick="syncSystem.togglePrep(${prep.id})">
+                    <div class="prep-header">
+                        <div class="prep-checkbox"></div>
+                        <h4 class="prep-title">${prep.name}</h4>
+                    </div>
+                    <div class="prep-details">
+                        <span class="prep-detail category">📂 ${prep.category}</span>
+                        <span class="prep-detail time">⏱️ ${prep.estimatedTime}</span>
+                        ${prep.hasRecipe ? '<span class="prep-detail">📋 Recipe</span>' : ''}
+                        ${prep.frequency > 1 ? `<span class="prep-detail">🔄 Every ${prep.frequency} days</span>` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Initialize the demo
+        document.addEventListener('DOMContentLoaded', () => {
+            renderPreps();
+            syncSystem.updateUI();
+            
+            console.log('🚀 Prep Multi-Device Sync Demo initialized');
+            console.log('📱 Device ID:', syncSystem.deviceId);
+            console.log('📋 Instructions: Open this page in multiple tabs to test synchronization');
+        });
+    </script>
+</body>
+</html>

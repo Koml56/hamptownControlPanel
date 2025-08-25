@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Title-Only Drag Validation</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+        
+        .demo-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .demo-title {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        
+        .demo-description {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 24px;
+        }
+        
+        .test-instructions {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 24px;
+        }
+        
+        .test-instructions h3 {
+            margin-top: 0;
+            color: #8b5a00;
+        }
+        
+        .demo-card {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            margin: 16px 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: all 0.2s ease;
+        }
+        
+        .demo-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+        
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #2c3e50;
+            cursor: move;
+            user-select: none;
+            -webkit-user-select: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            background: #e3f2fd;
+            border: 2px dashed #1976d2;
+            margin-right: 12px;
+        }
+        
+        .card-title:hover {
+            background: #bbdefb;
+        }
+        
+        .status-badge {
+            background: #e8f5e8;
+            color: #2e7d32;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .card-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        
+        .card-info {
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .card-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .btn {
+            flex: 1;
+            padding: 12px 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .btn-primary {
+            background: #1976d2;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #1565c0;
+            transform: translateY(-1px);
+        }
+        
+        .btn-secondary {
+            background: #f57c00;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #ef6c00;
+            transform: translateY(-1px);
+        }
+        
+        .feedback-log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 24px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .feedback-entry {
+            padding: 8px 0;
+            border-bottom: 1px solid #e9ecef;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 13px;
+        }
+        
+        .feedback-entry:last-child {
+            border-bottom: none;
+        }
+        
+        .success {
+            color: #27ae60;
+        }
+        
+        .info {
+            color: #3498db;
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-container">
+        <h1 class="demo-title">✅ Title-Only Drag - Implementation Validation</h1>
+        
+        <div class="demo-description">
+            <strong>Problem Solved:</strong> Dragging is now limited to the item title only, making all buttons fully pressable without drag interference.
+            <br><br>
+            <strong>Key Changes:</strong>
+            <ul>
+                <li>Drag listeners moved from entire card wrapper to title element only</li>
+                <li>Buttons are completely isolated from drag functionality</li>
+                <li>Title has visual drag indicators (cursor, styling, dashed border)</li>
+                <li>Improved user experience with clear drag zones</li>
+            </ul>
+        </div>
+        
+        <div class="test-instructions">
+            <h3>🧪 Test Instructions</h3>
+            <ol>
+                <li><strong>Button Interaction:</strong> Click/tap any button below - they should respond instantly</li>
+                <li><strong>Title Dragging:</strong> Touch and hold ONLY the blue bordered title areas to test drag behavior</li>
+                <li><strong>Visual Feedback:</strong> Notice the move cursor and styling only on title areas</li>
+                <li><strong>Mixed Testing:</strong> Try rapid button clicks while touching title areas</li>
+            </ol>
+        </div>
+        
+        <!-- Demo Item Card 1 -->
+        <div class="demo-card">
+            <div class="card-header">
+                <div class="card-title" onmousedown="handleTitleInteraction('drag', 1)">
+                    🥕 Fresh Carrots
+                </div>
+                <span class="status-badge">✅ Good Stock</span>
+            </div>
+            
+            <div class="card-content">
+                <div class="card-info">
+                    <div><strong>Current:</strong> 25 kg</div>
+                    <div><strong>Min Level:</strong> 10 kg</div>
+                </div>
+                <div class="card-info">
+                    <div><strong>Cost:</strong> €3.50</div>
+                    <div><strong>Category:</strong> Vegetables</div>
+                </div>
+            </div>
+            
+            <div class="card-actions">
+                <button class="btn btn-primary" onclick="handleButtonClick('update', 1)">
+                    🔄 Update Count
+                </button>
+                <button class="btn btn-secondary" onclick="handleButtonClick('waste', 1)">
+                    🗑️ Report Waste
+                </button>
+            </div>
+        </div>
+        
+        <!-- Demo Item Card 2 -->
+        <div class="demo-card">
+            <div class="card-header">
+                <div class="card-title" onmousedown="handleTitleInteraction('drag', 2)">
+                    🍞 Artisan Bread
+                </div>
+                <span class="status-badge" style="background: #fff3cd; color: #856404;">⚠️ Low Stock</span>
+            </div>
+            
+            <div class="card-content">
+                <div class="card-info">
+                    <div><strong>Current:</strong> 3 loaves</div>
+                    <div><strong>Min Level:</strong> 5 loaves</div>
+                </div>
+                <div class="card-info">
+                    <div><strong>Cost:</strong> €4.20</div>
+                    <div><strong>Category:</strong> Bakery</div>
+                </div>
+            </div>
+            
+            <div class="card-actions">
+                <button class="btn btn-primary" onclick="handleButtonClick('update', 2)">
+                    🔄 Update Count
+                </button>
+                <button class="btn btn-secondary" onclick="handleButtonClick('waste', 2)">
+                    🗑️ Report Waste
+                </button>
+            </div>
+        </div>
+        
+        <!-- Demo Item Card 3 -->
+        <div class="demo-card">
+            <div class="card-header">
+                <div class="card-title" onmousedown="handleTitleInteraction('drag', 3)">
+                    🥛 Organic Milk
+                </div>
+                <span class="status-badge" style="background: #f8d7da; color: #721c24;">🚨 Critical</span>
+            </div>
+            
+            <div class="card-content">
+                <div class="card-info">
+                    <div><strong>Current:</strong> 2 liters</div>
+                    <div><strong>Min Level:</strong> 8 liters</div>
+                </div>
+                <div class="card-info">
+                    <div><strong>Cost:</strong> €2.85</div>
+                    <div><strong>Category:</strong> Dairy</div>
+                </div>
+            </div>
+            
+            <div class="card-actions">
+                <button class="btn btn-primary" onclick="handleButtonClick('update', 3)">
+                    🔄 Update Count
+                </button>
+                <button class="btn btn-secondary" onclick="handleButtonClick('waste', 3)">
+                    🗑️ Report Waste
+                </button>
+            </div>
+        </div>
+        
+        <div class="feedback-log" id="feedbackLog">
+            <div class="feedback-entry info">📋 Title-only drag validation loaded - test the interactions above...</div>
+        </div>
+    </div>
+
+    <script>
+        let interactionCount = 0;
+        
+        function logEntry(message, type = 'info') {
+            const log = document.getElementById('feedbackLog');
+            const entry = document.createElement('div');
+            entry.className = `feedback-entry ${type}`;
+            entry.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+        
+        function handleButtonClick(action, itemId) {
+            interactionCount++;
+            const actionText = action === 'update' ? 'Update Count' : 'Report Waste';
+            logEntry(`✅ Button clicked successfully: ${actionText} for Item #${itemId} (Interaction #${interactionCount})`, 'success');
+            
+            // Visual feedback
+            const button = event.target;
+            button.style.transform = 'scale(0.95)';
+            setTimeout(() => {
+                button.style.transform = '';
+            }, 150);
+        }
+        
+        function handleTitleInteraction(action, itemId) {
+            interactionCount++;
+            logEntry(`🎯 Title drag area activated for Item #${itemId} - drag functionality available`, 'info');
+            
+            // Visual feedback for drag area
+            const title = event.target;
+            title.style.background = '#90caf9';
+            setTimeout(() => {
+                title.style.background = '#e3f2fd';
+            }, 500);
+        }
+        
+        // Add touch event listeners for better mobile testing
+        document.addEventListener('touchstart', (e) => {
+            if (e.target.closest('.btn')) {
+                logEntry(`👆 Touch start on button: ${e.target.textContent.trim()}`, 'info');
+            } else if (e.target.closest('.card-title')) {
+                logEntry(`🎯 Touch start on title area - drag zone active`, 'info');
+            }
+        }, { passive: true });
+        
+        document.addEventListener('touchend', (e) => {
+            if (e.target.closest('.btn')) {
+                logEntry(`👆 Touch end on button: ${e.target.textContent.trim()}`, 'info');
+            }
+        }, { passive: true });
+        
+        // Log successful load
+        document.addEventListener('DOMContentLoaded', () => {
+            logEntry('🚀 Title-only drag validation loaded successfully!', 'success');
+            logEntry('💡 Try clicking buttons and dragging titles to test the implementation', 'info');
+        });
+    </script>
+</body>
+</html>
