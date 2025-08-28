@@ -210,6 +210,9 @@ export class MultiDeviceSyncService {
   private async connectToFirebase(): Promise<void> {
     this.useLocalStorageFallback = false;
     
+    // FIXED: Load initial data from Firebase before starting to listen for changes
+    await this.loadInitialFirebaseData();
+    
     // Start listening (non-blocking)
     this.startListening();
   }
@@ -351,6 +354,74 @@ export class MultiDeviceSyncService {
 
     // NOTE: This is now mainly for logging, actual loading happens when callbacks are registered
     console.log(`📂 Ready to load ${relevantFields.length} fields from localStorage when callbacks are registered`);
+  }
+
+  // FIXED: Load initial data from Firebase when connecting to ensure cross-browser sync
+  private async loadInitialFirebaseData(): Promise<void> {
+    try {
+      console.log('📂 Loading initial data from Firebase...');
+      
+      // Fetch current state from Firebase
+      const response = await fetch(`${this.baseUrl}/.json`);
+      if (!response.ok) {
+        console.warn('⚠️ Failed to fetch initial Firebase data:', response.status);
+        return;
+      }
+      
+      const data = await response.json();
+      if (!data) {
+        console.log('📂 No initial data found in Firebase');
+        return;
+      }
+      
+      console.log('📥 Received initial Firebase data');
+      
+      // Process the data through registered callbacks
+      const relevantFields = [
+        'employees', 
+        'tasks', 
+        'dailyData', 
+        'completedTasks', 
+        'taskAssignments', 
+        'customRoles',
+        'prepItems',
+        'scheduledPreps',
+        'prepSelections',
+        'storeItems',
+        'inventoryDailyItems',
+        'inventoryWeeklyItems', 
+        'inventoryMonthlyItems',
+        'inventoryDatabaseItems',
+        'inventoryActivityLog'
+      ];
+      
+      for (const field of relevantFields) {
+        if (data[field] && this.syncCallbacks.has(field)) {
+          let processedData = data[field];
+          
+          // Handle completedTasks conversion to Set
+          if (field === 'completedTasks' && Array.isArray(processedData)) {
+            processedData = new Set(processedData);
+          }
+          
+          // Update our current field state for proper merging
+          this.currentFieldState.set(field, processedData);
+          
+          // Call the callback to update the app state
+          const callback = this.syncCallbacks.get(field)!;
+          callback(processedData);
+          
+          console.log(`📂 Loaded ${field} from Firebase:`, 
+                     Array.isArray(data[field]) ? `${data[field].length} items` : Object.keys(data[field] || {}).length);
+        }
+      }
+      
+      console.log('✅ Initial Firebase data loading completed');
+      
+    } catch (error) {
+      console.warn('⚠️ Error loading initial Firebase data:', error);
+      // Don't throw - fallback to empty state and rely on real-time updates
+    }
   }
 
   // PERFORMANCE: Fast disconnect
