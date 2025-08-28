@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Today's Preps Multi-Device Sync Demo - WorkVibe</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            margin: 0 0 10px 0;
+            font-size: 2.5rem;
+            font-weight: 700;
+        }
+        
+        .subtitle {
+            margin: 0;
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+        
+        .demo-section {
+            padding: 20px;
+        }
+        
+        .demo-instructions {
+            background: #f8fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .demo-instructions h2 {
+            margin: 0 0 15px 0;
+            color: #1e293b;
+            font-size: 1.3rem;
+        }
+        
+        .demo-instructions ol {
+            margin: 0;
+            padding-left: 20px;
+        }
+        
+        .demo-instructions li {
+            margin-bottom: 8px;
+            line-height: 1.5;
+        }
+        
+        .status-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .status-card {
+            background: #f8fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+        }
+        
+        .status-card h4 {
+            margin: 0 0 10px 0;
+            color: #475569;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .status-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #10b981;
+            margin-bottom: 5px;
+        }
+        
+        .device-id {
+            font-size: 0.8rem;
+            color: #64748b;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .prep-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 15px;
+        }
+        
+        .prep-item {
+            background: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .prep-item:hover {
+            border-color: #10b981;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(16, 185, 129, 0.15);
+        }
+        
+        .prep-item.completed {
+            background: #f0fdf4;
+            border-color: #10b981;
+        }
+        
+        .prep-item.highlight {
+            animation: pulse 1s ease-in-out;
+            border-color: #fbbf24;
+            background: #fffbeb;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+        }
+        
+        .prep-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .prep-checkbox {
+            width: 24px;
+            height: 24px;
+            border: 2px solid #d1d5db;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+        
+        .prep-checkbox.checked {
+            background: #10b981;
+            border-color: #10b981;
+        }
+        
+        .prep-checkbox.checked::after {
+            content: '✓';
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        
+        .prep-title {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #1e293b;
+            flex: 1;
+        }
+        
+        .prep-details {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .prep-detail {
+            font-size: 0.85rem;
+            color: #64748b;
+            background: #f1f5f9;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+        
+        .prep-detail.category {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        
+        .prep-detail.time {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        
+        .sync-indicator {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #10b981;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 50px;
+            font-size: 0.9rem;
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+            z-index: 1000;
+        }
+        
+        .tab-id {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #1e293b;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-family: 'Courier New', monospace;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <div class="tab-id" id="tabId">Tab Loading...</div>
+    <div class="sync-indicator">🔄 Multi-Tab Sync Active</div>
+    
+    <div class="container">
+        <div class="header">
+            <h1>🍽️ Today's Preps Sync Demo</h1>
+            <p class="subtitle">Multi-Device Synchronization Testing for Today's Prep Tasks</p>
+        </div>
+        
+        <div class="demo-section">
+            <div class="demo-instructions">
+                <h2>🧪 Multi-Tab Sync Testing Instructions</h2>
+                <ol>
+                    <li><strong>Open this page in 2+ browser tabs</strong> (Ctrl+T, paste URL)</li>
+                    <li><strong>Position tabs side by side</strong> to see both simultaneously</li>
+                    <li><strong>Click prep completion checkboxes rapidly</strong> in one tab</li>
+                    <li><strong>Watch for instant sync</strong> to other tab (should be immediate)</li>
+                    <li><strong>Check console logs</strong> (F12) for sync debugging info</li>
+                    <li><strong>Monitor sync latency</strong> and active tab count below</li>
+                </ol>
+            </div>
+            
+            <div class="status-bar">
+                <div class="status-card">
+                    <h4>Completed Today</h4>
+                    <div class="status-value" id="completedCount">0</div>
+                    <div class="device-id" id="deviceId">Device ID: Loading...</div>
+                </div>
+                <div class="status-card">
+                    <h4>Total Preps</h4>
+                    <div class="status-value" id="totalCount">12</div>
+                    <div class="device-id">Last Sync: <span id="lastSync">Never</span></div>
+                </div>
+                <div class="status-card">
+                    <h4>Sync Latency</h4>
+                    <div class="status-value"><span id="syncLatency">--</span></div>
+                    <div class="device-id">Sync Time: <span id="syncTime">--</span></div>
+                </div>
+                <div class="status-card">
+                    <h4>Active Tabs</h4>
+                    <div class="status-value" id="activeTabCount">1</div>
+                    <div class="device-id" id="activeTabsList">This tab only</div>
+                </div>
+            </div>
+            
+            <div class="prep-grid" id="prepGrid">
+                <!-- Today's prep items will be dynamically generated here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Sample today's prep items (scheduled for today)
+        const todayPreps = [
+            { id: 1, name: 'Prep Salad Greens', category: 'Vegetables', estimatedTime: '20 min', completed: false, priority: 'high', timeSlot: 'morning' },
+            { id: 2, name: 'Dice Onions & Peppers', category: 'Vegetables', estimatedTime: '15 min', completed: false, priority: 'high', timeSlot: 'morning' },
+            { id: 3, name: 'Marinate Chicken Portions', category: 'Proteins', estimatedTime: '30 min', completed: false, priority: 'high', timeSlot: 'morning' },
+            { id: 4, name: 'Prep Herb Oil', category: 'Sauces', estimatedTime: '12 min', completed: false, priority: 'medium', timeSlot: 'morning' },
+            { id: 5, name: 'Cook & Cool Rice', category: 'Grains', estimatedTime: '45 min', completed: false, priority: 'high', timeSlot: 'midday' },
+            { id: 6, name: 'Blanch Green Vegetables', category: 'Vegetables', estimatedTime: '25 min', completed: false, priority: 'medium', timeSlot: 'midday' },
+            { id: 7, name: 'Mix Special Dressing', category: 'Sauces', estimatedTime: '15 min', completed: false, priority: 'medium', timeSlot: 'midday' },
+            { id: 8, name: 'Portion Protein Servings', category: 'Proteins', estimatedTime: '20 min', completed: false, priority: 'high', timeSlot: 'afternoon' },
+            { id: 9, name: 'Prepare Garnish Mix', category: 'Vegetables', estimatedTime: '10 min', completed: false, priority: 'low', timeSlot: 'afternoon' },
+            { id: 10, name: 'Toast Breadcrumbs', category: 'Misc', estimatedTime: '8 min', completed: false, priority: 'low', timeSlot: 'afternoon' },
+            { id: 11, name: 'Prep Tomorrow\'s Stock', category: 'Sauces', estimatedTime: '35 min', completed: false, priority: 'medium', timeSlot: 'evening' },
+            { id: 12, name: 'Clean & Store Equipment', category: 'Cleanup', estimatedTime: '15 min', completed: false, priority: 'high', timeSlot: 'evening' }
+        ];
+
+        // Multi-tab sync system for today's preps
+        class TodayPrepsMultiTabSync {
+            constructor() {
+                this.deviceId = this.generateDeviceId();
+                this.completedPreps = new Set();
+                
+                // Listen for storage changes
+                window.addEventListener('storage', (e) => {
+                    if (e.key === 'demo_completedTodayPreps') {
+                        this.handleRemoteUpdate(e.newValue);
+                    } else if (e.key === 'demo_activeTabs') {
+                        this.updateActiveTabsDisplay();
+                    }
+                });
+                
+                // Load existing data
+                this.loadData();
+                
+                // Register this tab as active
+                this.registerTab();
+                
+                // Update UI
+                this.updateUI();
+                this.updateDeviceInfo();
+                
+                // Set up heartbeat to maintain active tab list
+                setInterval(() => this.heartbeat(), 1000);
+                
+                // Clean up on page unload
+                window.addEventListener('beforeunload', () => this.cleanup());
+                
+                console.log('🍽️ Today\'s Preps Multi-Tab Sync initialized for device:', this.deviceId);
+            }
+            
+            generateDeviceId() {
+                // Use sessionStorage for unique tab IDs (fixed from PR #125)
+                let deviceId = sessionStorage.getItem('demo_todayPreps_deviceId');
+                if (!deviceId) {
+                    deviceId = 'TAB-' + Math.random().toString(36).substr(2, 8).toUpperCase();
+                    sessionStorage.setItem('demo_todayPreps_deviceId', deviceId);
+                }
+                return deviceId;
+            }
+            
+            loadData() {
+                const stored = localStorage.getItem('demo_completedTodayPreps');
+                if (stored) {
+                    this.completedPreps = new Set(JSON.parse(stored));
+                }
+            }
+            
+            saveData() {
+                localStorage.setItem('demo_completedTodayPreps', JSON.stringify([...this.completedPreps]));
+                this.updateSyncTime();
+            }
+            
+            handleRemoteUpdate(newValue) {
+                if (newValue) {
+                    const startTime = performance.now();
+                    this.completedPreps = new Set(JSON.parse(newValue));
+                    this.updateUI();
+                    
+                    // Show sync latency
+                    const latency = (performance.now() - startTime).toFixed(2);
+                    document.getElementById('syncLatency').textContent = `${latency}ms`;
+                    
+                    console.log('📥 Today\'s Preps sync received from remote tab:', {
+                        completedPreps: [...this.completedPreps],
+                        latency: `${latency}ms`,
+                        timestamp: new Date().toLocaleTimeString()
+                    });
+                }
+            }
+            
+            togglePrepCompletion(prepId) {
+                const startTime = performance.now();
+                console.log(`🔄 Toggling today's prep completion for ID: ${prepId}`);
+                
+                if (this.completedPreps.has(prepId)) {
+                    this.completedPreps.delete(prepId);
+                    console.log(`❌ Today's prep ${prepId} marked incomplete`);
+                } else {
+                    this.completedPreps.add(prepId);
+                    console.log(`✅ Today's prep ${prepId} completed`);
+                }
+                
+                // Immediate local update
+                this.updateUI();
+                
+                // Immediate sync to other tabs (no delay!)
+                this.saveData();
+                
+                const syncTime = (performance.now() - startTime).toFixed(2);
+                console.log(`🚀 Today's Preps sync completed in ${syncTime}ms`);
+                
+                // Highlight the synced prep
+                this.highlightPrep(prepId);
+            }
+            
+            highlightPrep(prepId) {
+                const prepElement = document.querySelector(`[data-prep-id="${prepId}"]`);
+                if (prepElement) {
+                    prepElement.classList.add('highlight');
+                    setTimeout(() => {
+                        prepElement.classList.remove('highlight');
+                    }, 2000);
+                }
+            }
+            
+            updateUI() {
+                const completedCount = this.completedPreps.size;
+                document.getElementById('completedCount').textContent = completedCount;
+                
+                // Update prep checkboxes and completion status
+                todayPreps.forEach(prep => {
+                    const checkbox = document.querySelector(`[data-prep-id="${prep.id}"] .prep-checkbox`);
+                    const prepItem = document.querySelector(`[data-prep-id="${prep.id}"]`);
+                    
+                    if (checkbox && prepItem) {
+                        const isCompleted = this.completedPreps.has(prep.id);
+                        checkbox.classList.toggle('checked', isCompleted);
+                        prepItem.classList.toggle('completed', isCompleted);
+                    }
+                });
+            }
+            
+            updateDeviceInfo() {
+                document.getElementById('deviceId').textContent = `Device ID: ${this.deviceId}`;
+                document.getElementById('tabId').textContent = this.deviceId;
+            }
+            
+            updateSyncTime() {
+                const now = new Date();
+                document.getElementById('lastSync').textContent = now.toLocaleTimeString();
+                document.getElementById('syncTime').textContent = now.toLocaleTimeString();
+            }
+            
+            registerTab() {
+                const tabs = this.getActiveTabs();
+                tabs.add(this.deviceId);
+                localStorage.setItem('demo_activeTabs', JSON.stringify([...tabs]));
+                this.updateActiveTabsDisplay();
+            }
+            
+            getActiveTabs() {
+                const stored = localStorage.getItem('demo_activeTabs');
+                return new Set(stored ? JSON.parse(stored) : []);
+            }
+            
+            updateActiveTabsDisplay() {
+                const tabs = this.getActiveTabs();
+                document.getElementById('activeTabCount').textContent = tabs.size;
+                document.getElementById('activeTabsList').textContent = 
+                    tabs.size === 1 ? 'This tab only' : `${tabs.size} tabs: ${[...tabs].join(', ')}`;
+            }
+            
+            heartbeat() {
+                // Keep this tab registered as active
+                this.registerTab();
+            }
+            
+            cleanup() {
+                // Remove this tab from active list
+                const tabs = this.getActiveTabs();
+                tabs.delete(this.deviceId);
+                localStorage.setItem('demo_activeTabs', JSON.stringify([...tabs]));
+                console.log(`🧹 Tab ${this.deviceId} cleaned up`);
+            }
+        }
+
+        // Render today's prep items
+        function renderTodayPreps() {
+            const grid = document.getElementById('prepGrid');
+            grid.innerHTML = todayPreps.map(prep => `
+                <div class="prep-item" data-prep-id="${prep.id}" onclick="syncSystem.togglePrepCompletion(${prep.id})">
+                    <div class="prep-header">
+                        <div class="prep-checkbox"></div>
+                        <h4 class="prep-title">${prep.name}</h4>
+                    </div>
+                    <div class="prep-details">
+                        <span class="prep-detail category">📂 ${prep.category}</span>
+                        <span class="prep-detail time">⏱️ ${prep.estimatedTime}</span>
+                        <span class="prep-detail">🕐 ${prep.timeSlot}</span>
+                        <span class="prep-detail">🎯 ${prep.priority}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Initialize the demo
+        document.addEventListener('DOMContentLoaded', () => {
+            renderTodayPreps();
+            window.syncSystem = new TodayPrepsMultiTabSync();
+        });
+    </script>
+</body>
+</html>

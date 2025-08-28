@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manual Multi-Tab Sync Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 10px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .connected {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .disconnected {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .task {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            margin: 5px 0;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        .task input {
+            margin-right: 10px;
+        }
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .points {
+            font-weight: bold;
+            color: #28a745;
+        }
+    </style>
+</head>
+<body>
+    <h1>Manual Multi-Tab Sync Test</h1>
+    <p><strong>Instructions:</strong> Open this page in multiple tabs. Complete tasks in one tab and verify they sync to other tabs instantly.</p>
+    
+    <div class="card">
+        <h3>Connection Status</h3>
+        <div id="status" class="status disconnected">❌ Not Connected</div>
+        <div>Device ID: <span id="deviceId">Unknown</span></div>
+        <div>Active Devices: <span id="deviceCount">0</span></div>
+        <div>Last Sync: <span id="lastSync">Never</span></div>
+    </div>
+
+    <div class="card">
+        <h3>Test Tasks (Complete and watch sync across tabs)</h3>
+        <div class="points">Total Points: <span id="totalPoints">0</span></div>
+        
+        <div class="task">
+            <input type="checkbox" id="task1" onchange="toggleTask(1)">
+            <label for="task1">Clean Kitchen (5 points)</label>
+        </div>
+        <div class="task">
+            <input type="checkbox" id="task2" onchange="toggleTask(2)">
+            <label for="task2">Vacuum Living Room (8 points)</label>
+        </div>
+        <div class="task">
+            <input type="checkbox" id="task3" onchange="toggleTask(3)">
+            <label for="task3">Organize Closet (10 points)</label>
+        </div>
+        <div class="task">
+            <input type="checkbox" id="task4" onchange="toggleTask(4)">
+            <label for="task4">Wash Dishes (3 points)</label>
+        </div>
+        <div class="task">
+            <input type="checkbox" id="task5" onchange="toggleTask(5)">
+            <label for="task5">Take Out Trash (2 points)</label>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>Actions</h3>
+        <button onclick="clearAllTasks()">Clear All Tasks</button>
+        <button onclick="clearLogs()">Clear Logs</button>
+        <button onclick="checkLocalStorage()">Check localStorage</button>
+    </div>
+
+    <div class="card">
+        <h3>Sync Events Log</h3>
+        <div id="logs" class="log">
+            <div>Initializing...</div>
+        </div>
+    </div>
+
+    <script>
+        // Mock the MultiDeviceSync functionality for testing
+        class MockMultiDeviceSync {
+            constructor() {
+                this.deviceId = this.generateDeviceId();
+                this.completedTasks = new Set();
+                this.isConnected = false;
+                this.callbacks = new Map();
+                this.logElement = document.getElementById('logs');
+                this.log('🔄 Sync service initialized: ' + this.deviceId.substring(0, 8) + '...');
+            }
+
+            generateDeviceId() {
+                return 'device_' + Math.random().toString(36).substr(2, 9);
+            }
+
+            log(message) {
+                const timestamp = new Date().toLocaleTimeString();
+                const logEntry = document.createElement('div');
+                logEntry.textContent = `[${timestamp}] ${message}`;
+                this.logElement.appendChild(logEntry);
+                this.logElement.scrollTop = this.logElement.scrollHeight;
+                console.log(message);
+            }
+
+            async connect() {
+                this.log('🔗 Connecting sync service...');
+                
+                // Simulate Firebase unavailable, use localStorage fallback
+                this.log('⚠️ Firebase unavailable, using localStorage fallback');
+                this.log('🔄 Initializing localStorage sync...');
+                
+                // Set up storage event listener for cross-tab sync
+                window.addEventListener('storage', (e) => {
+                    if (e.key === 'workVibe_sync_completedTasks' && e.newValue) {
+                        this.log('📥 Received localStorage update for completedTasks');
+                        try {
+                            const incomingData = JSON.parse(e.newValue);
+                            const incomingSet = new Set(incomingData);
+                            const mergedSet = new Set([...this.completedTasks, ...incomingSet]);
+                            
+                            this.log(`🔀 Merging completedTasks - Local: [${Array.from(this.completedTasks)}], Incoming: [${incomingData}], Merged: [${Array.from(mergedSet)}]`);
+                            
+                            if (mergedSet.size !== this.completedTasks.size) {
+                                this.completedTasks = mergedSet;
+                                this.updateUI();
+                                this.log(`✅ Updated tasks from another tab`);
+                            }
+                        } catch (error) {
+                            this.log('⚠️ Error processing localStorage update: ' + error.message);
+                        }
+                    }
+                });
+
+                // Load initial data from localStorage
+                this.loadInitialData();
+
+                this.isConnected = true;
+                this.log('✅ Sync service connected in local mode');
+                this.updateStatus();
+            }
+
+            loadInitialData() {
+                const stored = localStorage.getItem('workVibe_sync_completedTasks');
+                this.log(`🔍 Checking localStorage for completedTasks: value="${stored}"`);
+                
+                if (stored) {
+                    try {
+                        const data = JSON.parse(stored);
+                        this.completedTasks = new Set(data);
+                        this.log(`📂 Loaded completedTasks from localStorage: [${Array.from(this.completedTasks)}]`);
+                        this.updateUI();
+                    } catch (error) {
+                        this.log('⚠️ Error loading initial data: ' + error.message);
+                    }
+                } else {
+                    this.log('📂 No existing data found in localStorage');
+                }
+            }
+
+            async syncData(field, data) {
+                this.log(`📤 Syncing ${field}: [${Array.from(data)}]`);
+                
+                // Save to localStorage
+                const value = JSON.stringify(Array.from(data));
+                localStorage.setItem('workVibe_sync_' + field, value);
+                
+                this.log(`✅ Synced ${field} to localStorage with value="${value}"`);
+                
+                // Update last sync time
+                this.updateStatus();
+            }
+
+            updateStatus() {
+                document.getElementById('status').className = this.isConnected ? 'status connected' : 'status disconnected';
+                document.getElementById('status').textContent = this.isConnected ? '✅ Connected (localStorage mode)' : '❌ Not Connected';
+                document.getElementById('deviceId').textContent = this.deviceId.substring(0, 16) + '...';
+                document.getElementById('lastSync').textContent = new Date().toLocaleTimeString();
+            }
+
+            updateUI() {
+                // Update checkboxes
+                for (let i = 1; i <= 5; i++) {
+                    document.getElementById(`task${i}`).checked = this.completedTasks.has(i);
+                }
+
+                // Update points
+                const points = Array.from(this.completedTasks).reduce((total, taskId) => {
+                    const pointsMap = { 1: 5, 2: 8, 3: 10, 4: 3, 5: 2 };
+                    return total + (pointsMap[taskId] || 0);
+                }, 0);
+                document.getElementById('totalPoints').textContent = points;
+            }
+        }
+
+        // Initialize sync service
+        let sync = new MockMultiDeviceSync();
+
+        // Task functions
+        async function toggleTask(taskId) {
+            if (sync.completedTasks.has(taskId)) {
+                sync.completedTasks.delete(taskId);
+                sync.log(`❌ Uncompleted task ${taskId}`);
+            } else {
+                sync.completedTasks.add(taskId);
+                sync.log(`✅ Completed task ${taskId}`);
+            }
+            
+            sync.updateUI();
+            await sync.syncData('completedTasks', sync.completedTasks);
+        }
+
+        function clearAllTasks() {
+            sync.completedTasks.clear();
+            sync.updateUI();
+            sync.syncData('completedTasks', sync.completedTasks);
+            sync.log('🗑️ Cleared all tasks');
+        }
+
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = '';
+        }
+
+        function checkLocalStorage() {
+            const data = localStorage.getItem('workVibe_sync_completedTasks');
+            sync.log('🔍 Current localStorage: ' + (data || 'null'));
+        }
+
+        // Initialize
+        sync.connect().then(() => {
+            sync.log('🎉 Ready for multi-tab testing!');
+            sync.log('👁️ Open this page in multiple tabs to test sync');
+        });
+    </script>
+</body>
+</html>
