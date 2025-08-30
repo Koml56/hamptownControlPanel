@@ -19,6 +19,8 @@ import {
   getSelectionKey,
   generateUniqueId
 } from './prep-utils';
+import { syncPrepSelectionToggle } from './prepOperations';
+import type { SyncOperation } from './OperationManager';
 
 // Components
 import TodayView from './TodayView';
@@ -36,7 +38,8 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
   setPrepItems,
   setScheduledPreps,
   setPrepSelections,
-  quickSave
+  quickSave,
+  syncOperationImmediate
 }) => {
   // UI State
   const [activeView, setActiveView] = useState('today');
@@ -416,8 +419,87 @@ const PrepListPrototype: React.FC<PrepListPrototypeProps> = ({
     setShowRecipeModal(true);
   };
 
-  // Toggle prep selection
-  const togglePrepSelection = (prep: PrepItem): void => {
+  // Toggle prep selection - Real-time sync version
+  const togglePrepSelection = async (prep: PrepItem): Promise<void> => {
+    const selectionKey = getSelectionKey(selectedDate, prep.id);
+    const isSelected = prepSelections[selectionKey]?.selected;
+    const scheduledDate = getDateString(selectedDate);
+    
+    console.log(`🚀 [REAL-TIME] Prep selection toggle: ${prep.name} (${!isSelected ? 'selecting' : 'deselecting'})`);
+
+    // Use real-time sync for prep selection toggle
+    if (syncOperationImmediate) {
+      try {
+        let scheduledPrep: ScheduledPrep | undefined = undefined;
+        
+        if (!isSelected) {
+          // Creating new selection
+          const existingScheduledPrep = scheduledPreps.find(p => 
+            p.prepId === prep.id && p.scheduledDate === scheduledDate
+          );
+          
+          if (!existingScheduledPrep) {
+            scheduledPrep = {
+              id: generateUniqueId(),
+              prepId: prep.id,
+              name: prep.name,
+              category: prep.category,
+              estimatedTime: prep.estimatedTime,
+              isCustom: prep.isCustom,
+              hasRecipe: prep.hasRecipe,
+              recipe: prep.recipe,
+              scheduledDate,
+              priority: 'medium',
+              timeSlot: '',
+              completed: false,
+              assignedTo: null,
+              notes: ''
+            };
+          }
+        }
+
+        await syncPrepSelectionToggle(
+          prep.id,
+          !isSelected,
+          selectionKey,
+          scheduledDate,
+          scheduledPrep,
+          prepSelections,
+          scheduledPreps,
+          setPrepSelections,
+          setScheduledPreps,
+          async (operation: SyncOperation) => {
+            // Immediate sync to Firebase with operation data
+            await syncOperationImmediate('prepSelections', operation.payload.selected 
+              ? { ...prepSelections, [selectionKey]: { priority: 'medium', timeSlot: '', selected: true } }
+              : (() => { const newSelections = { ...prepSelections }; delete newSelections[selectionKey]; return newSelections; })()
+            );
+            
+            // Also sync scheduledPreps if needed
+            if (operation.payload.scheduledPrep) {
+              await syncOperationImmediate('scheduledPreps', [...scheduledPreps, operation.payload.scheduledPrep]);
+            } else if (!operation.payload.selected) {
+              await syncOperationImmediate('scheduledPreps', 
+                scheduledPreps.filter(p => !(p.prepId === prep.id && p.scheduledDate === scheduledDate))
+              );
+            }
+          }
+        );
+
+        console.log(`✅ [REAL-TIME] Prep selection synced immediately: ${prep.name}`);
+      } catch (error) {
+        console.error(`❌ [REAL-TIME] Failed to sync prep selection: ${prep.name}`, error);
+        // Fallback to original method
+        togglePrepSelectionFallback(prep);
+      }
+    } else {
+      // Fallback to original method if syncOperationImmediate is not available
+      togglePrepSelectionFallback(prep);
+    }
+  };
+
+  // Fallback prep selection toggle (original method)
+  const togglePrepSelectionFallback = (prep: PrepItem): void => {
     const selectionKey = getSelectionKey(selectedDate, prep.id);
     const isSelected = prepSelections[selectionKey]?.selected;
 

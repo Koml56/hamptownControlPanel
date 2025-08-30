@@ -55,3 +55,69 @@ export function rollbackTaskOperations(ops: SyncOperation[], tasks: Task[]): Tas
   const newState = opManager.rollbackOperations(ops, { tasks });
   return newState.tasks;
 }
+
+// Real-time individual task completion operations
+export function createTaskCompletionToggleOperation(
+  taskId: number, 
+  completed: boolean, 
+  points: number,
+  employeeId: number,
+  taskName: string
+): SyncOperation {
+  return opManager.createOperation('TOGGLE_TASK_COMPLETION', {
+    taskId,
+    completed,
+    points,
+    employeeId,
+    taskName,
+    timestamp: Date.now()
+  }, 'completedTasks');
+}
+
+export function applyTaskCompletionToggle(completedTasks: Set<number>, op: SyncOperation): Set<number> {
+  if (op.type !== 'TOGGLE_TASK_COMPLETION') return completedTasks;
+  
+  const newCompletedTasks = new Set(completedTasks);
+  const { taskId, completed } = op.payload;
+  
+  if (completed) {
+    newCompletedTasks.add(taskId);
+  } else {
+    newCompletedTasks.delete(taskId);
+  }
+  
+  return newCompletedTasks;
+}
+
+export async function syncTaskCompletionToggle(
+  taskId: number,
+  completed: boolean,
+  points: number,
+  employeeId: number,
+  taskName: string,
+  completedTasks: Set<number>,
+  setCompletedTasks: (tasks: Set<number>) => void,
+  immediateSync?: (operation: SyncOperation) => Promise<void>
+) {
+  console.log(`🚀 [REAL-TIME] Task completion toggle: ${taskName} (${completed ? 'completed' : 'uncompleted'})`);
+  
+  // Create operation
+  const op = createTaskCompletionToggleOperation(taskId, completed, points, employeeId, taskName);
+  
+  // Apply locally immediately
+  const newCompletedTasks = applyTaskCompletionToggle(completedTasks, op);
+  setCompletedTasks(newCompletedTasks);
+  
+  // Add to offline queue for reliability
+  offlineQueue.enqueue(op);
+  
+  // Immediate sync to other devices
+  if (immediateSync) {
+    try {
+      await immediateSync(op);
+      console.log(`✅ [REAL-TIME] Task completion synced immediately: ${taskName}`);
+    } catch (error) {
+      console.error(`❌ [REAL-TIME] Failed to sync task completion: ${taskName}`, error);
+    }
+  }
+}

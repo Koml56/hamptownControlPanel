@@ -702,6 +702,22 @@ export class FirebaseService {
 
     return success;
   }
+  
+  // Real-time sync for individual operations - bypasses debouncing
+  async syncOperationImmediate(field: string, data: any): Promise<boolean> {
+    console.log(`🚀 [REAL-TIME] Immediate operation sync: ${field}`);
+    
+    // Bypass debouncing by calling executeSave directly
+    const success = await this.executeSave(field, data);
+    
+    if (success) {
+      console.log(`✅ [REAL-TIME] Operation synced immediately: ${field}`);
+    } else {
+      console.error(`❌ [REAL-TIME] Failed to sync operation: ${field}`);
+    }
+    
+    return success;
+  }
 
   // Get fields that should be synced together
   private getRelatedFields(changedField: string): string[] {
