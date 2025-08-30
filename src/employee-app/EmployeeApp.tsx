@@ -97,6 +97,7 @@ const EmployeeApp: React.FC = () => {
     loadFromFirebase,
     saveToFirebase,
     quickSave,
+    syncOperationImmediate,
     applyTaskSyncOperation
   } = useFirebaseData();
 
@@ -844,6 +845,7 @@ const EmployeeApp: React.FC = () => {
             setDailyData={setDailyDataWithSave}
             setEmployees={setEmployeesWithSave}
             saveToFirebase={saveToFirebase}
+            syncOperationImmediate={syncOperationImmediate}
           />
         )}
 
@@ -858,6 +860,7 @@ const EmployeeApp: React.FC = () => {
             setScheduledPreps={setScheduledPreps}
             setPrepSelections={setPrepSelections}
             quickSave={quickSave}
+            syncOperationImmediate={syncOperationImmediate}
           />
         )}
 

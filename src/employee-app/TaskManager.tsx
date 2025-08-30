@@ -3,7 +3,9 @@ import React, { useEffect } from 'react';
 import { CheckSquare, Check, Users, Star } from 'lucide-react';
 import { getPriorityColor, getFormattedDate } from './utils';
 import { toggleTaskComplete, assignTask, getAssignedEmployee, reassignCompletedTask } from './taskFunctions';
+import { syncTaskCompletionToggle } from './taskOperations';
 import type { Task, Employee, TaskAssignments, DailyDataMap, CurrentUser } from './types';
+import type { SyncOperation } from './OperationManager';
 
 interface TaskManagerProps {
   currentUser: CurrentUser;
@@ -17,6 +19,7 @@ interface TaskManagerProps {
   setDailyData: (updater: (prev: DailyDataMap) => DailyDataMap) => void;
   setEmployees: (updater: (prev: Employee[]) => Employee[]) => void;
   saveToFirebase?: () => void;
+  syncOperationImmediate?: (field: string, data: any) => Promise<boolean>;
 }
 
 const TaskManager: React.FC<TaskManagerProps> = ({
@@ -30,7 +33,8 @@ const TaskManager: React.FC<TaskManagerProps> = ({
   setTaskAssignments,
   setDailyData,
   setEmployees,
-  saveToFirebase
+  saveToFirebase,
+  syncOperationImmediate
 }) => {
   // Debug logging
   useEffect(() => {
@@ -41,21 +45,97 @@ const TaskManager: React.FC<TaskManagerProps> = ({
     });
   }, [completedTasks]);
 
-  const handleTaskToggle = (taskId: number, assignToEmployeeId?: number) => {
-    toggleTaskComplete(
-      taskId,
-      assignToEmployeeId,
-      currentUser.id,
-      completedTasks,
-      taskAssignments,
-      tasks,
-      employees,
-      setCompletedTasks,
-      setTaskAssignments,
-      setDailyData,
-      setEmployees,
-      saveToFirebase
-    );
+  const handleTaskToggle = async (taskId: number, assignToEmployeeId?: number) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) {
+      console.error('Task not found:', taskId);
+      return;
+    }
+
+    const wasCompleted = completedTasks.has(taskId);
+    const isNowCompleted = !wasCompleted;
+    const currentlyAssignedEmp = getAssignedEmployee(taskId, taskAssignments, employees);
+    const targetEmployeeId = assignToEmployeeId || currentlyAssignedEmp?.id || currentUser.id;
+    
+    console.log(`🚀 [REAL-TIME] Task toggle: ${task.task} (${isNowCompleted ? 'completing' : 'uncompleting'})`);
+
+    // Use real-time sync for task completion toggle
+    if (syncOperationImmediate) {
+      try {
+        await syncTaskCompletionToggle(
+          taskId,
+          isNowCompleted,
+          task.points,
+          targetEmployeeId,
+          task.task,
+          completedTasks,
+          setCompletedTasks,
+          async (operation: SyncOperation) => {
+            // Immediate sync to Firebase with operation data
+            await syncOperationImmediate('completedTasks', Array.from(
+              isNowCompleted 
+                ? new Set([...completedTasks, taskId])
+                : new Set(Array.from(completedTasks).filter(id => id !== taskId))
+            ));
+          }
+        );
+
+        // Also handle task assignment
+        if (isNowCompleted) {
+          if (assignToEmployeeId || !currentlyAssignedEmp) {
+            setTaskAssignments(prev => ({ ...prev, [taskId]: targetEmployeeId }));
+            await syncOperationImmediate('taskAssignments', { ...taskAssignments, [taskId]: targetEmployeeId });
+          }
+        } else {
+          // Remove assignment when uncompleting
+          setTaskAssignments(prev => {
+            const newAssignments = { ...prev };
+            delete newAssignments[taskId];
+            return newAssignments;
+          });
+          await syncOperationImmediate('taskAssignments', (() => {
+            const newAssignments = { ...taskAssignments };
+            delete newAssignments[taskId];
+            return newAssignments;
+          })());
+        }
+
+        console.log(`✅ [REAL-TIME] Task completion synced immediately: ${task.task}`);
+      } catch (error) {
+        console.error(`❌ [REAL-TIME] Failed to sync task completion: ${task.task}`, error);
+        // Fallback to original method
+        toggleTaskComplete(
+          taskId,
+          assignToEmployeeId,
+          currentUser.id,
+          completedTasks,
+          taskAssignments,
+          tasks,
+          employees,
+          setCompletedTasks,
+          setTaskAssignments,
+          setDailyData,
+          setEmployees,
+          saveToFirebase
+        );
+      }
+    } else {
+      // Fallback to original method if syncOperationImmediate is not available
+      toggleTaskComplete(
+        taskId,
+        assignToEmployeeId,
+        currentUser.id,
+        completedTasks,
+        taskAssignments,
+        tasks,
+        employees,
+        setCompletedTasks,
+        setTaskAssignments,
+        setDailyData,
+        setEmployees,
+        saveToFirebase
+      );
+    }
   };
 
   const handleAssignTask = (taskId: number, employeeId: number) => {

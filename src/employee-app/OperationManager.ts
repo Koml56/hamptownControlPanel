@@ -4,7 +4,7 @@ import { VectorClock } from './VectorClock';
 
 export interface SyncOperation {
   id: string;
-  type: 'ADD_TASK' | 'UPDATE_EMPLOYEE' | 'COMPLETE_TASK' | 'DELETE_ITEM' | 'ADD_STORE_ITEM' | 'UPDATE_STORE_ITEM' | 'DELETE_STORE_ITEM';
+  type: 'ADD_TASK' | 'UPDATE_EMPLOYEE' | 'COMPLETE_TASK' | 'DELETE_ITEM' | 'ADD_STORE_ITEM' | 'UPDATE_STORE_ITEM' | 'DELETE_STORE_ITEM' | 'TOGGLE_TASK_COMPLETION' | 'TOGGLE_PREP_SELECTION';
   payload: any;
   timestamp: number;
   deviceId: string;
@@ -101,6 +101,84 @@ export class OperationManager {
           return currentState;
       }
     }
+    
+    // Completed tasks operations
+    if (operation.targetField === 'completedTasks') {
+      switch (operation.type) {
+        case 'TOGGLE_TASK_COMPLETION':
+          const taskId = operation.payload.taskId;
+          const currentCompletedTasks = new Set(currentState.completedTasks || []);
+          
+          if (operation.payload.completed) {
+            currentCompletedTasks.add(taskId);
+          } else {
+            currentCompletedTasks.delete(taskId);
+          }
+          
+          return {
+            ...currentState,
+            completedTasks: currentCompletedTasks
+          };
+        default:
+          return currentState;
+      }
+    }
+    
+    // Prep selections operations
+    if (operation.targetField === 'prepSelections') {
+      switch (operation.type) {
+        case 'TOGGLE_PREP_SELECTION':
+          const { selected, selectionKey } = operation.payload;
+          const currentSelections = { ...currentState.prepSelections || {} };
+          
+          if (selected) {
+            currentSelections[selectionKey] = {
+              priority: operation.payload.priority || 'medium',
+              timeSlot: operation.payload.timeSlot || '',
+              selected: true
+            };
+          } else {
+            delete currentSelections[selectionKey];
+          }
+          
+          return {
+            ...currentState,
+            prepSelections: currentSelections
+          };
+        default:
+          return currentState;
+      }
+    }
+    
+    // Scheduled preps operations  
+    if (operation.targetField === 'scheduledPreps') {
+      switch (operation.type) {
+        case 'TOGGLE_PREP_SELECTION':
+          const currentScheduledPreps = [...(currentState.scheduledPreps || [])];
+          const { prepId: schedPrepId, selected: schedSelected, scheduledPrep } = operation.payload;
+          
+          if (schedSelected && scheduledPrep) {
+            // Add new scheduled prep
+            currentScheduledPreps.push(scheduledPrep);
+          } else {
+            // Remove scheduled prep
+            const index = currentScheduledPreps.findIndex(p => 
+              p.prepId === schedPrepId && p.scheduledDate === operation.payload.scheduledDate
+            );
+            if (index !== -1) {
+              currentScheduledPreps.splice(index, 1);
+            }
+          }
+          
+          return {
+            ...currentState,
+            scheduledPreps: currentScheduledPreps
+          };
+        default:
+          return currentState;
+      }
+    }
+    
     // ...інші targetField
     return currentState;
   }

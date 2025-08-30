@@ -245,6 +245,24 @@ export const useFirebaseData = () => {
     }
   }, []);
 
+  // Real-time immediate sync for individual operations - bypasses debouncing
+  const syncOperationImmediate = useCallback(async (field: string, data: any): Promise<boolean> => {
+    console.log(`🚀 [REAL-TIME] Immediate operation sync: ${field}`);
+    
+    try {
+      const success = await firebaseService.syncOperationImmediate(field, data);
+      if (success) {
+        setLastSync(new Date().toLocaleTimeString());
+        setConnectionStatus('connected');
+      }
+      return success;
+    } catch (error) {
+      console.error(`❌ [REAL-TIME] Failed to sync operation: ${field}`, error);
+      setConnectionStatus('error');
+      return false;
+    }
+  }, [firebaseService]);
+
   // PERFORMANCE: Non-blocking main save function - FIXED to include all fields
   const debouncedSave = useCallback(async () => {
     if (isSavingRef.current || connectionStatus === 'error') {
@@ -784,6 +802,7 @@ export const useFirebaseData = () => {
     loadFromFirebase,
     saveToFirebase,
     quickSave,
+    syncOperationImmediate,
 
     // Додаємо applyTaskOperation для застосування операцій до задач
     applyTaskSyncOperation
